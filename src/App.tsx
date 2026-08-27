@@ -7,7 +7,7 @@ const trustedMediaUrls: Record<string, string> = { '2048': 'https://play2048.co/
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
-  render() { return this.state.failed ? <main className="center-page"><section className="card prose"><p className="eyebrow">SAFE RECOVERY</p><h1>Something went wrong.</h1><p className="muted">Lithium kept your local data safe. Reload this view to continue.</p><button onClick={() => this.setState({ failed: false })}>Try again</button></section></main> : this.props.children; }
+  render() { return this.state.failed ? <main className="center-page"><section className="card prose"><p className="eyebrow">SAFE RECOVERY</p><h1>Something went wrong.</h1><p className="muted">Lithium kept your local data safe. Reload this view to continue.</p><button onClick={() => window.location.reload()}>Try again</button></section></main> : this.props.children; }
 }
 
 type Preferences = { contrast: boolean; reducedMotion: boolean; language: string };

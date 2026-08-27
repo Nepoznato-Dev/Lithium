@@ -29,7 +29,7 @@ For production deployments, run `npm run build` and serve the generated
 
 ## MVP
 
-The current Phase 9 build includes consent and local authentication, protected
+The current Phase 10 build includes consent and local authentication, protected
 routing, a dashboard, settings, accessibility preferences, calculator, unit
 converter, whiteboard, keyboard navigation, and Escape-key panic mode.
 `src/config.ts` is the central phase and feature gate; browser persistence is
