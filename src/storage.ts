@@ -17,4 +17,5 @@ export const storage = {
   },
   async getAll<T>(storeName: string): Promise<T[]> { const db = await this.openDatabase(); return new Promise((resolve, reject) => { const request = db.transaction(storeName).objectStore(storeName).getAll(); request.onsuccess = () => resolve(request.result as T[]); request.onerror = () => reject(request.error); }); },
   async put<T>(storeName: string, value: T) { const db = await this.openDatabase(); return new Promise<IDBValidKey>((resolve, reject) => { const request = db.transaction(storeName, 'readwrite').objectStore(storeName).put(value); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); }); },
+  async delete(storeName: string, id: IDBValidKey) { const db = await this.openDatabase(); return new Promise<void>((resolve, reject) => { const request = db.transaction(storeName, 'readwrite').objectStore(storeName).delete(id); request.onsuccess = () => resolve(); request.onerror = () => reject(request.error); }); },
 };

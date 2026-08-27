@@ -66,8 +66,7 @@ function Converter() {
   const category = Object.keys(units).find(key => from in units[key as keyof typeof units]) as keyof typeof units;
   const options = Object.keys(units[category]);
   const safeTo = options.includes(to) ? to : options[0];
-  const fromDistance = units.distance[from as keyof typeof units.distance] ?? 1;
-  const result = category === 'temperature' ? from === 'celsius' && safeTo === 'fahrenheit' ? Number(amount) * 9 / 5 + 32 : from === 'fahrenheit' && safeTo === 'celsius' ? (Number(amount) - 32) * 5 / 9 : Number(amount) : Number(amount) * fromDistance / units.distance[safeTo as keyof typeof units.distance];
+  const result = category === 'temperature' ? from === 'celsius' && safeTo === 'fahrenheit' ? Number(amount) * 9 / 5 + 32 : from === 'fahrenheit' && safeTo === 'celsius' ? (Number(amount) - 32) * 5 / 9 : Number(amount) : Number(amount) * (units.distance[from as keyof typeof units.distance] ?? 1) / units.distance[safeTo as keyof typeof units.distance];
   return <Tool title="Unit converter" description="Convert distance and temperature units."><div className="converter"><input type="number" value={amount} onChange={e => setAmount(e.target.value)} /><select value={from} onChange={e => { const next = e.target.value; setFrom(next); const nextCategory = Object.keys(units).find(key => next in units[key as keyof typeof units]) as keyof typeof units; setTo(Object.keys(units[nextCategory])[0]); }}>{Object.keys(units.distance).concat(Object.keys(units.temperature)).map(x => <option key={x}>{x}</option>)}</select><span>to</span><select value={safeTo} onChange={e => setTo(e.target.value)}>{options.map(x => <option key={x}>{x}</option>)}</select><output>{Number.isFinite(result) ? result.toFixed(4).replace(/\.?0+$/, '') : '—'} {safeTo}</output></div></Tool>;
 }
 
@@ -94,7 +93,7 @@ function Flashcards() {
   const [cards, setCards] = useState<Card[]>([]); const [index, setIndex] = useState(0); const [flipped, setFlipped] = useState(false);
   useEffect(() => { storage.getAll<Card>('flashcards').then(setCards).catch(() => undefined); }, []);
   const current = cards[index]; const add = async () => { const card = { front: 'Question', back: 'Answer', reviewed: 0 }; const id = await storage.put('flashcards', card); setCards([...cards, { ...card, id: Number(id) }]); };
-  const review = async () => { if (!current) return; const card = { ...current, reviewed: current.reviewed + 1 }; await storage.put('flashcards', card); setCards(cards.map(item => item.id === card.id ? card : item)); setFlipped(false); setIndex((index + 1) % cards.length); };
+  const review = async () => { if (!current) return; const card = { ...current, reviewed: current.reviewed + 1 }; await storage.put('flashcards', card); setCards(cards.map(item => item.id === card.id ? card : item)); setFlipped(false); setIndex(i => (i + 1) % cards.length); };
   return <Tool title="Flashcards" description="Practice recall with a compact local deck."><div className="flashcards"><div className="card flashcard" onClick={() => setFlipped(!flipped)} role="button" tabIndex={0}>{current ? <><p className="eyebrow">{flipped ? 'ANSWER' : 'QUESTION'}</p><h2>{flipped ? current.back : current.front}</h2><span className="muted">Click to flip · Reviewed {current.reviewed} times</span></> : <p className="muted">Your deck is empty.</p>}</div><div><button onClick={add}>＋ Add card</button>{current && <button onClick={review}>Mark reviewed</button>}</div></div></Tool>;
 }
 
