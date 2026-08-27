@@ -46,3 +46,8 @@ media pausing. No large game libraries are bundled.
 Phase 5 adds a separately scoped embedded browser with persisted tabs,
 `about:blank` startup, HTTPS navigation, loading/error states, retry handling,
 and a popup-blocker fallback.
+
+Phases 6–8 are intentionally skipped. Phase 9 adds an opt-in experimental
+Risk Insights page with local outcome learning, simple pre-launch signals,
+feedback, export, and deletion controls. Predictive features are disabled until
+the user explicitly consents.
