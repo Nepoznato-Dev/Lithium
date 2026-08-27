@@ -55,3 +55,7 @@ the user explicitly consents.
 Phase 10 hardens the application with safe recovery boundaries, resilient
 storage writes, focusable main content, and the existing reduced-motion and
 high-contrast preferences.
+
+Phase 11 establishes the first stable release boundary: Phases 1–2 are stable,
+later modules remain independently releasable, and experimental features stay
+disabled unless explicitly opted into. See `CHANGELOG.md` for phase history.

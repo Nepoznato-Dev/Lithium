@@ -10,6 +10,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "tsc --noEmit"
+    ,"check": "npm run lint && npm test && npm run build"
   },
   "repository": {
     "type": "git",

@@ -16,5 +16,5 @@ export const phaseConfig = {
   crashPrevention: { owner: 'predictive', phase: 9, dependencies: [], storage: 'localStorage', offline: true, roles: ['student'], state: 'experimental' as FeatureState },
   hardening: { owner: 'platform', phase: 10, dependencies: [], storage: 'localStorage', offline: true, roles: ['student'], state: 'beta' as FeatureState },
 } as const;
-export const currentPhase = 10;
+export const currentPhase = 11;
 export const isFeatureEnabled = (feature: keyof typeof phaseConfig) => phaseConfig[feature].phase <= currentPhase && phaseConfig[feature].state !== 'deprecated';
