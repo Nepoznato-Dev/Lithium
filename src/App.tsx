@@ -3,6 +3,7 @@ import { Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import { storage } from './storage';
 import { currentPhase } from './config';
 import { mediaManifest, type MediaEntry } from './manifest';
+const trustedMediaUrls: Record<string, string> = { '2048': 'https://play2048.co/', wordle: 'https://wordle.global/' };
 
 type Preferences = { contrast: boolean; reducedMotion: boolean; language: string };
 const defaultPreferences: Preferences = { contrast: false, reducedMotion: false, language: 'English' };
@@ -106,7 +107,7 @@ function Pomodoro() { const [seconds, setSeconds] = useState(25 * 60); const [ru
 function ScientificCalculator() { const [value, setValue] = useState(''); const calculate = () => { try { if (!/^(sin|cos|tan|sqrt|log|ln)\(-?\d+(?:\.\d+)?\)$/.test(value) && !/^-?\d+(?:\.\d+)?\s*\^\s*-?\d+(?:\.\d+)?$/.test(value)) throw new Error(); const match = value.match(/^([a-z]+)\((-?\d+(?:\.\d+)?)\)$/); const result = match ? ({ sin: Math.sin, cos: Math.cos, tan: Math.tan, sqrt: Math.sqrt, log: Math.log10, ln: Math.log }[match[1] as 'sin']?.(Number(match[2])) ?? 0) : Math.pow(...value.split('^').map(part => Number(part.trim())) as [number, number]); setValue(String(result)); } catch { setValue('Error'); } }; return <Tool title="Scientific calculator" description="Offline trigonometry, logarithms, roots, and powers."><div className="calculator"><input value={value} onChange={e => setValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && calculate()} placeholder="sin(1.57) or 2^8" /><button onClick={calculate}>Calculate</button></div></Tool>; }
 function MediaCard({ item }: { item: MediaEntry }) {
   const [failed, setFailed] = useState(false); const [source, setSource] = useState('');
-  const safeUrl = (() => { try { const url = new URL(item.url); return url.protocol === 'https:' ? url.href : ''; } catch { return ''; } })();
+  const safeUrl = trustedMediaUrls[item.id] ?? '';
   useEffect(() => () => { if (source) URL.revokeObjectURL(source); }, [source]);
   if (item.category !== 'game' && !item.url) return <div className="card game-card"><span className="tool-icon">{item.category === 'music' ? '♫' : '◉'}</span><h3>{item.title}</h3><p className="muted">{item.description}</p><p className="small muted">Choose a local file to play it.</p><input type="file" accept={item.mediaType === 'audio' ? 'audio/*' : 'video/*'} onChange={e => { const file = e.target.files?.[0]; if (file) { if (source) URL.revokeObjectURL(source); setSource(URL.createObjectURL(file)); } }} />{item.mediaType === 'audio' ? <audio src={source} controls /> : <video src={source} controls />}</div>;
   return <div className="card game-card"><span className="tool-icon">🎮</span><h3>{item.title}</h3><p className="muted">{item.description}</p>{failed || !safeUrl ? <><p className="muted">This game could not be launched in the current browser.</p><button className="ghost" onClick={() => setFailed(false)}>Retry</button></> : <><iframe key={String(failed)} src={safeUrl} title={item.title} sandbox="allow-scripts allow-same-origin allow-forms" onError={() => setFailed(true)} /><a className="small muted" href={safeUrl} target="_blank" rel="noreferrer">Open in a new tab ↗</a></>}</div>;
