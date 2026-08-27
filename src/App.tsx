@@ -4,6 +4,16 @@ import { storage } from './storage';
 
 type Preferences = { contrast: boolean; reducedMotion: boolean; language: string };
 const defaultPreferences: Preferences = { contrast: false, reducedMotion: false, language: 'English' };
+type DeviceProfile = { platform: string; browser: string; touch: boolean; online: boolean };
+function detectDevice(): DeviceProfile {
+  const agent = navigator.userAgent;
+  return {
+    platform: /CrOS/i.test(agent) ? 'Chromebook' : navigator.platform || 'Unknown device',
+    browser: /Edg/i.test(agent) ? 'Edge' : /Firefox/i.test(agent) ? 'Firefox' : /Chrome/i.test(agent) ? 'Chrome' : 'Browser',
+    touch: navigator.maxTouchPoints > 0,
+    online: navigator.onLine,
+  };
+}
 function evaluateExpression(input: string) {
   const tokens = input.match(/\d+(?:\.\d+)?|[()+\-*/%]/g);
   if (!tokens || tokens.join('') !== input.replace(/\s/g, '')) throw new Error();
@@ -30,6 +40,7 @@ function Layout() {
   const navigate = useNavigate();
   const user = storage.get<{ name: string }>('user', { name: 'Student' });
   const [panic, setPanic] = useState(false);
+  useEffect(() => { const prefs = storage.get('preferences', defaultPreferences); document.documentElement.classList.toggle('high-contrast', prefs.contrast); document.documentElement.classList.toggle('reduce-motion', prefs.reducedMotion); storage.set('device', detectDevice()); }, []);
   useEffect(() => { const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setPanic(true); const tag = document.activeElement?.tagName; const search = document.querySelector('#quick-search') as HTMLInputElement | null; if (e.key === '/' && search && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') { e.preventDefault(); search.focus(); } }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler); }, []);
   const links = [['/', '⌂', 'Dashboard'], ['/calculator', '＋', 'Calculator'], ['/converter', '⇄', 'Unit converter'], ['/whiteboard', '✎', 'Whiteboard'], ['/settings', '⚙', 'Settings']];
   return <div className={`app ${panic ? 'panic' : ''}`}><aside><div className="brand"><span>Li</span> Lithium</div><nav>{links.map(([to, icon, label]) => <NavLink key={to} to={to} end={to === '/'}><b>{icon}</b>{label}</NavLink>)}</nav><button className="panic-button" onClick={() => setPanic(true)}>Panic mode <kbd>Esc</kbd></button></aside><main className="content"><header><div><span className="eyebrow">WELCOME BACK</span><h2>{user.name}</h2></div><button className="ghost" onClick={() => { storage.remove('user'); navigate('/auth'); }}>Sign out</button></header>{panic && <div className="panic-banner" role="alert"><strong>Panic mode active.</strong> Media and distractions are paused. <button onClick={() => setPanic(false)}>Return to Lithium</button></div>}<Routes><Route path="/" element={<Dashboard />} /><Route path="/calculator" element={<Calculator />} /><Route path="/converter" element={<Converter />} /><Route path="/whiteboard" element={<Whiteboard />} /><Route path="/settings" element={<Settings />} /></Routes></main></div>;
@@ -64,8 +75,9 @@ function Whiteboard() {
 }
 
 function Settings() {
-  const [prefs, setPrefs] = useState(storage.get('preferences', defaultPreferences)); const update = (next: Partial<Preferences>) => { const value = { ...prefs, ...next }; setPrefs(value); storage.set('preferences', value); document.documentElement.classList.toggle('high-contrast', value.contrast); document.documentElement.classList.toggle('reduce-motion', value.reducedMotion); };
-  return <Tool title="Settings" description="Tune Lithium to work better for you."><div className="settings"><label>Language<select value={prefs.language} onChange={e => update({ language: e.target.value })}><option>English</option><option>Spanish</option><option>French</option></select></label><label className="check"><input type="checkbox" checked={prefs.contrast} onChange={e => update({ contrast: e.target.checked })} /> High contrast</label><label className="check"><input type="checkbox" checked={prefs.reducedMotion} onChange={e => update({ reducedMotion: e.target.checked })} /> Reduce motion</label><p className="muted small">Your settings are stored locally and never leave this device.</p></div></Tool>;
+  const [prefs, setPrefs] = useState(storage.get('preferences', defaultPreferences)); const device = storage.get<DeviceProfile>('device', detectDevice()); const update = (next: Partial<Preferences>) => { const value = { ...prefs, ...next }; setPrefs(value); storage.set('preferences', value); document.documentElement.classList.toggle('high-contrast', value.contrast); document.documentElement.classList.toggle('reduce-motion', value.reducedMotion); };
+  const clearData = () => { storage.remove('user'); storage.remove('consent'); storage.remove('preferences'); storage.remove('whiteboard'); window.location.href = '/auth'; };
+  return <Tool title="Settings" description="Tune Lithium to work better for you."><div className="settings"><div className="card profile"><p className="eyebrow">DEVICE PROFILE</p><strong>{device.platform}</strong><span className="muted">{device.browser} · {device.touch ? 'Touch enabled' : 'Keyboard and pointer'} · {device.online ? 'Online' : 'Offline'}</span></div><label>Language<select value={prefs.language} onChange={e => update({ language: e.target.value })}><option>English</option><option>Spanish</option><option>French</option></select></label><label className="check"><input type="checkbox" checked={prefs.contrast} onChange={e => update({ contrast: e.target.checked })} /> High contrast</label><label className="check"><input type="checkbox" checked={prefs.reducedMotion} onChange={e => update({ reducedMotion: e.target.checked })} /> Reduce motion</label><p className="muted small">Your settings are stored locally and never leave this device.</p><button className="danger" onClick={clearData}>Clear local data</button></div></Tool>;
 }
 
 function Tool({ title, description, children }: { title: string; description: string; children: React.ReactNode }) { return <section className="tool-page"><NavLink to="/" className="back">← Dashboard</NavLink><p className="eyebrow">TOOL</p><h1>{title}</h1><p className="muted">{description}</p>{children}</section>; }
