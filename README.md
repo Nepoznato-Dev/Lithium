@@ -13,6 +13,20 @@ npm run dev
 
 Run `npm run build`, `npm run lint`, and `npm test` before submitting changes.
 
+## Hosting
+
+Lithium is configured for common static hosting providers:
+
+- **Vercel:** import the repository; `vercel.json` configures the build and SPA
+  fallback.
+- **Netlify:** import the repository; `netlify.toml` configures the build,
+  publish directory, and client-side route fallback.
+- **Replit:** open the repository as a Repl; `.replit` starts Vite on the
+  externally reachable host and port.
+
+For production deployments, run `npm run build` and serve the generated
+`dist/` directory with SPA fallback routing to `index.html`.
+
 ## MVP
 
 The current Phase 2 build includes consent and local authentication, protected
