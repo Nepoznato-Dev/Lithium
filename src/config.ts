@@ -11,6 +11,7 @@ export const phaseConfig = {
   formulas: { owner: 'study', phase: 3, dependencies: ['indexeddb'], storage: 'indexeddb', offline: true, roles: ['student'], state: 'beta' as FeatureState },
   pomodoro: { owner: 'study', phase: 3, dependencies: ['indexeddb'], storage: 'indexeddb', offline: true, roles: ['student'], state: 'beta' as FeatureState },
   scientificCalculator: { owner: 'study', phase: 3, dependencies: [], storage: 'none', offline: true, roles: ['student'], state: 'beta' as FeatureState },
+  browser: { owner: 'browser', phase: 5, dependencies: [], storage: 'localStorage', offline: false, roles: ['student'], state: 'experimental' as FeatureState },
 } as const;
 export const currentPhase = 4;
 export const isFeatureEnabled = (feature: keyof typeof phaseConfig) => phaseConfig[feature].phase <= currentPhase && phaseConfig[feature].state !== 'deprecated';

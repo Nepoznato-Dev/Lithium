@@ -42,3 +42,7 @@ scientific calculator.
 Phase 4 adds a curated Games & media page with searchable categories, sandboxed
 iframe launches, retry handling, local audio/video selection, and panic-mode
 media pausing. No large game libraries are bundled.
+
+Phase 5 adds a separately scoped embedded browser with persisted tabs,
+`about:blank` startup, HTTPS navigation, loading/error states, retry handling,
+and a popup-blocker fallback.
