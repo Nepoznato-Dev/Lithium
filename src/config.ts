@@ -12,5 +12,5 @@ export const phaseConfig = {
   pomodoro: { owner: 'study', phase: 3, dependencies: ['indexeddb'], storage: 'indexeddb', offline: true, roles: ['student'], state: 'beta' as FeatureState },
   scientificCalculator: { owner: 'study', phase: 3, dependencies: [], storage: 'none', offline: true, roles: ['student'], state: 'beta' as FeatureState },
 } as const;
-export const currentPhase = 3;
+export const currentPhase = 4;
 export const isFeatureEnabled = (feature: keyof typeof phaseConfig) => phaseConfig[feature].phase <= currentPhase && phaseConfig[feature].state !== 'deprecated';

@@ -38,3 +38,7 @@ provided by `src/storage.ts`.
 Phase 3 adds the independent study module: IndexedDB-backed notes and
 flashcards, an offline dictionary and formula sheet, Pomodoro focus timer, and
 scientific calculator.
+
+Phase 4 adds a curated Games & media page with searchable categories, sandboxed
+iframe launches, retry handling, local audio/video selection, and panic-mode
+media pausing. No large game libraries are bundled.
