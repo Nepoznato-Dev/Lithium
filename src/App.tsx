@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
-import { isFeatureEnabled, phaseConfig } from './config';
 import { storage } from './storage';
 
 type Preferences = { contrast: boolean; reducedMotion: boolean; language: string };
@@ -58,4 +57,4 @@ function Settings() {
 
 function Tool({ title, description, children }: { title: string; description: string; children: React.ReactNode }) { return <section className="tool-page"><NavLink to="/" className="back">← Dashboard</NavLink><p className="eyebrow">TOOL</p><h1>{title}</h1><p className="muted">{description}</p>{children}</section>; }
 function Privacy() { return <main className="center-page"><section className="card prose"><NavLink to="/auth">← Back</NavLink><h1>Privacy notice</h1><p>Lithium is local-first. Your display name, preferences, and whiteboard are stored in your browser. We do not send this data to a server in the MVP.</p><p>You can clear local data from your browser settings at any time.</p></section></main>; }
-export default function App() { const user = useMemo(() => storage.get('user', null), []); return <Routes><Route path="/auth" element={<Auth />} /><Route path="/privacy" element={<Privacy />} /><Route path="/*" element={<Protected><Layout /></Protected>} /></Routes>; }
+export default function App() { return <Routes><Route path="/auth" element={<Auth />} /><Route path="/privacy" element={<Privacy />} /><Route path="/*" element={<Protected><Layout /></Protected>} /></Routes>; }
