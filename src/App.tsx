@@ -4,6 +4,15 @@ import { storage } from './storage';
 
 type Preferences = { contrast: boolean; reducedMotion: boolean; language: string };
 const defaultPreferences: Preferences = { contrast: false, reducedMotion: false, language: 'English' };
+function evaluateExpression(input: string) {
+  const tokens = input.match(/\d+(?:\.\d+)?|[()+\-*/%]/g);
+  if (!tokens || tokens.join('') !== input.replace(/\s/g, '')) throw new Error();
+  let index = 0;
+  const primary = (): number => tokens[index] === '(' ? (index++, (() => { const value = expression(); if (tokens[index++] !== ')') throw new Error(); return value; })()) : Number(tokens[index++]);
+  const term = (): number => { let value = primary(); while (['*', '/', '%'].includes(tokens[index])) { const op = tokens[index++]; const next = primary(); value = op === '*' ? value * next : op === '/' ? value / next : value % next; } return value; };
+  const expression = (): number => { let value = term(); while (['+', '-'].includes(tokens[index])) { const op = tokens[index++]; const next = term(); value = op === '+' ? value + next : value - next; } return value; };
+  const result = expression(); if (index !== tokens.length || !Number.isFinite(result)) throw new Error(); return result;
+}
 
 function Protected({ children }: { children: React.ReactNode }) {
   return storage.get('user', null) ? <>{children}</> : <Navigate to="/auth" replace />;
@@ -35,15 +44,17 @@ function Dashboard() {
 
 function Calculator() {
   const [value, setValue] = useState('');
-  const calculate = () => { try { if (!/^[0-9+\-*/().%\s]+$/.test(value)) throw new Error(); setValue(String(Function(`"use strict"; return (${value})`)())); } catch { setValue('Error'); } };
+  const calculate = () => { try { setValue(String(evaluateExpression(value))); } catch { setValue('Error'); } };
   return <Tool title="Calculator" description="Simple arithmetic without leaving your workspace."><div className="calculator"><input value={value} onChange={e => setValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && calculate()} aria-label="Calculator input" placeholder="0" /><div className="keys">{['7','8','9','÷','4','5','6','×','1','2','3','−','C','0','.','＝'].map(key => <button key={key} onClick={() => key === '＝' ? calculate() : key === 'C' ? setValue('') : setValue(v => v + ({'÷':'/','×':'*','−':'-'}[key] ?? key))}>{key}</button>)}</div></div></Tool>;
 }
 
 function Converter() {
   const [amount, setAmount] = useState('1'); const [from, setFrom] = useState('meters'); const [to, setTo] = useState('feet');
-  const factors: Record<string, number> = { meters: 1, feet: 0.3048, kilometers: 1000, miles: 1609.344, celsius: 1, fahrenheit: 1 };
-  const result = from === 'celsius' && to === 'fahrenheit' ? Number(amount) * 9 / 5 + 32 : from === 'fahrenheit' && to === 'celsius' ? (Number(amount) - 32) * 5 / 9 : Number(amount) * factors[from] / factors[to];
-  return <Tool title="Unit converter" description="Convert distance and temperature units."><div className="converter"><input type="number" value={amount} onChange={e => setAmount(e.target.value)} /><select value={from} onChange={e => setFrom(e.target.value)}>{Object.keys(factors).map(x => <option key={x}>{x}</option>)}</select><span>to</span><select value={to} onChange={e => setTo(e.target.value)}>{Object.keys(factors).map(x => <option key={x}>{x}</option>)}</select><output>{Number.isFinite(result) ? result.toFixed(4).replace(/\.?0+$/, '') : '—'} {to}</output></div></Tool>;
+  const units = { distance: { meters: 1, feet: 0.3048, kilometers: 1000, miles: 1609.344 }, temperature: { celsius: 1, fahrenheit: 1 } };
+  const category = Object.keys(units).find(key => from in units[key as keyof typeof units]) as keyof typeof units;
+  const options = Object.keys(units[category]);
+  const result = category === 'temperature' ? from === 'celsius' && to === 'fahrenheit' ? Number(amount) * 9 / 5 + 32 : from === 'fahrenheit' && to === 'celsius' ? (Number(amount) - 32) * 5 / 9 : Number(amount) : Number(amount) * units.distance[from as keyof typeof units.distance] / units.distance[to as keyof typeof units.distance];
+  return <Tool title="Unit converter" description="Convert distance and temperature units."><div className="converter"><input type="number" value={amount} onChange={e => setAmount(e.target.value)} /><select value={from} onChange={e => { const next = e.target.value; setFrom(next); const nextCategory = Object.keys(units).find(key => next in units[key as keyof typeof units]) as keyof typeof units; setTo(Object.keys(units[nextCategory])[0]); }}>{Object.keys(units.distance).concat(Object.keys(units.temperature)).map(x => <option key={x}>{x}</option>)}</select><span>to</span><select value={to} onChange={e => setTo(e.target.value)}>{options.map(x => <option key={x}>{x}</option>)}</select><output>{Number.isFinite(result) ? result.toFixed(4).replace(/\.?0+$/, '') : '—'} {to}</output></div></Tool>;
 }
 
 function Whiteboard() {
