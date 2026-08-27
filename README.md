@@ -51,3 +51,7 @@ Phases 6–8 are intentionally skipped. Phase 9 adds an opt-in experimental
 Risk Insights page with local outcome learning, simple pre-launch signals,
 feedback, export, and deletion controls. Predictive features are disabled until
 the user explicitly consents.
+
+Phase 10 hardens the application with safe recovery boundaries, resilient
+storage writes, focusable main content, and the existing reduced-motion and
+high-contrast preferences.
