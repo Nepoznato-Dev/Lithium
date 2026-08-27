@@ -34,3 +34,7 @@ routing, a dashboard, settings, accessibility preferences, calculator, unit
 converter, whiteboard, keyboard navigation, and Escape-key panic mode.
 `src/config.ts` is the central phase and feature gate; browser persistence is
 provided by `src/storage.ts`.
+
+Phase 3 adds the independent study module: IndexedDB-backed notes and
+flashcards, an offline dictionary and formula sheet, Pomodoro focus timer, and
+scientific calculator.
