@@ -8,7 +8,7 @@ type DeviceProfile = { platform: string; browser: string; touch: boolean; online
 function detectDevice(): DeviceProfile {
   const agent = navigator.userAgent;
   return {
-    platform: /CrOS/i.test(agent) ? 'Chromebook' : navigator.platform || 'Unknown device',
+    platform: /CrOS/i.test(agent) ? 'Chromebook' : /Android/i.test(agent) ? 'Android device' : /Macintosh|Mac OS/i.test(agent) ? 'Mac' : /Windows/i.test(agent) ? 'Windows PC' : /Linux/i.test(agent) ? 'Linux device' : 'Unknown device',
     browser: /Edg/i.test(agent) ? 'Edge' : /Firefox/i.test(agent) ? 'Firefox' : /Chrome/i.test(agent) ? 'Chrome' : 'Browser',
     touch: navigator.maxTouchPoints > 0,
     online: navigator.onLine,
@@ -75,8 +75,8 @@ function Whiteboard() {
 }
 
 function Settings() {
-  const [prefs, setPrefs] = useState(storage.get('preferences', defaultPreferences)); const device = storage.get<DeviceProfile>('device', detectDevice()); const update = (next: Partial<Preferences>) => { const value = { ...prefs, ...next }; setPrefs(value); storage.set('preferences', value); document.documentElement.classList.toggle('high-contrast', value.contrast); document.documentElement.classList.toggle('reduce-motion', value.reducedMotion); };
-  const clearData = () => { storage.remove('user'); storage.remove('consent'); storage.remove('preferences'); storage.remove('whiteboard'); storage.remove('device'); window.location.href = '/auth'; };
+  const navigate = useNavigate(); const [prefs, setPrefs] = useState(storage.get('preferences', defaultPreferences)); const device = storage.get<DeviceProfile>('device', detectDevice()); const update = (next: Partial<Preferences>) => { const value = { ...prefs, ...next }; setPrefs(value); storage.set('preferences', value); document.documentElement.classList.toggle('high-contrast', value.contrast); document.documentElement.classList.toggle('reduce-motion', value.reducedMotion); };
+  const clearData = () => { storage.remove('user'); storage.remove('consent'); storage.remove('preferences'); storage.remove('whiteboard'); storage.remove('device'); navigate('/auth'); };
   return <Tool title="Settings" description="Tune Lithium to work better for you."><div className="settings"><div className="card profile"><p className="eyebrow">DEVICE PROFILE</p><strong>{device.platform}</strong><span className="muted">{device.browser} · {device.touch ? 'Touch enabled' : 'Keyboard and pointer'} · {device.online ? 'Online' : 'Offline'}</span></div><label>Language<select value={prefs.language} onChange={e => update({ language: e.target.value })}><option>English</option><option>Spanish</option><option>French</option></select></label><label className="check"><input type="checkbox" checked={prefs.contrast} onChange={e => update({ contrast: e.target.checked })} /> High contrast</label><label className="check"><input type="checkbox" checked={prefs.reducedMotion} onChange={e => update({ reducedMotion: e.target.checked })} /> Reduce motion</label><p className="muted small">Your settings are stored locally and never leave this device.</p><button className="danger" onClick={clearData}>Clear local data</button></div></Tool>;
 }
 
