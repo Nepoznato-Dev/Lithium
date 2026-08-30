@@ -21,6 +21,24 @@ const ACCENT = '#ff6b6b';
 /** Cloudflare Pages CDN hosting all 767 HTML games. */
 const GAMES_CDN = 'https://lithium-games.mantiswolfe1.workers.dev';
 
+/** Download an HTML game file from the Cloudflare CDN to the user's computer. */
+async function downloadGame(game) {
+  if (!game.html || !game.url) return;
+  try {
+    const res = await fetch(game.url);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${game.title.replace(/[^a-zA-Z0-9 ]/g, '').trim()}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  } catch (err) {
+    console.error('Download failed:', err);
+  }
+}
+
 /** Curated online catalog used when the local manifest is unavailable. */
 const ONLINE_GAMES = [
   { id: 'o-2048', title: '2048', category: 'puzzle', tags: ['puzzle', 'classic'], url: 'https://play2048.co/', performance: 'low' },
@@ -66,7 +84,7 @@ function placeholderThumb(title, category) {
   return `data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="225"%3E%3Crect fill="${color}" width="400" height="225"/%3E%3Ctext x="50%25" y="50%25" font-size="34" fill="%230a0a0f" text-anchor="middle" dy=".3em" font-family="Arial,sans-serif" font-weight="bold"%3E${encodeURIComponent(title)}%3C/text%3E%3C/svg%3E`;
 }
 
-/** Load local game manifest, falling back to the curated online catalog. */
+/** Load games from Cloudflare CDN, falling back to the curated online catalog. */
 function useGameLibrary() {
   const [games, setGames] = useState(ONLINE_GAMES);
   const [loading, setLoading] = useState(true);
@@ -75,67 +93,37 @@ function useGameLibrary() {
     let active = true;
 
     (async () => {
-      let local = [];
       let htmlGames = [];
 
+      // Load HTML games from Cloudflare CDN.
       try {
-        const response = await fetch('/games/games-manifest.json');
+        const response = await fetch(`${GAMES_CDN}/manifest.json`);
         if (response.ok) {
           const data = await response.json();
           if (Array.isArray(data.games)) {
-            local = data.games
-              .map(game => ({
-                id: `local-${game.id}`,
-                title: game.title,
-                category: game.category || 'arcade',
-                tags: game.tags || [game.category],
-                description: game.description,
-                url: game.localPath || game.online,
-                performance: game.performance || 'low',
-                source: game.localPath ? 'local' : 'online',
-                local: Boolean(game.localPath),
-              }))
-              .filter(game => game.url);
+            htmlGames = data.games.map((game, index) => ({
+              id: `html-${index}`,
+              title: game.title,
+              category: 'html',
+              tags: ['html', 'classic'],
+              description: 'Self-contained HTML game — download to play',
+              url: `${GAMES_CDN}/games/${encodeURIComponent(game.slug)}/index.html`,
+              performance: 'low',
+              source: 'html',
+              local: true,
+              html: true,
+            }));
           }
         }
       } catch {
-        // Local clone manifest is optional.
-      }
-
-      // Try Cloudflare CDN first, then fall back to local html-games pack.
-      const cdnUrls = [`${GAMES_CDN}/manifest.json`, '/html-games/manifest.json'];
-      for (const manifestUrl of cdnUrls) {
-        try {
-          const htmlResponse = await fetch(manifestUrl);
-          if (!htmlResponse.ok) continue;
-          const htmlData = await htmlResponse.json();
-          if (!Array.isArray(htmlData.games)) continue;
-          const isCdn = manifestUrl.startsWith(GAMES_CDN);
-          htmlGames = htmlData.games.map((game, index) => ({
-            id: `html-${index}`,
-            title: game.title,
-            category: 'html',
-            tags: ['html', 'classic'],
-            description: 'Self-contained HTML game',
-            url: isCdn
-              ? `${GAMES_CDN}/games/${encodeURIComponent(game.slug)}/index.html`
-              : `/html-games/${encodeURIComponent(game.file)}`,
-            performance: 'low',
-            source: 'html',
-            local: true,
-            html: true,
-          }));
-          break; // Got a working manifest, stop trying.
-        } catch {
-          // Try next source.
-        }
+        // Cloudflare CDN games unavailable.
       }
 
       if (!active) return;
 
-      // Local clones win; keep online entries only when no clone exists.
-      const localTitles = new Set(local.map(game => game.title.toLowerCase()));
-      const merged = [...htmlGames, ...local, ...ONLINE_GAMES.filter(g => !localTitles.has(g.title.toLowerCase()))];
+      // HTML games from CDN + curated online catalog.
+      const htmlTitles = new Set(htmlGames.map(game => game.title.toLowerCase()));
+      const merged = [...htmlGames, ...ONLINE_GAMES.filter(g => !htmlTitles.has(g.title.toLowerCase()))];
       setGames(merged);
       setLoading(false);
     })();
@@ -150,9 +138,16 @@ function useGameLibrary() {
 
 const GameCard = React.memo(function GameCard({ game, isFavorite, offline, onPlay, onToggleFavorite }) {
   const [thumbFailed, setThumbFailed] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const thumb = thumbFailed || !game.thumbnail ? placeholderThumb(game.title, game.category) : game.thumbnail;
   const handlePlay = useCallback(() => onPlay(game), [onPlay, game]);
   const handleFav = useCallback(() => onToggleFavorite(game.id), [onToggleFavorite, game.id]);
+  const handleDownload = useCallback(async (e) => {
+    e.stopPropagation();
+    setDownloading(true);
+    await downloadGame(game);
+    setDownloading(false);
+  }, [game]);
 
   return (
     <article className="glass glass-hover group flex flex-col overflow-hidden">
@@ -183,6 +178,16 @@ const GameCard = React.memo(function GameCard({ game, isFavorite, offline, onPla
           <h3 className="truncate text-sm font-semibold text-white">{game.title}</h3>
           <p className="truncate text-xs capitalize text-white/40">{game.category}</p>
         </div>
+        {game.html && (
+          <button
+            className={`icon-btn h-8 w-8 text-cyan-400 hover:text-cyan-300 ${downloading ? 'animate-pulse' : ''}`}
+            onClick={handleDownload}
+            aria-label="Download HTML file"
+            title="Download to your computer"
+          >
+            <Icon name={downloading ? 'Loader2' : 'Download'} className="h-4 w-4" />
+          </button>
+        )}
         <button
           className={`icon-btn h-8 w-8 ${isFavorite ? 'text-red-400' : ''}`}
           onClick={handleFav}
@@ -230,6 +235,11 @@ export function GamePlayer({ game, onClose, embedded = false, closeSelf }) {
           <button className="icon-btn h-8 w-8" onClick={fullscreen} aria-label="Fullscreen">
             <Icon name="Maximize2" className="h-4 w-4" />
           </button>
+          {game.html && (
+            <button className="icon-btn h-8 w-8 text-cyan-400" onClick={() => downloadGame(game)} aria-label="Download HTML file" title="Download to your computer">
+              <Icon name="Download" className="h-4 w-4" />
+            </button>
+          )}
           {game.url?.startsWith('http') && (
             <a className="icon-btn h-8 w-8" href={game.url} target="_blank" rel="noreferrer" aria-label="Open in new tab">
               <Icon name="ExternalLink" className="h-4 w-4" />
@@ -350,7 +360,7 @@ export default function Games({ windowed = false, closeSelf, minimizeSelf, maxim
       {showFilters && (
         <div className="animate-fade-up mb-4 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            {[['all', 'All Sources'], ['html', 'HTML Files'], ['local', 'Local Clones'], ['online', 'Online']].map(([value, label]) => (
+            {[['all', 'All Sources'], ['html', 'HTML Games'], ['online', 'Online']].map(([value, label]) => (
               <button
                 key={value}
                 onClick={() => setSource(value)}
