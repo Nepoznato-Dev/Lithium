@@ -18,6 +18,9 @@ function useDebouncedValue(value, delay = 200) {
 
 const ACCENT = '#ff6b6b';
 
+/** Cloudflare Pages CDN hosting all 767 HTML games. */
+const GAMES_CDN = 'https://lithium-games.mantiswolfe1.workers.dev';
+
 /** Curated online catalog used when the local manifest is unavailable. */
 const ONLINE_GAMES = [
   { id: 'o-2048', title: '2048', category: 'puzzle', tags: ['puzzle', 'classic'], url: 'https://play2048.co/', performance: 'low' },
@@ -99,27 +102,33 @@ function useGameLibrary() {
         // Local clone manifest is optional.
       }
 
-      try {
-        const htmlResponse = await fetch('/html-games/manifest.json');
-        if (htmlResponse.ok) {
+      // Try Cloudflare CDN first, then fall back to local html-games pack.
+      const cdnUrls = [`${GAMES_CDN}/manifest.json`, '/html-games/manifest.json'];
+      for (const manifestUrl of cdnUrls) {
+        try {
+          const htmlResponse = await fetch(manifestUrl);
+          if (!htmlResponse.ok) continue;
           const htmlData = await htmlResponse.json();
-          if (Array.isArray(htmlData.games)) {
-            htmlGames = htmlData.games.map((game, index) => ({
-              id: `html-${index}`,
-              title: game.title,
-              category: 'html',
-              tags: ['html', 'classic'],
-              description: 'Self-contained HTML game',
-              url: `/html-games/${encodeURIComponent(game.file)}`,
-              performance: 'low',
-              source: 'html',
-              local: true,
-              html: true,
-            }));
-          }
+          if (!Array.isArray(htmlData.games)) continue;
+          const isCdn = manifestUrl.startsWith(GAMES_CDN);
+          htmlGames = htmlData.games.map((game, index) => ({
+            id: `html-${index}`,
+            title: game.title,
+            category: 'html',
+            tags: ['html', 'classic'],
+            description: 'Self-contained HTML game',
+            url: isCdn
+              ? `${GAMES_CDN}/games/${encodeURIComponent(game.slug)}/index.html`
+              : `/html-games/${encodeURIComponent(game.file)}`,
+            performance: 'low',
+            source: 'html',
+            local: true,
+            html: true,
+          }));
+          break; // Got a working manifest, stop trying.
+        } catch {
+          // Try next source.
         }
-      } catch {
-        // HTML games pack is optional.
       }
 
       if (!active) return;
