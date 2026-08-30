@@ -1,0 +1,472 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Restore SVG icon outlines: Tailwind preflight sets svg * { fill: currentColor }
+   which overrides the inherited fill="none" from the Icon component's root SVG.
+   This rule sits outside @layer so it wins over @layer base preflight. */
+svg * { fill: inherit; }
+
+@layer base {
+  :root {
+    --background: 240 20% 4%;
+    --foreground: 0 0% 98%;
+    --card: 240 16% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 16% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 187 100% 50%;
+    --primary-foreground: 240 20% 4%;
+    --secondary: 240 12% 14%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 12% 14%;
+    --muted-foreground: 240 6% 64%;
+    --accent: 187 100% 50%;
+    --accent-foreground: 240 20% 4%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 12% 16%;
+    --input: 240 12% 16%;
+    --ring: 187 100% 50%;
+    --radius: 1rem;
+
+    /* Live accent, switchable from Settings */
+    --accent: #22d3ee;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* Ensure all form elements have readable text on dark backgrounds */
+  input, textarea, select {
+    color: inherit;
+  }
+  input::placeholder, textarea::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.3);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: 999px;
+    border: 2px solid hsl(var(--background));
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.6);
+  }
+}
+
+@layer components {
+  .nexus-dashboard-page { min-height: 100vh; background: radial-gradient(circle at 80% 10%, rgba(0, 240, 255, 0.07), transparent 30%), #0a0a0f; }
+  .nexus-dashboard-content { width: min(100%, 1280px); margin: 0 auto; padding: 32px; }
+  .nexus-dashboard-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; }
+  .nexus-dashboard-tile { display: flex; min-height: 230px; flex-direction: column; padding: 24px; text-decoration: none; }
+  .nexus-tile-icon { display: flex; height: 48px; width: 48px; align-items: center; justify-content: center; border-radius: 12px; }
+  .nexus-tile-stat { border-radius: 999px; padding: 5px 9px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+  .nexus-tile-open { margin-top: 16px; font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .2s ease; }
+  .nexus-dashboard-tile:hover .nexus-tile-open, .nexus-dashboard-tile:focus-visible .nexus-tile-open { opacity: 1; }
+  .nexus-status-link { display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.06); border-radius: 10px; background: rgba(255,255,255,.03); padding: 12px; text-decoration: none; }
+  .nexus-status-link:hover { background: rgba(255,255,255,.07); }
+  .nexus-status-link strong { color: white; font-family: ui-monospace, monospace; font-size: 14px; }
+  .nexus-status-dot { height: 8px; width: 8px; border-radius: 999px; }
+  @media (max-width: 1100px) { .nexus-dashboard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 700px) { .nexus-dashboard-content { padding: 20px 14px 90px; } .nexus-dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } .nexus-dashboard-tile { min-height: 190px; padding: 16px; } }
+  @media (max-width: 460px) { .nexus-dashboard-grid { grid-template-columns: 1fr; } }
+
+  .lithium-desktop {
+    position: relative;
+    min-height: 100vh;
+    overflow: hidden;
+    background: #17245b;
+    color: white;
+  }
+
+  .desktop-wallpaper {
+    position: absolute;
+    inset: 0;
+    background-color: #1a1d2e;
+    background-image: linear-gradient(0deg, #1a1d2e 24%, transparent 25%, transparent 75%, #1a1d2e 76%), linear-gradient(90deg, #1a1d2e 24%, transparent 25%, transparent 75%, #1a1d2e 76%);
+    background-size: 40px 40px;
+    background-position: 0 0, 20px 20px;
+  }
+
+  .desktop-wallpaper::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.08) 48%, transparent 66%);
+    transform: skewX(-18deg) translateX(-20%);
+  }
+
+  .desktop-icons {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(6, 100px);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .desktop-icon {
+    appearance: none;
+    display: flex;
+    width: 100px;
+    min-height: 110px;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 8px 3px;
+    background: transparent;
+    color: white;
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .desktop-icon:hover, .desktop-icon:focus-visible {
+    border-color: rgba(255, 255, 255, 0.42);
+    background: rgba(89, 129, 222, 0.42);
+    outline: none;
+  }
+
+  .desktop-icon-image {
+    display: flex;
+    height: 64px;
+    width: 64px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 9px;
+    box-shadow: 0 5px 14px rgba(8, 12, 55, 0.32);
+  }
+
+  .desktop-icon-label {
+    max-width: 100px;
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+    white-space: nowrap;
+  }
+
+  .desktop-clock {
+    position: absolute;
+    top: 25px;
+    right: 30px;
+    z-index: 1;
+    color: rgba(255, 255, 255, 0.76);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 13px;
+  }
+
+  .desktop-date {
+    position: absolute;
+    top: 24px;
+    right: 30px;
+    z-index: 1;
+    color: rgba(255, 255, 255, 0.76);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 13px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  }
+
+  .desktop-taskbar {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 3;
+    display: flex;
+    height: 48px;
+    align-items: center;
+    gap: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(26, 26, 26, 0.98);
+    padding: 0 8px;
+    backdrop-filter: blur(12px);
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 13px;
+  }
+
+  .performance-good .desktop-taskbar { border-top-color: rgba(34, 197, 94, 0.55); }
+  .performance-limited .desktop-taskbar { border-top-color: rgba(251, 191, 36, 0.55); }
+  .performance-low .desktop-taskbar { border-top-color: rgba(248, 113, 113, 0.6); }
+
+  .desktop-status { color: rgba(255, 255, 255, 0.7); }
+
+  .desktop-start-menu {
+    position: fixed;
+    bottom: 60px;
+    left: 16px;
+    z-index: 4;
+    width: min(330px, calc(100vw - 32px));
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 12px;
+    background: rgba(15, 23, 65, 0.92);
+    padding: 16px;
+    box-shadow: 0 18px 50px rgba(5, 10, 45, 0.55);
+    backdrop-filter: blur(22px);
+  }
+
+  .desktop-start-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .desktop-start-header strong {
+    color: white;
+    font-size: 15px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .desktop-start-heading, .desktop-recent-heading {
+    display: flex;
+    justify-content: space-between;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .desktop-start-heading strong { color: white; font-size: 15px; letter-spacing: 0; text-transform: none; }
+  .desktop-start-apps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 14px 0 18px; }
+  .desktop-start-menu a { display: flex; align-items: center; gap: 9px; border-radius: 7px; padding: 9px; color: rgba(255,255,255,.82); font-size: 13px; text-decoration: none; }
+  .desktop-start-menu a:hover { background: rgba(255,255,255,.12); color: white; }
+  .desktop-start-menu svg { height: 17px; width: 17px; }
+  .desktop-recent-heading { border-top: 1px solid rgba(255,255,255,.12); padding-top: 13px; }
+  .desktop-empty-recent { display: block; padding: 12px 4px 2px; color: rgba(255,255,255,.42); font-size: 12px; }
+
+  .desktop-start-button, .desktop-settings {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    background: transparent;
+    color: white;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .desktop-start-logo { display: inline-flex; height: 28px; width: 28px; align-items: center; justify-content: center; border-radius: 7px; background: #18d7e9; color: #092038; font-size: 11px; }
+  .desktop-start-word { font-weight: 600; opacity: 0.84; }
+  .desktop-taskbar-spacer { flex: 1; }
+  .desktop-taskbar-apps { display: flex; gap: 6px; max-width: 45vw; overflow: auto; }
+  .desktop-taskbar-apps button { border: 1px solid transparent; border-radius: 5px; background: rgba(255,255,255,.06); color: rgba(255,255,255,.72); padding: 7px 10px; cursor: pointer; white-space: nowrap; }
+  .desktop-taskbar-apps button.active { border-color: rgba(24,215,233,.6); color: white; background: rgba(24,215,233,.16); }
+  .desktop-window { position: absolute; display: flex; flex-direction: column; overflow: hidden; min-width: 320px; min-height: 220px; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; background: rgba(10,14,28,.96); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .desktop-window-titlebar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 42px; padding: 0 10px 0 14px; border-bottom: 1px solid rgba(255,255,255,.14); background: rgba(28,35,62,.96); color: white; font-size: 13px; font-weight: 600; cursor: grab; user-select: none; }
+  .desktop-window-controls { display: flex; gap: 3px; }
+  .desktop-window-controls button { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 4px; background: transparent; color: rgba(255,255,255,.72); padding: 6px; cursor: pointer; }
+  .desktop-window-controls button:hover { background: rgba(255,255,255,.14); color: white; }
+  .desktop-window-controls button:last-child:hover { background: #c2415b; }
+  .desktop-window-content { flex: 1; min-height: 0; overflow: auto; }
+  .desktop-window-resize { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,.45) 50%); }
+
+  @media (max-width: 700px) {
+    .desktop-icons { grid-template-columns: repeat(4, 76px); gap: 18px 12px; padding: 20px 14px 84px; }
+    .desktop-clock { top: 14px; right: 14px; }
+    .desktop-date { top: 14px; right: 14px; }
+    .desktop-taskbar { padding: 0 10px; }
+  }
+
+  .glass {
+    @apply rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl;
+  }
+
+  .glass-hover {
+    @apply transition-all duration-200 hover:border-white/20 hover:bg-white/[0.07];
+  }
+
+  .icon-btn {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-xl text-white/60 transition-colors hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-950 transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+    background-color: var(--accent);
+  }
+
+  .btn-primary:hover {
+    filter: brightness(1.12);
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:text-white active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .text-input {
+    @apply w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:bg-white/[0.07];
+  }
+
+  .text-input:focus {
+    border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+
+  /* Accent-driven helpers used across pages */
+  .accent-text {
+    color: var(--accent);
+  }
+
+  .accent-soft-bg {
+    background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+
+  .nav-active {
+    color: var(--accent);
+    background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+
+  .nav-dot {
+    background-color: var(--accent);
+  }
+
+  .brand-badge {
+    background: var(--accent);
+    box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+
+  .calc-key {
+    @apply flex min-h-11 items-center justify-center rounded-md border-none bg-[#3b3b3b] font-mono text-sm text-white/90 transition-all hover:bg-[#4a4a4a] active:scale-[0.97];
+  }
+
+  .calc-key-num {
+    @apply bg-[#454545] text-base font-medium;
+  }
+
+  .calc-key-op {
+    @apply bg-[#3b3b3b] text-white/90;
+  }
+
+  .calc-key-accent {
+    @apply text-base font-bold text-slate-950;
+    background-color: var(--accent);
+  }
+
+  .calc-key-accent:hover {
+    filter: brightness(1.12);
+  }
+
+  .calc-flat {
+    @apply flex h-8 w-8 items-center justify-center rounded-md border-none bg-transparent text-white/70 transition-colors hover:bg-white/10 hover:text-white;
+  }
+
+  .calc-mem {
+    @apply rounded px-2 py-1 font-medium transition-colors hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30;
+  }
+
+  .calc-mode {
+    @apply flex w-full items-center gap-3 border-none bg-transparent px-4 py-2 text-left text-[13px] text-white/80 transition-colors hover:bg-white/[0.07];
+  }
+
+  .calc-mode.active {
+    @apply bg-white/[0.1] text-white;
+  }
+
+  .calc-input {
+    @apply w-full rounded-lg border border-white/10 bg-[#333] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-cyan-400/60;
+  }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fade-up 0.4s ease-out both;
+  }
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-drift {
+    animation: drift 26s ease-in-out infinite alternate;
+  }
+
+  .animate-drift-slow {
+    animation: drift 38s ease-in-out infinite alternate-reverse;
+  }
+
+  @keyframes drift {
+    from {
+      transform: translate(-6%, -4%) scale(1);
+    }
+    to {
+      transform: translate(6%, 5%) scale(1.15);
+    }
+  }
+
+  /* Motion level (Settings → Motion & Animations) */
+  html[data-motion='reduced'] .animate-fade-up,
+  html[data-motion='none'] .animate-fade-up {
+    animation-duration: 0.01s;
+  }
+
+  html[data-motion='none'] *,
+  html[data-motion='none'] *::before,
+  html[data-motion='none'] *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Layout density (Settings → Layout & Density) */
+  html[data-density='compact'] {
+    font-size: 14px;
+  }
+
+  html[data-density='comfortable'] {
+    font-size: 17.5px;
+  }
+
+  /* High contrast (Settings → Appearance) */
+  html[data-contrast='high'] body {
+    background: #000;
+  }
+
+  html[data-contrast='high'] .glass {
+    background-color: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-up,
+    .animate-drift,
+    .animate-drift-slow {
+      animation: none;
+    }
+  }
+}

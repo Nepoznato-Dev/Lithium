@@ -1,0 +1,22 @@
+# Dependencies and build
+node_modules/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+backend/lithium.db
+
+# Rust build artifacts
+rust/lithium-core/target/
+
+# IDE
+.vscode/
+.idea/
+
+.vercel
+.env*

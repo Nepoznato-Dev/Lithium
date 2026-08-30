@@ -1,0 +1,41 @@
+{
+  "name": "lithium",
+  "version": "2.0.0",
+  "description": "Lithium is a lightweight, offline-first web desktop and workspace for games, music, browsing, files, AI, and quick tools.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "preview": "vite preview",
+    "build": "vite build",
+    "lint": "eslint .",
+    "check": "npm run lint && npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nepoznato-Dev/Lithium.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@wllama/wllama": "^3.6.1",
+    "fflate": "^0.8.3",
+    "music-metadata-browser": "^2.5.11",
+    "preact": "^10.29.8",
+    "react-router-dom": "^7.8.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.34.0",
+    "@preact/preset-vite": "^2.10.6",
+    "autoprefixer": "^10.5.4",
+    "eslint": "^9.34.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.3.0",
+    "postcss": "^8.5.26",
+    "tailwindcss": "^3.4.19",
+    "vite": "^7.1.3"
+  }
+}
