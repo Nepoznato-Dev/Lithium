@@ -10,6 +10,7 @@ Thumbs.db
 __pycache__/
 *.pyc
 backend/lithium.db
+backend/data/
 
 # Rust build artifacts
 rust/lithium-core/target/

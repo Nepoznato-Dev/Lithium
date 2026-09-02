@@ -1,4 +1,4 @@
-import { idbAll, idbDelete, idbGet, idbPut } from './indexedDB';
+import { idbAll, idbDelete, idbGet, idbPut, idbKeys } from './indexedDB';
 import { kvOverflowBytes } from './kvTier';
 import * as core from '../core';
 
@@ -133,11 +133,12 @@ export async function clearSiteCache() {
 /** Everything the Storage Manager panel needs, in one call. */
 export async function storageSnapshot() {
   const estimate = await browserEstimate();
-  const [local, idb, cache, assets] = await Promise.all([
+  const [local, idb, cache, assets, cold] = await Promise.all([
     Promise.resolve(localStorageUsage()),
     idbUsage(),
     cacheUsage(),
     cachedAssetCount(),
+    coldStorageUsage(),
   ]);
   return {
     quota: estimate.quota || 0,
@@ -148,5 +149,24 @@ export async function storageSnapshot() {
     cache,
     cachedAssets: assets,
     kvOverflow: kvOverflowBytes(),
+    cold,
   };
+}
+
+async function coldStorageUsage() {
+  try {
+    const keys = await idbKeys('blobs');
+    let archives = 0;
+    let compressedBytes = 0;
+    for (const key of keys) {
+      if (typeof key === 'string' && key.startsWith('cold:')) {
+        archives++;
+        const record = await idbGet('blobs', key);
+        if (record?.data) compressedBytes += record.data.size || record.size || 0;
+      }
+    }
+    return { archives, compressedBytes };
+  } catch {
+    return { archives: 0, compressedBytes: 0 };
+  }
 }

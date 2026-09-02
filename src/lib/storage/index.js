@@ -18,3 +18,10 @@ export {
   registerSeeder, getTree, isHydrated, hasStoredData, getSnapshotStats,
   hydrate, setTree, persistNow,
 } from './unifiedStore';
+export {
+  createBackupZip, restoreBackupZip, exportFolderZip, importZipToFolder, downloadBlob as downloadZipBlob,
+} from './zipArchive';
+export {
+  coldArchive, coldRestore, coldRestoreAll, readColdEntry,
+  coldStorageUsage, listColdArchives,
+} from './coldStorage';

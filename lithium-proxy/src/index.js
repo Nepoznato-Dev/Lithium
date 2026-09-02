@@ -168,6 +168,7 @@ async function proxyRequest(request, targetUrl, proxyOrigin) {
   responseHeaders.set('Access-Control-Allow-Origin', '*');
   responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
   responseHeaders.set('Access-Control-Allow-Headers', '*');
+  responseHeaders.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
   responseHeaders.delete('X-Content-Type-Options');
 
   // ---- HTML: rewrite URLs ----

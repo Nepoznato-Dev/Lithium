@@ -144,6 +144,15 @@ export function fsOpSync(request) {
   });
 }
 
+/** Explorer-specific WASM ops: sort, filter, search, batch ops, MIME, etc.
+ *  Returns null when wasm isn't loaded; callers supply JS fallbacks. */
+export function explorerOpSync(request) {
+  return safe(() => {
+    const out = callStr(exportsRef.explorer_op, JSON.stringify(request));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
 /** Full API catalog from Rust ({ api, ns, desc, callers, params }[]). */
 export function apiCatalogSync() {
   return safe(() => {
@@ -600,6 +609,120 @@ export function widgetToggleEnabledSync(enabled, id, value) {
 export function widgetStaleRunningIdsSync(running, valid) {
   return safe(() => {
     const out = callStr(exportsRef.widget_stale_running_ids, JSON.stringify({ running, valid }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/* ---------- Browser facades ---------- */
+
+/** Resolve input as URL or search query. */
+export function browserResolveInputSync(input, searchUrl) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_resolve_input, JSON.stringify({ input, searchUrl }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Extract hostname from URL. */
+export function browserHostnameSync(url) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_hostname, JSON.stringify({ url }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Build proxy URL. */
+export function browserToProxyUrlSync(url, proxyOrigin, backendUrl) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_to_proxy_url, JSON.stringify({ url, proxyOrigin, backendUrl }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Increment shields stats. */
+export function browserStatsIncrementSync(stats, ads, trackers, https, scripts, data) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_stats_increment, JSON.stringify({ stats: JSON.stringify(stats), ads: ads || 0, trackers: trackers || 0, https: https || 0, scripts: scripts || 0, data: data || 0 }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Daily reset check for shields stats. */
+export function browserStatsDailyResetSync(stats, now) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_stats_daily_reset, JSON.stringify({ stats: JSON.stringify(stats), now }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Format stat number for display. */
+export function browserFormatStatNumberSync(n) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_format_stat_number, JSON.stringify({ n }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Format time saved in seconds to human-readable. */
+export function browserFormatTimeSavedSync(seconds) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_format_time_saved, JSON.stringify({ seconds }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Build bookmark tree from flat array. */
+export function browserBookmarkTreeSync(bookmarks) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_bookmark_tree, JSON.stringify({ bookmarks }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Search bookmarks by query. */
+export function browserBookmarkSearchSync(bookmarks, query) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_bookmark_search, JSON.stringify({ bookmarks, query: query || '' }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Group history entries by date. */
+export function browserHistoryGroupSync(entries, now) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_history_group, JSON.stringify({ entries, now }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Search history by query. */
+export function browserHistorySearchSync(entries, query) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_history_search, JSON.stringify({ entries, query: query || '' }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Rank omnibox suggestions. */
+export function browserOmniboxRankSync(query, history, bookmarks, topSites) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_omnibox_rank, JSON.stringify({ query: query || '', history: history || [], bookmarks: bookmarks || [], topSites: topSites || [] }));
+    return out ? JSON.parse(out) : null;
+  });
+}
+
+/** Sanitize HTML by stripping dangerous tags. */
+export function browserSanitizeHtmlSync(html) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_sanitize_html, JSON.stringify({ html }));
+    return out || null;
+  });
+}
+
+/** Generate URL-safe slug from text. */
+export function browserSlugSync(text) {
+  return safe(() => {
+    const out = callStr(exportsRef.browser_slug, JSON.stringify({ text }));
     return out ? JSON.parse(out) : null;
   });
 }

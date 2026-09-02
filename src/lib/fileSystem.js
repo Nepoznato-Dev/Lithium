@@ -205,6 +205,11 @@ export async function storeEntryContent(entry, content) {
 }
 
 export async function readEntryContent(entry) {
+  // Cold-stored entries live inside a ZIP archive in IndexedDB.
+  if (entry.cold) {
+    const { readColdEntry } = await import('./storage/coldStorage');
+    return (await readColdEntry(entry)) || '';
+  }
   // blobRef entries point at an externally-owned blob (e.g. model GGUFs).
   if (entry.idb) {
     const ref = String(entry.blobRef || '');
@@ -223,13 +228,28 @@ export async function readEntryContent(entry) {
 }
 
 /** Remove entries plus any IndexedDB payloads they own (blobRef blobs are
- *  externally owned and left intact). */
+ *  externally owned and left intact; cold entries clean up their archive). */
 export async function removeEntryDeep(tree, id) {
   const doomed = doomedList(tree, id);
+  // Clean up standalone IDB blobs.
   await Promise.all(
     tree.filter(entry => doomed.has(entry.id) && entry.idb && !entry.blobRef).map(entry => deleteBlob(entry.id))
   );
-  return tree.filter(entry => !doomed.has(entry.id));
+  // Clean up cold archives that become empty.
+  const coldArchiveIds = new Set();
+  for (const entry of tree) {
+    if (doomed.has(entry.id) && entry.cold && entry.coldRef) {
+      coldArchiveIds.add(entry.coldRef.split('/')[0]);
+    }
+  }
+  const remaining = tree.filter(entry => !doomed.has(entry.id));
+  for (const archiveId of coldArchiveIds) {
+    const stillCold = remaining.filter(e => e.cold && e.coldRef?.startsWith(archiveId + '/'));
+    if (stillCold.length === 0) {
+      await deleteBlob(`cold:${archiveId}`).catch(() => {});
+    }
+  }
+  return remaining;
 }
 
 /* ---------- Recycle Bin ---------- */
@@ -266,15 +286,28 @@ export function restoreEntry(tree, id) {
 }
 
 /** Permanently delete everything in the Recycle Bin. Returns the next tree
- *  (IndexedDB blobs owned by purged entries are deleted too). */
+ *  (IndexedDB blobs owned by purged entries are deleted too; cold archives
+ *  that become empty are cleaned up). */
 export async function purgeTrash(tree) {
   const doomed = trashedItems(tree);
   if (doomed.length === 0) return tree;
   await Promise.all(
     doomed.filter(entry => entry.idb && !entry.blobRef).map(entry => deleteBlob(entry.id))
   );
+  // Clean up cold archives that become empty after trash purge.
+  const coldArchiveIds = new Set();
+  for (const entry of doomed) {
+    if (entry.cold && entry.coldRef) coldArchiveIds.add(entry.coldRef.split('/')[0]);
+  }
   const doomedIds = new Set(doomed.map(entry => entry.id));
-  return tree.filter(entry => !doomedIds.has(entry.id));
+  const remaining = tree.filter(entry => !doomedIds.has(entry.id));
+  for (const archiveId of coldArchiveIds) {
+    const stillCold = remaining.filter(e => e.cold && e.coldRef?.startsWith(archiveId + '/'));
+    if (stillCold.length === 0) {
+      await deleteBlob(`cold:${archiveId}`).catch(() => {});
+    }
+  }
+  return remaining;
 }
 
 /** One-time migration: move oversized inline content into IndexedDB. */

@@ -16,6 +16,7 @@ export const ACCENT_OPTIONS = [
 
 /** Iframe-friendly search engines used by the built-in browser. */
 export const SEARCH_ENGINES = {
+  brave: { label: 'Brave Search', url: 'https://search.brave.com/search?q=' },
   duckduckgo: { label: 'DuckDuckGo Lite', url: 'https://lite.duckduckgo.com/lite/?q=' },
   qwant: { label: 'Qwant Lite', url: 'https://lite.qwant.com/?q=' },
   mojeek: { label: 'Mojeek', url: 'https://www.mojeek.com/search?q=' },
@@ -30,7 +31,7 @@ export const DEFAULT_SETTINGS = {
   background: { enabled: true, intensity: 0.7 },
   performance: { lowEndMode: false },
   games: { fullscreenOnLaunch: false, escToClose: true },
-  browser: { searchEngine: 'duckduckgo', proxyEnabled: false, proxyUrl: '', scrapeProvider: 'duckduckgo' },
+  browser: { searchEngine: 'brave', proxyEnabled: false, proxyUrl: '', scrapeProvider: 'brave' },
   window: { snapAssist: false, titlebarTranslucent: true },
   display: { fontSize: 14, brightness: 100, glassEffect: 30 },
   power: { batterySaver: false, autoDimOnLow: true, lowBatteryThreshold: 20 },

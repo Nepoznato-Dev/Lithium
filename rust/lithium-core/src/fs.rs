@@ -6,26 +6,26 @@
 use crate::{get, json_escape, write_json, Parser, Value};
 use std::collections::{HashMap, HashSet};
 
-fn entry_field<'v>(v: &'v Value, key: &str) -> Option<&'v Value> {
+pub(crate) fn entry_field<'v>(v: &'v Value, key: &str) -> Option<&'v Value> {
     match v {
         Value::Obj(obj) => get(obj, key),
         _ => None,
     }
 }
 
-fn eid(v: &Value) -> String {
+pub(crate) fn eid(v: &Value) -> String {
     entry_field(v, "id").and_then(|v| match v { Value::Str(s) => Some(s.as_str()), _ => None }).unwrap_or("").to_string()
 }
 
-fn eparent(v: &Value) -> Option<String> {
+pub(crate) fn eparent(v: &Value) -> Option<String> {
     entry_field(v, "parentId").and_then(|v| match v { Value::Str(s) => Some(s.as_str()), _ => None }).map(|s| s.to_string())
 }
 
-fn etype(v: &Value) -> String {
+pub(crate) fn etype(v: &Value) -> String {
     entry_field(v, "type").and_then(|v| match v { Value::Str(s) => Some(s.as_str()), _ => None }).unwrap_or("").to_string()
 }
 
-fn obj_set(obj: &mut Vec<(String, Value)>, key: &str, val: Value) {
+pub(crate) fn obj_set(obj: &mut Vec<(String, Value)>, key: &str, val: Value) {
     if let Some(pair) = obj.iter_mut().find(|(k, _)| k == key) {
         pair.1 = val;
     } else {
@@ -33,7 +33,7 @@ fn obj_set(obj: &mut Vec<(String, Value)>, key: &str, val: Value) {
     }
 }
 
-fn doomed_ids(entries: &[Value], id: &str) -> HashSet<String> {
+pub(crate) fn doomed_ids(entries: &[Value], id: &str) -> HashSet<String> {
     let mut doomed: HashSet<String> = HashSet::new();
     doomed.insert(id.to_string());
     let mut grew = true;
@@ -52,7 +52,7 @@ fn doomed_ids(entries: &[Value], id: &str) -> HashSet<String> {
     doomed
 }
 
-fn serialize_tree(items: &[Value]) -> String {
+pub(crate) fn serialize_tree(items: &[Value]) -> String {
     let mut out = String::from("[");
     for (idx, item) in items.iter().enumerate() {
         if idx > 0 {
@@ -64,7 +64,7 @@ fn serialize_tree(items: &[Value]) -> String {
     out
 }
 
-fn insert_suffix(name: &str, suffix: &str) -> String {
+pub(crate) fn insert_suffix(name: &str, suffix: &str) -> String {
     match name.rfind('.') {
         Some(dot) if dot > 0 => format!("{}{}{}", &name[..dot], suffix, &name[dot..]),
         _ => format!("{}{}", name, suffix),

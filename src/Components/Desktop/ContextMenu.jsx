@@ -222,8 +222,8 @@ export default function ContextMenu({ menu, onClose }) {
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-[10015]" onMouseDown={handleBackdropClick} onContextMenu={event => { event.preventDefault(); handleBackdropClick(); }} />
-      <div ref={ref} className="nx-ctx-menu" style={{ left: pos.x, top: pos.y }}>
+      <div className="fixed inset-0 z-[10015]" onClick={handleBackdropClick} onContextMenu={event => { event.preventDefault(); handleBackdropClick(); }} />
+      <div ref={ref} className="nx-ctx-menu" style={{ left: pos.x, top: pos.y }} onMouseDown={event => event.stopPropagation()} onContextMenu={event => event.stopPropagation()}>
         <MenuList items={menu.items} onAction={handleAction} focusIndex={focusIndex} onFocusIndex={setFocusIndex} />
       </div>
     </>,

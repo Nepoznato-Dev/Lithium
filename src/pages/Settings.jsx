@@ -5,8 +5,11 @@ import { useSettings } from '../Components/SettingsContext';
 import { ACCENT_OPTIONS, BUILD_VERSION, DEFAULT_SETTINGS, SEARCH_ENGINES } from '../lib/settings';
 import { SCRAPE_PROVIDERS } from '../lib/searchProxy';
 import { storage } from '../lib/storage';
+import { createBackupZip, restoreBackupZip, downloadBlob as downloadZipBlob } from '../lib/storage/zipArchive';
 import { registerSavedFile } from '../lib/downloads';
 import { clearPin, hasPin, setPin, verifyPin } from '../lib/desktop/ui';
+import { authUser, authChecked, getAuthEmail, signOut, initAuth } from './Browser/stores/authStore';
+import { signIn, signUp, isSupabaseConfigured } from '../lib/supabase';
 import Icon from '../Components/Icon';
 
 /* ================================================================
@@ -673,6 +676,25 @@ function GamesSection({ settings, update }) {
 
 function BrowserSection({ settings, update }) {
   const [proxyUrl, setProxyUrl] = useState(settings.browser?.proxyUrl || '');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const user = authUser.value;
+  const checked = authChecked.value;
+
+  // Init auth on first render
+  useEffect(() => { initAuth(); }, []);
+
+  const handleAuth = async (isSignUp) => {
+    if (!authEmail || !authPassword) { setAuthError('Email and password required'); return; }
+    setAuthLoading(true);
+    setAuthError('');
+    const { error } = isSignUp ? await signUp(authEmail, authPassword) : await signIn(authEmail, authPassword);
+    setAuthLoading(false);
+    if (error) setAuthError(error.message);
+    else { setAuthEmail(''); setAuthPassword(''); }
+  };
 
   return (
     <div>
@@ -704,6 +726,44 @@ function BrowserSection({ settings, update }) {
         </SettingsRow>
       </CardGroup>
 
+      <CardGroup label="Sync & Login">
+        {!isSupabaseConfigured() ? (
+          <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+            <p className="text-[13px] text-amber-300/80">Supabase not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local</p>
+          </div>
+        ) : !checked ? (
+          <div className="settings-row">
+            <span className="text-[13px] text-white/50">Checking session…</span>
+          </div>
+        ) : user ? (
+          <div className="settings-row">
+            <div className="flex items-center gap-3">
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(34,211,238,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#67e8f9' }}>
+                {getAuthEmail().charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div className="text-[13px] text-white/90">{getAuthEmail()}</div>
+                <div className="text-[11px] text-white/40">Auto-fill active — login forms will be detected</div>
+              </div>
+            </div>
+            <button className="settings-btn text-xs" onClick={async () => { await signOut(); }}>Sign out</button>
+          </div>
+        ) : (
+          <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+            <p className="text-[13px] text-white/50">Sign in to auto-fill your email on website login forms.</p>
+            <div className="flex gap-2 items-center">
+              <input className="text-input flex-1 rounded-full py-1.5 text-xs" type="email" placeholder="Email" value={authEmail} onInput={e => setAuthEmail(e.target.value)} />
+              <input className="text-input w-40 rounded-full py-1.5 text-xs" type="password" placeholder="Password" value={authPassword} onInput={e => setAuthPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAuth(false); }} />
+            </div>
+            {authError && <p className="text-[11px] text-red-400">{authError}</p>}
+            <div className="flex gap-2">
+              <button className="settings-btn text-xs" disabled={authLoading} onClick={() => handleAuth(false)}>{authLoading ? 'Signing in…' : 'Sign in'}</button>
+              <button className="settings-btn-secondary text-xs" disabled={authLoading} onClick={() => handleAuth(true)}>Create account</button>
+            </div>
+          </div>
+        )}
+      </CardGroup>
+
       <CardGroup label="Cloudflare Proxy">
         <SettingsRow
           title="Enable proxy"
@@ -733,7 +793,7 @@ function BrowserSection({ settings, update }) {
   );
 }
 
-function DataSection({ exportSettings, importSettings, exportAllData, deleteAllData }) {
+function DataSection({ exportSettings, importSettings, exportAllData, exportFullZip, importFullZip, zipBusy, deleteAllData }) {
   return (
     <div>
       <CardGroup label="Settings Backup">
@@ -752,11 +812,27 @@ function DataSection({ exportSettings, importSettings, exportAllData, deleteAllD
         </div>
       </CardGroup>
 
+      <CardGroup label="Full ZIP Backup">
+        <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+          <p className="text-[13px] text-white/50">
+            Export or restore a complete ZIP backup — includes all files, photos, notes, models, and settings.
+          </p>
+          <div className="flex gap-2">
+            <button className="btn-ghost flex-1 text-xs" onClick={exportFullZip} disabled={zipBusy}>
+              {zipBusy ? <Icon name="Loader2" className="h-3.5 w-3.5 animate-spin" /> : <Icon name="PackageOpen" className="h-3.5 w-3.5" />} Export full ZIP
+            </button>
+            <button className="btn-primary flex-1 text-xs" onClick={importFullZip} disabled={zipBusy}>
+              <Icon name="FolderOpen" className="h-3.5 w-3.5" /> Restore from ZIP
+            </button>
+          </div>
+        </div>
+      </CardGroup>
+
       <CardGroup label="All Data">
         <div className="settings-row">
           <div className="settings-row-info">
-            <div className="settings-row-title">Export all data</div>
-            <div className="settings-row-desc">Download a full backup of all Lithium data</div>
+            <div className="settings-row-title">Export all data (JSON)</div>
+            <div className="settings-row-desc">Download a JSON backup of localStorage data</div>
           </div>
           <button className="btn-ghost px-3 py-1.5 text-xs" onClick={exportAllData}>
             <Icon name="Download" className="h-3.5 w-3.5" /> Export
@@ -836,6 +912,7 @@ function AboutSection() {
             ['FastAPI', 'Backend proxy'],
             ['IndexedDB', 'Storage'],
             ['OPFS', 'Large files'],
+            ['fflate', 'ZIP compression'],
           ].map(([tech, role]) => (
             <div key={tech} className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5">
               <span className="text-[11px] font-medium text-white/70">{tech}</span>
@@ -955,6 +1032,42 @@ export default function Settings({ windowed = false, closeSelf, minimizeSelf, ma
     registerSavedFile(anchor.download, json);
   }, []);
 
+  const [zipBusy, setZipBusy] = useState(false);
+
+  const exportFullZip = useCallback(async () => {
+    setZipBusy(true);
+    try {
+      const { getTree } = await import('../lib/storage/unifiedStore');
+      const tree = getTree();
+      const blob = await createBackupZip(tree);
+      const name = `lithium-full-backup-${Date.now()}.zip`;
+      downloadZipBlob(blob, name);
+    } catch { /* user can retry */ }
+    setZipBusy(false);
+  }, []);
+
+  const importFullZip = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.zip';
+    input.onchange = async event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      if (!window.confirm('Restore from this ZIP backup? Current files and settings will be replaced.')) return;
+      setZipBusy(true);
+      try {
+        const result = await restoreBackupZip(file, { replace: true });
+        const { setTree } = await import('../lib/storage/unifiedStore');
+        setTree(result.tree);
+        window.location.reload();
+      } catch {
+        alert('Failed to restore from ZIP backup.');
+      }
+      setZipBusy(false);
+    };
+    input.click();
+  }, []);
+
   const deleteAllData = useCallback(() => {
     if (!window.confirm('Delete ALL Lithium data? This cannot be undone.')) return;
     Object.keys(localStorage)
@@ -992,7 +1105,7 @@ export default function Settings({ windowed = false, closeSelf, minimizeSelf, ma
       case 'games': return <GamesSection settings={settings} update={update} />;
       case 'browser': return <BrowserSection settings={settings} update={update} />;
       case 'security': return <SecuritySection settings={settings} update={update} />;
-      case 'data': return <DataSection exportSettings={exportSettings} importSettings={importSettings} exportAllData={exportAllData} deleteAllData={deleteAllData} />;
+      case 'data': return <DataSection exportSettings={exportSettings} importSettings={importSettings} exportAllData={exportAllData} exportFullZip={exportFullZip} importFullZip={importFullZip} zipBusy={zipBusy} deleteAllData={deleteAllData} />;
       case 'about': return <AboutSection />;
       default: return null;
     }

@@ -300,7 +300,7 @@ export const SCRAPE_PROVIDERS = {
  * @param {string} providerKey — one of the SCRAPE_PROVIDERS keys
  * @returns {Promise<{ title: string, url: string, snippet: string }[]>}
  */
-export async function scrapeSearch(query, providerKey = 'duckduckgo') {
+export async function scrapeSearch(query, providerKey = 'brave') {
   const provider = SCRAPE_PROVIDERS[providerKey] || duckduckgo;
   const url = provider.buildUrl(query);
   const html = await fetchViaProxy(url);

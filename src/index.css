@@ -470,3 +470,1538 @@ svg * { fill: inherit; }
     }
   }
 }
+
+/* ─── Browser Chrome (Brave-inspired) ─── */
+
+:root {
+  --browser-chrome: #222235;
+  --browser-chrome-active: #34344a;
+  --browser-chrome-hover: rgba(255,255,255,0.06);
+  --browser-toolbar: #222235;
+  --browser-omnibox: #2b2b3d;
+  --browser-omnix-focus: #363650;
+  --browser-border: rgba(255,255,255,0.06);
+  --browser-accent: #FB542B;
+  --browser-text: rgba(255,255,255,0.85);
+  --browser-text-dim: rgba(255,255,255,0.45);
+  --browser-text-faint: rgba(255,255,255,0.25);
+}
+
+.browser-chrome {
+  background: var(--browser-chrome);
+}
+
+.browser-tab {
+  position: relative;
+  max-width: 240px;
+  min-width: 80px;
+  height: 34px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 10px 10px 0 0;
+  font-size: 12px;
+  color: var(--browser-text-dim);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+.browser-tab:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--browser-text);
+}
+.browser-tab--active {
+  background: var(--browser-chrome);
+  color: var(--browser-text);
+}
+/* Brave-style accent indicator at top of active tab */
+.browser-tab--active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  background: var(--browser-accent);
+  border-radius: 0 0 2px 2px;
+}
+
+.browser-tab__close {
+  opacity: 0;
+  border-radius: 4px;
+  padding: 2px;
+  transition: opacity 0.1s, background 0.1s;
+}
+.browser-tab:hover .browser-tab__close {
+  opacity: 1;
+}
+.browser-tab__close:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+/* Tab context menu */
+.tab-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 180px;
+  background: rgba(30,30,42,0.96);
+  backdrop-filter: blur(20px);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.tab-ctx-sep {
+  height: 1px;
+  background: rgba(255,255,255,0.06);
+  margin: 4px 8px;
+}
+.ntp-ctx-item:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+.browser-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--browser-text-dim);
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+.browser-nav-btn:hover {
+  background: var(--browser-chrome-hover);
+  color: var(--browser-text);
+}
+.browser-nav-btn:disabled {
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+/* Omnibox bar — Brave-style prominent pill shape */
+.browser-omnibox-bar {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  background: #2e2e44;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 20px;
+  padding: 0 6px;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.browser-omnibox-bar:focus-within {
+  background: #38385a;
+  border-color: rgba(255,255,255,0.12);
+  box-shadow: 0 0 0 2px rgba(251,84,43,0.12);
+}
+
+/* Omnibox internal buttons */
+.browser-omnibox-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  color: var(--browser-text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.browser-omnibox-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--browser-text);
+}
+
+/* Omnibox text input */
+.browser-omnibox {
+  flex: 1;
+  height: 100%;
+  background: transparent;
+  border: none;
+  padding: 0 10px;
+  font-size: 13.5px;
+  color: var(--browser-text);
+  outline: none;
+  width: 100%;
+  min-width: 0;
+}
+.browser-omnibox::placeholder {
+  color: var(--browser-text-faint);
+}
+
+.browser-dropdown {
+  background: #2a2a3e;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+.browser-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--browser-text-dim);
+  transition: background 0.1s, color 0.1s;
+  text-align: left;
+}
+.browser-dropdown-item:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--browser-text);
+}
+
+.browser-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  transition: background 0.2s;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.browser-toggle--on {
+  background: var(--browser-accent);
+}
+.browser-toggle--off {
+  background: rgba(255,255,255,0.12);
+}
+.browser-toggle__knob {
+  position: absolute;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.2s;
+}
+.browser-toggle--on .browser-toggle__knob {
+  left: 18px;
+}
+.browser-toggle--off .browser-toggle__knob {
+  left: 2px;
+}
+
+.browser-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.browser-progress {
+  height: 2px;
+  background: var(--browser-accent);
+  transition: width 0.3s ease;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+/* ─── NTP Layout (Brave-inspired flex column) ─── */
+
+.ntp-root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  min-height: 100%;
+  overflow-y: auto;
+  -webkit-font-smoothing: antialiased;
+  --ntp-scroll-progress: 0;
+}
+
+/* Scroll-linked darkening + blur overlay */
+.ntp-bg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: rgba(0,0,0, calc(var(--ntp-scroll-progress) * 0.6));
+  backdrop-filter: blur(calc(var(--ntp-scroll-progress) * 32px));
+  transition: --ntp-scroll-progress 0.05s linear;
+}
+
+.ntp-page {
+  position: relative;
+  z-index: 10;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 24px;
+  pointer-events: none;
+  gap: 16px;
+}
+.ntp-page > * {
+  pointer-events: auto;
+}
+
+/* Clock — absolutely positioned top-left (matches Brave .clock) */
+.ntp-clock-pos {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  margin: 24px;
+  padding: 8px;
+  pointer-events: auto;
+}
+
+/* Settings gear — absolutely positioned top-right (matches Brave .settings) */
+.ntp-settings-pos {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 20;
+  margin: 24px;
+}
+
+/* Top Sites — centered in flow */
+.ntp-grid-top-sites {
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+/* Search — centered in flow */
+.ntp-grid-search {
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+}
+
+/* Spacer — pushes stats widget to bottom */
+.ntp-spacer {
+  flex: 1 1 auto;
+  align-self: stretch;
+}
+
+/* Widget row — tabbed widget stacks (matches Brave .widget-container) */
+.ntp-widget-row {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: stretch;
+  padding: 0 16px;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Widget stack — tabbed container for widgets */
+.ntp-widget-stack {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 128px;
+  max-width: 400px;
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ntp-stack-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.ntp-stack-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: rgba(255,255,255,0.35);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  padding: 0;
+}
+.ntp-stack-tab:hover {
+  color: rgba(255,255,255,0.6);
+}
+.ntp-stack-tab--active {
+  color: #f97316;
+  border-bottom-color: #f97316;
+}
+.ntp-stack-body {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Stats widget — bottom of page (legacy, kept for compat) */
+.ntp-grid-stats {
+  flex: 0 0 auto;
+  padding: 0 16px;
+}
+
+/* Footer — photo credits at bottom */
+.ntp-footer {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 24px;
+  pointer-events: none;
+}
+.ntp-footer > * {
+  pointer-events: auto;
+}
+
+/* Photo credits */
+.ntp-credits {
+  max-width: 300px;
+}
+.ntp-credits-text {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+/* Settings gear button */
+.ntp-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: rgba(255,255,255,0.5);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s, color 0.15s;
+}
+.ntp-nav-btn:hover {
+  opacity: 0.95;
+  color: #fff;
+}
+
+/* ─── Clock Widget (Brave-style: time + inline AM/PM) ─── */
+
+.ntp-clock {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  font-size: 56px;
+  font-weight: 500;
+  line-height: 1;
+  color: #fff;
+  opacity: 0.9;
+  text-shadow: rgba(0, 0, 0, 0.33) 0 1px 2px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.ntp-clock-day-period {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 14px;
+  margin-top: 7px;
+}
+
+/* ─── Stats List (Brave pattern) ─── */
+
+.ntp-stats-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-weight: 400;
+}
+
+.ntp-stats-item {
+  margin: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ntp-stats-item:first-child {
+  color: #4F86E2;
+}
+.ntp-stats-item:nth-child(2) {
+  color: #F28A29;
+}
+.ntp-stats-item:last-child {
+  color: #fff;
+  margin-right: 0;
+}
+
+.ntp-stats-counter {
+  font-size: 40px;
+  font-weight: 400;
+  width: 7ch;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: 1.1;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.ntp-stats-unit {
+  font-size: 20px;
+  font-family: system-ui, -apple-system, sans-serif;
+  margin-left: 4px;
+  display: inline;
+}
+
+.ntp-stats-desc {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.7);
+  margin-top: 4px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* ─── News Widget (Brave-style) ─── */
+
+.ntp-news-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+.ntp-news-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ntp-news-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ntp-news-dots {
+  display: flex;
+  gap: 5px;
+}
+.ntp-news-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.ntp-news-dot:hover {
+  background: rgba(255,255,255,0.4);
+}
+.ntp-news-dot--active {
+  background: #fff;
+  transform: scale(1.3);
+}
+
+.ntp-news-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  flex: 1;
+  border-radius: 10px;
+  transition: background 0.15s;
+}
+.ntp-news-card:hover {
+  background: rgba(255,255,255,0.06);
+}
+.ntp-news-card-img {
+  width: 80px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.04);
+}
+.ntp-news-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ntp-news-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.ntp-news-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ntp-news-card-sep {
+  opacity: 0.4;
+}
+.ntp-news-card-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.85);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ─── Top Sites Tiles (Brave pattern: flex row, centered) ─── */
+
+.ntp-top-sites {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: fit-content;
+  margin: 0 auto;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 600px;
+}
+
+.ntp-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 72px;
+  padding: 0;
+  border-radius: 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s;
+  text-decoration: none;
+}
+.ntp-tile:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.ntp-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(217, 217, 222, 0.56);
+  backdrop-filter: blur(50px);
+  transition: transform 0.12s, background 0.12s;
+  /* Gradient border (matches Brave) */
+  position: relative;
+}
+.ntp-tile-icon::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  padding: 1px;
+  background: linear-gradient(
+    156.52deg,
+    rgba(0, 0, 0, 0.05) 2.12%,
+    rgba(0, 0, 0, 0) 39%,
+    rgba(0, 0, 0, 0) 54.33%,
+    rgba(0, 0, 0, 0.15) 93.02%
+  );
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.ntp-tile:hover .ntp-tile-icon {
+  transform: scale(1.05);
+  background: rgba(217, 217, 222, 0.66);
+}
+
+.ntp-tile-fallback {
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ntp-tile-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  width: 100%;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0px 1px 4px rgba(0, 0, 0, 0.40);
+  transition: color 0.12s;
+}
+.ntp-tile:hover .ntp-tile-label {
+  color: rgba(255,255,255,0.9);
+}
+
+/* ─── Top Sites Pagination (arrows + dots) ─── */
+
+.ntp-sites-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.ntp-page-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+  opacity: 0;
+}
+.ntp-sites-pager:hover .ntp-page-arrow {
+  opacity: 1;
+}
+.ntp-page-arrow:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+.ntp-page-dots {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+}
+.ntp-page-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.ntp-page-dot:hover {
+  background: rgba(255,255,255,0.5);
+}
+.ntp-page-dot--active {
+  background: #fff;
+  transform: scale(1.3);
+}
+
+/* Show More / Show Less toggle below tiles */
+.ntp-sites-toggle {
+  display: block;
+  margin: 28px auto 0;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 12px;
+  transition: color 0.15s, background 0.15s;
+}
+.ntp-sites-toggle:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.08);
+}
+
+/* ─── Add shortcut tile ─── */
+.ntp-add-tile {
+  border: 2px dashed rgba(255,255,255,0.15);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ntp-add-tile:hover {
+  border-color: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.04);
+}
+.ntp-add-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.35);
+  background: transparent !important;
+}
+
+/* ─── Top site context menu ─── */
+.ntp-site-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 140px;
+  background: rgba(30,30,42,0.96);
+  backdrop-filter: blur(20px);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.ntp-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: rgba(255,255,255,0.8);
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+.ntp-ctx-item:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+.ntp-ctx-item--danger:hover {
+  background: rgba(239,68,68,0.15);
+  color: #f87171;
+}
+
+/* ─── Edit/Add modal ─── */
+.ntp-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ntp-edit-modal {
+  background: #1e1e2a;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 24px;
+  width: 340px;
+  max-width: 90vw;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+}
+.ntp-edit-modal-title {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+.ntp-edit-label {
+  display: block;
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  margin: 12px 0 4px;
+}
+.ntp-edit-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.ntp-edit-input:focus {
+  border-color: rgba(255,160,60,0.5);
+}
+.ntp-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+.ntp-edit-cancel {
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  font-size: 12px;
+  cursor: pointer;
+}
+.ntp-edit-cancel:hover {
+  background: rgba(255,255,255,0.06);
+}
+.ntp-edit-save {
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #f97316;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.ntp-edit-save:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ntp-edit-save:not(:disabled):hover {
+  background: #ea580c;
+}
+
+/* ─── Remove toast ─── */
+.ntp-remove-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 800;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: rgba(30,30,42,0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  color: rgba(255,255,255,0.8);
+  font-size: 13px;
+  animation: ntp-toast-in 0.25s ease-out;
+}
+.ntp-remove-undo {
+  background: none;
+  border: none;
+  color: #f97316;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.ntp-remove-undo:hover {
+  color: #fb923c;
+}
+@keyframes ntp-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ─── NTP Settings Modal ─── */
+.ntp-settings-modal {
+  display: flex;
+  width: 520px;
+  max-width: 92vw;
+  max-height: 80vh;
+  background: #1e1e2a;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+.ntp-settings-sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  padding: 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ntp-settings-title {
+  margin: 0 0 12px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ntp-settings-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: rgba(255,255,255,0.6);
+  font-size: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+.ntp-settings-nav:hover {
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+}
+.ntp-settings-nav--active {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+.ntp-settings-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ntp-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.ntp-settings-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+.ntp-settings-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: rgba(255,255,255,0.4);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ntp-settings-close:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+.ntp-settings-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.ntp-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.ntp-settings-row-label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+}
+.ntp-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.1);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s;
+}
+.ntp-toggle--on {
+  background: #f97316;
+}
+.ntp-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.2s;
+}
+.ntp-toggle--on .ntp-toggle-knob {
+  left: 18px;
+}
+.ntp-settings-bg-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ntp-bg-thumb {
+  width: 100px;
+  height: 60px;
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-end;
+  padding: 4px;
+  overflow: hidden;
+}
+.ntp-bg-thumb-label {
+  font-size: 9px;
+  color: rgba(255,255,255,0.7);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+}
+.ntp-bg-nav-btns {
+  display: flex;
+  gap: 4px;
+}
+.ntp-bg-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+}
+.ntp-bg-nav-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+
+/* ─── Reading List Page ─── */
+.reading-list-page {
+  padding: 24px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.reading-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.reading-list-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+}
+.reading-list-actions {
+  display: flex;
+  gap: 8px;
+}
+.reading-list-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: none;
+  background: #f97316;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.reading-list-add-btn:hover {
+  background: #ea580c;
+}
+.reading-list-clear-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: rgba(255,255,255,0.5);
+  font-size: 12px;
+  cursor: pointer;
+}
+.reading-list-clear-btn:hover {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.8);
+}
+.reading-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 0;
+  color: rgba(255,255,255,0.4);
+  font-size: 14px;
+}
+.reading-list-empty-hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.25);
+  margin: 0;
+}
+.reading-list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.reading-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  transition: background 0.12s;
+}
+.reading-list-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+.reading-list-item--read {
+  opacity: 0.5;
+}
+.reading-list-item-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.reading-list-item-title {
+  font-size: 13px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reading-list-item--read .reading-list-item-title {
+  text-decoration: line-through;
+  text-decoration-color: rgba(255,255,255,0.2);
+}
+.reading-list-item-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+}
+.reading-list-item-controls {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.reading-list-item:hover .reading-list-item-controls {
+  opacity: 1;
+}
+.reading-list-item-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+}
+.reading-list-item-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+.reading-list-item-btn--danger:hover {
+  background: rgba(239,68,68,0.15);
+  color: #f87171;
+}
+
+/* ─── Responsive: smaller clock + tighter margins on narrow viewports ─── */
+
+@media screen and (max-width: 870px) {
+  .ntp-clock-pos {
+    margin: 12px;
+  }
+  .ntp-settings-pos {
+    margin: 12px;
+  }
+  .ntp-clock {
+    font-size: 16px;
+  }
+  .ntp-clock-day-period {
+    display: none;
+  }
+  .ntp-widget-row {
+    flex-direction: column;
+    align-items: center;
+  }
+  .ntp-widget-cell {
+    max-width: 100%;
+    width: 100%;
+  }
+  .ntp-stats-list {
+    justify-content: center;
+  }
+  .ntp-top-sites {
+    justify-content: center;
+  }
+}
+
+/* ─── Search Widget (Brave pattern) ─── */
+
+.ntp-search-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.ntp-search-form {
+  width: 100%;
+  max-width: 416px;
+  transition: max-width 0.3s ease;
+}
+
+/* Expanded state — grows on focus (matches Brave .expanded .search-container) */
+.ntp-search-focused .ntp-search-form {
+  max-width: 540px;
+}
+
+.ntp-search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ntp-search-icon-left {
+  position: absolute;
+  left: 16px;
+  width: 18px;
+  height: 18px;
+  color: rgba(255,255,255,0.25);
+  pointer-events: none;
+}
+
+/* Provider badge badge — right side of search input */
+.ntp-search-badge {
+  display: flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.4);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.ntp-search-badge:hover {
+  background: rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.7);
+}
+
+/* Engine picker dropdown */
+.ntp-engine-picker-wrap {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+}
+.ntp-engine-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: rgba(30,30,42,0.96);
+  backdrop-filter: blur(20px);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 100;
+}
+.ntp-engine-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: rgba(255,255,255,0.8);
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+.ntp-engine-item:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+.ntp-engine-item--active {
+  color: #f97316;
+}
+.ntp-engine-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.5);
+  flex-shrink: 0;
+}
+
+.ntp-search-input {
+  width: 100%;
+  background: var(--browser-chrome);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 16px 52px;
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  transition: border-color 0.25s, box-shadow 0.25s, background 0.25s, padding 0.3s, font-size 0.3s;
+}
+.ntp-search-input::placeholder {
+  color: var(--browser-text-faint);
+  font-size: 15px;
+  transition: font-size 0.3s;
+}
+.ntp-search-input:focus {
+  border-color: rgba(251,84,43,0.3);
+  background: var(--browser-chrome-active);
+  box-shadow: 0 6px 32px rgba(0,0,0,0.55);
+  padding: 20px 56px;
+  font-size: 18px;
+}
+.ntp-search-input:focus::placeholder {
+  font-size: 17px;
+}
+
+/* ─── Search Focus Blur Effect ─── */
+/* When search is focused, blur everything except the search widget */
+
+.ntp-search-focused > :not(.ntp-grid-search) {
+  filter: blur(8px) brightness(0.7);
+  opacity: 0.5;
+  transition: filter 0.25s ease, opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.ntp-grid-search {
+  transition: filter 0.25s ease, opacity 0.25s ease, transform 0.25s ease;
+}
+
+.ntp-search-focused .ntp-grid-search {
+  filter: none;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-4px);
+}
+
+/* ─── NTP Bottom Bar (provider pills + bg controls) ─── */
+
+.ntp-bottom-bar {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 24px;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.ntp-bottom-providers {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ntp-bottom-pill {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.35);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.ntp-bottom-pill:hover {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.7);
+}
+.ntp-bottom-pill--active {
+  background: rgba(251,84,43,0.18);
+  color: #FB542B;
+}
+
+.ntp-bottom-bg {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: 4px;
+  padding-left: 4px;
+  border-left: 1px solid rgba(255,255,255,0.08);
+}
+
+.ntp-bottom-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.35);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.ntp-bottom-icon:hover {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.7);
+}
