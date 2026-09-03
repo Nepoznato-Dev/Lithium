@@ -3,7 +3,7 @@
 Lithium is a lightweight, offline-first web desktop and workspace for games,
 music, browsing, files, AI, and quick tools. Built on **Preact** for a tiny
 bundle (~72 kB gzipped), it runs fast on any device with no heavy frameworks
-or trackers. BUILT BY UNKNOWN CHERRY & Litten_Lawliet
+or trackers. BUILT BY Unknown Cherry & Litten_Lawliet
 
 ## What's inside
 
