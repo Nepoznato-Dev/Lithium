@@ -41,6 +41,7 @@ mod snap;
 mod soloist;
 mod storage_calc;
 mod runtime;
+mod tar_archive;
 mod widget;
 
 const MAGIC: u32 = 0x4C694653; // "LiFS"
@@ -1428,4 +1429,26 @@ pub extern "C" fn browser_slug(ptr: u32, len: u32) -> u32 {
     let text = get(&obj, "text").and_then(|v| match v { Value::Str(s) => Some(s.as_str()), _ => None }).unwrap_or("");
     let result = browser::slug(text);
     set_out(format!("\"{}\"", json_escape(&result)).into_bytes())
+}
+
+/* ---------- TAR archive ---------- */
+
+/// Build TAR stream from entries: {"entries": [{"name", "data_b64"}]} → raw TAR bytes via out_ptr.
+#[no_mangle]
+pub extern "C" fn tar_build(ptr: u32, len: u32) -> u32 {
+    let data = unsafe { input(ptr, len) };
+    match tar_archive::build_tar(data) {
+        Some(out) => set_out(out),
+        None => 0,
+    }
+}
+
+/// Parse TAR stream: raw TAR bytes → JSON {"files": [{"name", "data_b64"}], "count": N}.
+#[no_mangle]
+pub extern "C" fn tar_parse(ptr: u32, len: u32) -> u32 {
+    let data = unsafe { input(ptr, len) };
+    match tar_archive::parse_tar(data) {
+        Some(out) => set_out(out.into_bytes()),
+        None => 0,
+    }
 }

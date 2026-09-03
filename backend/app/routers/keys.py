@@ -1,9 +1,10 @@
-"""API key management — stored server-side; per-request keys take priority."""
+"""API key management — stored encrypted server-side; per-request keys take priority."""
 import time
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from .. import db
+from ..encryption import encrypt_value, decrypt_value
 
 router = APIRouter(prefix='/api')
 
@@ -22,11 +23,12 @@ def list_keys():
 
 @router.post('/keys')
 def save_key(body: KeyIn):
+    encrypted = encrypt_value(body.key)
     with db.connect() as conn:
         conn.execute(
             'INSERT INTO keys (provider, key, updated_at) VALUES (?, ?, ?)'
             ' ON CONFLICT(provider) DO UPDATE SET key = excluded.key, updated_at = excluded.updated_at',
-            (body.provider, body.key, int(time.time() * 1000)),
+            (body.provider, encrypted, int(time.time() * 1000)),
         )
     return {'ok': True}
 
@@ -41,4 +43,6 @@ def delete_key(provider: str):
 def stored_key(provider):
     with db.connect() as conn:
         row = conn.execute('SELECT key FROM keys WHERE provider = ?', (provider,)).fetchone()
-    return row['key'] if row else None
+    if not row:
+        return None
+    return decrypt_value(row['key'])

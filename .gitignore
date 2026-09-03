@@ -11,6 +11,7 @@ __pycache__/
 *.pyc
 backend/lithium.db
 backend/data/
+backend/.encryption_key
 
 # Rust build artifacts
 rust/lithium-core/target/

@@ -1,65 +1,170 @@
 /**
  * JS facade over the Rust lithium-core wasm module.
- * Sync facades return null when wasm isn't loaded; callers supply
- * minimal JS defaults via `|| fallback`.
+ *
+ * Sync facades are generated from a data-driven dispatch table.
+ * Each entry maps a public name → [wasmExport, returnType].
+ * The generic `_call` function handles encode → invoke → decode.
+ *
+ * Helpers (coreReady, hasWasm, wasmStatus, safe, toWasm, fromOut, callStr, mem)
+ * live in coreHelpers.js — this file re-exports them for backward compat.
  */
 
-let exportsRef = null;
-let readyPromise = null;
+export { coreReady, hasWasm, wasmStatus, mem, safe, toWasm, fromOut, callStr, getE } from './coreHelpers';
+import { coreReady, safe, toWasm, fromOut, mem, getE } from './coreHelpers';
 
-export function coreReady() {
-  if (!readyPromise) {
-    readyPromise = (async () => {
-      try {
-        const response = await fetch(new URL('../wasm/lithium_core.wasm', import.meta.url));
-        if (!response.ok) throw new Error(`wasm fetch ${response.status}`);
-        const bytes = await response.arrayBuffer();
-        const { instance } = await WebAssembly.instantiate(bytes, {});
-        exportsRef = instance.exports;
-        const fnCount = Object.keys(exportsRef).filter(k => typeof exportsRef[k] === 'function').length;
-        console.log(`[lithium-core] WASM loaded — ${fnCount} native functions available`);
-      } catch (err) {
-        exportsRef = null;
-        console.warn('[lithium-core] WASM unavailable:', err.message || err);
-      }
-      return exportsRef;
-    })();
+/* ================================================================
+   Dispatch table  —  [wasmExport, returnType]
+   returnType:
+     'json'   → callStr(fn, JSON.stringify(input)) → JSON.parse   (default)
+     'str'    → callStr(fn, JSON.stringify(input)) → raw string
+     'bytes'  → toWasm(input) → fn(ptr, len) → fromOut → Uint8Array
+     'int'    → toWasm(input) → fn(ptr, len) → raw integer
+   Input is byte-encoded (TextEncoder) when the key contains 'Bytes',
+   otherwise JSON-serialized.
+   ================================================================ */
+
+const _D = {
+  // Markdown + fs
+  mdRenderSync:              ['md_render',           'str'],
+  mdRenderEnhancedSync:      ['md_render_enhanced',  'str'],
+  mdWikiLinksSync:           ['md_wiki_links',       'json'],
+  fsOpSync:                  ['fs_op',               'json'],
+  explorerOpSync:            ['explorer_op',         'json'],
+  // API catalog / validate / audit
+  apiCatalogSync:            ['api_catalog',         'json'],
+  apiValidateSync:           ['api_validate',        'json'],
+  apiAuditAppendSync:        ['api_audit_append',    'json'],
+  // Notification history
+  notifyFilterSync:          ['notify_filter',       'json'],
+  notifyMarkAllReadSync:     ['notify_mark_all_read','json'],
+  notifyMarkReadSync:        ['notify_mark_read',    'json'],
+  notifyDismissSync:         ['notify_dismiss',      'json'],
+  notifyUnreadCountSync:     ['notify_unread_count', 'int'],
+  // Settings
+  settingsDefaultsSync:      ['settings_defaults',       'json'],
+  settingsMergeSync:         ['settings_merge',          'json'],
+  settingsSetAtPathSync:     ['settings_set_at_path',    'json'],
+  // Window snap
+  snapDetectZoneSync:        ['snap_detect_zone',    'json'],
+  snapBoundsSync:            ['snap_bounds',         'json'],
+  snapPreviewStyleSync:      ['snap_preview_style',  'json'],
+  // Lock
+  lockVerifySync:            ['lock_verify',          'json'],
+  lockRecordFailureSync:     ['lock_record_failure',  'json'],
+  // Memory
+  memoryWriteSync:           ['memory_write',         'json'],
+  memoryDumpSync:            ['memory_dump',          'json'],
+  // Agent
+  agentModeCatalogSync:      ['agent_mode_catalog',       'json'],
+  agentExtractApiCallsSync:  ['agent_extract_api_calls',  'json'],
+  agentExtractWidgetBlocksSync: ['agent_extract_widget_blocks', 'json'],
+  agentStripToolBlocksSync:  ['agent_strip_tool_blocks',  'json'],
+  // Chat
+  chatsUpsertSync:           ['chats_upsert',  'json'],
+  chatsDeleteSync:           ['chats_delete',  'json'],
+  chatsTrimSync:             ['chats_trim',    'json'],
+  // Storage calculation
+  storageFormatBytesSync:    ['storage_format_bytes',  'json'],
+  storageGuessDiskSync:      ['storage_guess_disk',    'json'],
+  storageSummarySync:        ['storage_summary',       'json'],
+  // Weather
+  weatherDescriptionSync:    ['weather_description',   'json'],
+  weatherEmojiSync:          ['weather_emoji',         'json'],
+  weatherReportSync:         ['weather_report',        'json'],
+  weatherSummaryLineSync:    ['weather_summary_line',  'json'],
+  // KV tier
+  kvShouldOverflowSync:      ['kv_should_overflow',      'json'],
+  kvOverflowBytesSync:       ['kv_overflow_bytes',       'json'],
+  kvMigrationCandidatesSync: ['kv_migration_candidates', 'json'],
+  // Download sync
+  dlSlugSync:                ['dl_slug',      'json'],
+  dlProgressSync:            ['dl_progress',  'json'],
+  dlStateSync:               ['dl_state',     'json'],
+  // Model
+  modelSlugifySync:          ['model_slugify',        'json'],
+  modelParseHfUrlSync:       ['model_parse_hf_url',   'json'],
+  modelHfResolveUrlSync:     ['model_hf_resolve_url', 'json'],
+  modelSearchSync:           ['model_search',         'json'],
+  modelDownloadSlugSync:     ['model_download_slug',  'json'],
+  // Soloist
+  soloistEntityInfoSync:     ['soloist_entity_info', 'json'],
+  soloistPositionSync:       ['soloist_position',    'json'],
+  // Inference runtime
+  runtimePrepareMessagesSync:      ['runtime_prepare_messages',       'json'],
+  runtimeEstimateTokensSync:       ['runtime_estimate_tokens',        'json'],
+  runtimeEstimateMessagesTokensSync: ['runtime_estimate_messages_tokens', 'json'],
+  runtimeTrimMessagesToContextSync:  ['runtime_trim_messages_to_context', 'json'],
+  runtimeResolveModelSync:           ['runtime_resolve_model',          'json'],
+  // Widget runtime
+  widgetFilterEntriesSync:   ['widget_filter_entries',   'json'],
+  widgetToggleEnabledSync:   ['widget_toggle_enabled',   'json'],
+  widgetStaleRunningIdsSync: ['widget_stale_running_ids','json'],
+  // Browser
+  browserResolveInputSync:     ['browser_resolve_input',     'json'],
+  browserHostnameSync:         ['browser_hostname',          'json'],
+  browserToProxyUrlSync:       ['browser_to_proxy_url',      'json'],
+  browserStatsIncrementSync:   ['browser_stats_increment',   'json'],
+  browserStatsDailyResetSync:  ['browser_stats_daily_reset', 'json'],
+  browserFormatStatNumberSync: ['browser_format_stat_number','json'],
+  browserFormatTimeSavedSync:  ['browser_format_time_saved', 'json'],
+  browserBookmarkTreeSync:     ['browser_bookmark_tree',     'json'],
+  browserBookmarkSearchSync:   ['browser_bookmark_search',   'json'],
+  browserHistoryGroupSync:     ['browser_history_group',     'json'],
+  browserHistorySearchSync:    ['browser_history_search',    'json'],
+  browserOmniboxRankSync:      ['browser_omnibox_rank',      'json'],
+  browserSanitizeHtmlSync:     ['browser_sanitize_html',     'str'],
+  browserSlugSync:             ['browser_slug',              'json'],
+};
+
+/* ---------- generic dispatcher ---------- */
+
+function _call(name, input) {
+  const e = getE();
+  if (!e) return null;
+  const entry = _D[name];
+  if (!entry) return null;
+  const [wasmFn, ret] = entry;
+  const fn = e[wasmFn];
+  if (!fn) return null;
+
+  // Encode input
+  let ptr, len;
+  if (name.includes('Bytes')) {
+    ptr = toWasm(input);
+    len = input.length;
+  } else {
+    const bytes = new TextEncoder().encode(JSON.stringify(input));
+    ptr = toWasm(bytes);
+    len = bytes.length;
   }
-  return readyPromise;
+
+  const out = fn(ptr, len);
+
+  // Decode output by return type
+  switch (ret) {
+    case 'bytes': {
+      return out ? fromOut(out) : null;
+    }
+    case 'int': {
+      return out;
+    }
+    case 'str': {
+      return out ? new TextDecoder().decode(fromOut(out)) : null;
+    }
+    default: { // json
+      if (!out) return null;
+      const text = new TextDecoder().decode(fromOut(out));
+      try { return JSON.parse(text); } catch { return null; }
+    }
+  }
 }
 
-export function hasWasm() {
-  return Boolean(exportsRef);
-}
-
-/** Diagnostic: returns a summary of WASM status for browser console debugging. */
-export function wasmStatus() {
-  if (!exportsRef) return { wasm: false, functions: [] };
-  const fns = Object.keys(exportsRef).filter(k => typeof exportsRef[k] === 'function');
-  return { wasm: true, functions: fns, memory: `${(exportsRef.memory.buffer.byteLength / 1024).toFixed(0)} KB` };
-}
-
-const mem = () => new Uint8Array(exportsRef.memory.buffer);
-
-/** Run a WASM call with graceful null-return when exports aren't ready. */
-function safe(fn) {
-  if (!exportsRef) return null;
-  return fn();
-}
-
-function toWasm(u8) {
-  const ptr = exportsRef.alloc(u8.length);
-  mem().set(u8, ptr);
-  return ptr;
-}
-
-function fromOut(len) {
-  const ptr = exportsRef.out_ptr();
-  return mem().slice(ptr, ptr + len);
-}
+/* ================================================================
+   Async facades (need await coreReady()) — unique, not table-driven
+   ================================================================ */
 
 /** LZ4-compress (size-prepended container). Returns Uint8Array or null (no wasm). */
-export async function wasmCompress(u8) {
+export async function wasmComPress(u8) {
   const wasm = await coreReady();
   if (!wasm) return null;
   const len = wasm.lz4_compress(toWasm(u8), u8.length);
@@ -104,625 +209,167 @@ export async function snapshotDecode(bin) {
   return len ? new TextDecoder().decode(fromOut(len)) : null;
 }
 
-/* ---------- Sync facades (markdown + fs ops) ----------
- * These run only when the wasm is already instantiated (warmed up at app
- * start); callers keep a JS fallback for the null result. */
+/* ================================================================
+   Sync facades — auto-generated from the dispatch table.
+   Each is a thin wrapper: pack args → _call(name, input) → return.
+   ================================================================ */
 
-function callStr(fn, text) {
-  const bytes = new TextEncoder().encode(text);
-  const len = fn(toWasm(bytes), bytes.length);
-  return len ? new TextDecoder().decode(fromOut(len)) : null;
-}
+/* ---------- Markdown + fs ---------- */
 
-/** Markdown → HTML via Rust. Null when wasm isn't loaded (JS fallback). */
-export function mdRenderSync(source) {
-  return safe(() => {
-    return callStr(exportsRef.md_render, source || '');
-  });
-}
+export function mdRenderSync(source) { return safe(() => _call('mdRenderSync', source || '')); }
+export function mdRenderEnhancedSync(source) { return safe(() => _call('mdRenderEnhancedSync', source || '')); }
+export function mdWikiLinksSync(source) { return safe(() => _call('mdWikiLinksSync', source || '')); }
+export function fsOpSync(request) { return safe(() => _call('fsOpSync', request)); }
+export function explorerOpSync(request) { return safe(() => _call('explorerOpSync', request)); }
 
-/** Enhanced Markdown (Obsidian/GFM) → HTML via Rust. Null without wasm. */
-export function mdRenderEnhancedSync(source) {
-  return safe(() => {
-    return callStr(exportsRef.md_render_enhanced, source || '');
-  });
-}
+/* ---------- API catalog / validate / audit ---------- */
 
-/** Unique [[wiki link]] targets via Rust. Null without wasm. */
-export function mdWikiLinksSync(source) {
-  return safe(() => {
-    const out = callStr(exportsRef.md_wiki_links, source || '');
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** File-system tree op via Rust. `op` = { op, tree, id, … } → parsed JSON or null. */
-export function fsOpSync(request) {
-  return safe(() => {
-    const out = callStr(exportsRef.fs_op, JSON.stringify(request));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Explorer-specific WASM ops: sort, filter, search, batch ops, MIME, etc.
- *  Returns null when wasm isn't loaded; callers supply JS fallbacks. */
-export function explorerOpSync(request) {
-  return safe(() => {
-    const out = callStr(exportsRef.explorer_op, JSON.stringify(request));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Full API catalog from Rust ({ api, ns, desc, callers, params }[]). */
-export function apiCatalogSync() {
-  return safe(() => {
-    const len = exportsRef.api_catalog();
-    return len ? JSON.parse(new TextDecoder().decode(fromOut(len))) : null;
-  });
-}
-
-/** Validate an API call request in Rust → { ok, api, params } | { ok: false, error }. */
-export function apiValidateSync(request) {
-  return safe(() => {
-    const out = callStr(exportsRef.api_validate, JSON.stringify(request));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Prepend audit log entry and cap: returns updated log array. */
+export function apiCatalogSync() { return safe(() => _call('apiCatalogSync', {})); }
+export function apiValidateSync(request) { return safe(() => _call('apiValidateSync', request)); }
 export function apiAuditAppendSync(log, api, caller, ok, error, now, cap) {
-  return safe(() => {
-    const out = callStr(exportsRef.api_audit_append, JSON.stringify({ log, api, caller, ok, error: error || '', now, cap }));
-    return out ? JSON.parse(out) : null;
-  });
+  return safe(() => _call('apiAuditAppendSync', { log, api, caller, ok, error: error || '', now, cap }));
 }
 
-/* ---------- Notification history facades ---------- */
-
-/** Filter notifications by age. JSON string → filtered JSON string. */
-export function notifyFilterSync(jsonString, cutoffMs) {
-  return safe(() => {
-    const bytes = new TextEncoder().encode(jsonString);
-    const len = exportsRef.notify_filter(toWasm(bytes), bytes.length, cutoffMs);
-    return len ? new TextDecoder().decode(fromOut(len)) : null;
-  });
-}
-
-/** Mark all notifications as read. JSON string → updated JSON string. */
-export function notifyMarkAllReadSync(jsonString) {
-  return safe(() => {
-    const bytes = new TextEncoder().encode(jsonString);
-    const len = exportsRef.notify_mark_all_read(toWasm(bytes), bytes.length);
-    return len ? new TextDecoder().decode(fromOut(len)) : null;
-  });
-}
-
-/** Mark single notification as read. JSON string + id → updated JSON string. */
-export function notifyMarkReadSync(jsonString, id) {
-  return safe(() => {
-    const bytes = new TextEncoder().encode(jsonString);
-    const idBytes = new TextEncoder().encode(id);
-    const len = exportsRef.notify_mark_read(toWasm(bytes), bytes.length, toWasm(idBytes), idBytes.length);
-    return len ? new TextDecoder().decode(fromOut(len)) : null;
-  });
-}
-
-/** Dismiss notification by id. JSON string + id → filtered JSON string. */
-export function notifyDismissSync(jsonString, id) {
-  return safe(() => {
-    const bytes = new TextEncoder().encode(jsonString);
-    const idBytes = new TextEncoder().encode(id);
-    const len = exportsRef.notify_dismiss(toWasm(bytes), bytes.length, toWasm(idBytes), idBytes.length);
-    return len ? new TextDecoder().decode(fromOut(len)) : null;
-  });
-}
-
-/** Count unread notifications. JSON string → count. */
-export function notifyUnreadCountSync(jsonString) {
-  return safe(() => {
-    const bytes = new TextEncoder().encode(jsonString);
-    return exportsRef.notify_unread_count(toWasm(bytes), bytes.length);
-  });
-}
-
-/* ---------- Settings facades ---------- */
-
-/** Default settings as JSON object. */
-export function settingsDefaultsSync() {
-  return safe(() => {
-    const len = exportsRef.settings_defaults();
-    return len ? JSON.parse(new TextDecoder().decode(fromOut(len))) : null;
-  });
-}
-
-/** Deep-merge stored settings over defaults. */
-export function settingsMergeSync(stored) {
-  return safe(() => {
-    const out = callStr(exportsRef.settings_merge, JSON.stringify({ stored }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Immutable set at dotted path. */
-export function settingsSetAtPathSync(settings, path, value) {
-  return safe(() => {
-    const out = callStr(exportsRef.settings_set_at_path, JSON.stringify({ settings, path, value }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Window snap facades ---------- */
-
-/** Detect snap zone from pointer position. */
-export function snapDetectZoneSync(x, y, screenWidth) {
-  return safe(() => {
-    const out = callStr(exportsRef.snap_detect_zone, JSON.stringify({ x, y, screenWidth }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Calculate window bounds for a snap side. */
-export function snapBoundsSync(side, taskbarPosition, screenWidth, screenHeight) {
-  return safe(() => {
-    const out = callStr(exportsRef.snap_bounds, JSON.stringify({ side, taskbarPosition, screenWidth, screenHeight }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Calculate preview style for a snap zone. */
-export function snapPreviewStyleSync(side, taskbarPosition, screenWidth, screenHeight) {
-  return safe(() => {
-    const out = callStr(exportsRef.snap_preview_style, JSON.stringify({ side, taskbarPosition, screenWidth, screenHeight }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Lock facades ---------- */
-
-/** Validate PIN format and lockout state. */
-export function lockVerifySync(pin, failCount, lockedUntil, now) {
-  return safe(() => {
-    const out = callStr(exportsRef.lock_verify, JSON.stringify({ pin, failCount, lockedUntil, now }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Record PIN failure and compute lockout. */
-export function lockRecordFailureSync(failCount, now) {
-  return safe(() => {
-    const out = callStr(exportsRef.lock_record_failure, JSON.stringify({ failCount, now }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Memory facades ---------- */
-
-/** Write memory entry with LRU eviction. */
-export function memoryWriteSync(memory, key, value, now) {
-  return safe(() => {
-    const out = callStr(exportsRef.memory_write, JSON.stringify({ memory, key, value, now }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Generate compact memory dump. */
-export function memoryDumpSync(memory, maxEntries = 40) {
-  return safe(() => {
-    const out = callStr(exportsRef.memory_dump, JSON.stringify({ memory, maxEntries }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Agent facades ---------- */
-
-/** Get mode catalog. */
-export function agentModeCatalogSync() {
-  return safe(() => {
-    const len = exportsRef.agent_mode_catalog();
-    return len ? JSON.parse(new TextDecoder().decode(fromOut(len))) : null;
-  });
-}
-
-/** Extract ```api blocks from text. */
-export function agentExtractApiCallsSync(text) {
-  return safe(() => {
-    const out = callStr(exportsRef.agent_extract_api_calls, JSON.stringify({ text }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Extract ```widget blocks from text. */
-export function agentExtractWidgetBlocksSync(text) {
-  return safe(() => {
-    const out = callStr(exportsRef.agent_extract_widget_blocks, JSON.stringify({ text }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Strip tool blocks from text. */
-export function agentStripToolBlocksSync(text) {
-  return safe(() => {
-    const out = callStr(exportsRef.agent_strip_tool_blocks, JSON.stringify({ text }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Chat facades ---------- */
-
-/** Upsert chat keeping list most-recent-first. */
-export function chatsUpsertSync(chats, chat, now) {
-  return safe(() => {
-    const out = callStr(exportsRef.chats_upsert, JSON.stringify({ chats, chat, now }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Delete chat by id. */
-export function chatsDeleteSync(chats, id) {
-  return safe(() => {
-    const out = callStr(exportsRef.chats_delete, JSON.stringify({ chats, id }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Trim chats list to max. */
-export function chatsTrimSync(chats) {
-  return safe(() => {
-    const out = callStr(exportsRef.chats_trim, JSON.stringify({ chats }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Storage calculation facades ---------- */
-
-/** Format bytes to human-readable string. */
-export function storageFormatBytesSync(bytes) {
-  return safe(() => {
-    const out = callStr(exportsRef.storage_format_bytes, JSON.stringify({ bytes }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Guess total disk from quota. */
-export function storageGuessDiskSync(quota) {
-  return safe(() => {
-    const out = callStr(exportsRef.storage_guess_disk, JSON.stringify({ quota }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Storage summary with formatted sizes. */
-export function storageSummarySync(snapshot) {
-  return safe(() => {
-    const out = callStr(exportsRef.storage_summary, JSON.stringify(snapshot));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Weather facades ---------- */
-
-/** Weather description from WMO code. */
-export function weatherDescriptionSync(code) {
-  return safe(() => {
-    const out = callStr(exportsRef.weather_description, JSON.stringify({ code }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Weather emoji from WMO code + day/night. */
-export function weatherEmojiSync(code, isDay) {
-  return safe(() => {
-    const out = callStr(exportsRef.weather_emoji, JSON.stringify({ code, isDay }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Build weather report markdown. */
-export function weatherReportSync(data) {
-  return safe(() => {
-    const out = callStr(exportsRef.weather_report, JSON.stringify(data));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Weather summary line. */
-export function weatherSummaryLineSync(params) {
-  return safe(() => {
-    const out = callStr(exportsRef.weather_summary_line, JSON.stringify(params));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- KV tier facades ---------- */
-
-/** Decide if value should overflow to IndexedDB. */
-export function kvShouldOverflowSync(jsonLength) {
-  return safe(() => {
-    const out = callStr(exportsRef.kv_should_overflow, JSON.stringify({ jsonLength }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Calculate overflow bytes from entries. */
-export function kvOverflowBytesSync(entries) {
-  return safe(() => {
-    const out = callStr(exportsRef.kv_overflow_bytes, JSON.stringify({ entries }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Migration candidates for overflow. */
-export function kvMigrationCandidatesSync(entries) {
-  return safe(() => {
-    const out = callStr(exportsRef.kv_migration_candidates, JSON.stringify({ entries }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Download sync facades ---------- */
-
-/** Download slug from name. */
-export function dlSlugSync(name) {
-  return safe(() => {
-    const out = callStr(exportsRef.dl_slug, JSON.stringify({ name }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Download progress with formatted sizes. */
-export function dlProgressSync(received, total) {
-  return safe(() => {
-    const out = callStr(exportsRef.dl_progress, JSON.stringify({ received, total }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Download state from progress. */
-export function dlStateSync(received, total, error) {
-  return safe(() => {
-    const out = callStr(exportsRef.dl_state, JSON.stringify({ received, total, error }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Model facades ---------- */
-
-/** Slugify a model name. */
-export function modelSlugifySync(text) {
-  return safe(() => {
-    const out = callStr(exportsRef.model_slugify, JSON.stringify({ text }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Parse Hugging Face URL. */
-export function modelParseHfUrlSync(url) {
-  return safe(() => {
-    const out = callStr(exportsRef.model_parse_hf_url, JSON.stringify({ url }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Resolve HF file URL. */
-export function modelHfResolveUrlSync(repoId, file) {
-  return safe(() => {
-    const out = callStr(exportsRef.model_hf_resolve_url, JSON.stringify({ repoId, file }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Search/filter models. */
-export function modelSearchSync(models, query, tier) {
-  return safe(() => {
-    const out = callStr(exportsRef.model_search, JSON.stringify({ models, query: query || '', tier: tier || '' }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Download slug from model name. */
-export function modelDownloadSlugSync(name) {
-  return safe(() => {
-    const out = callStr(exportsRef.model_download_slug, JSON.stringify({ name }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Soloist facades ---------- */
-
-/** Extract display info from a Soloist entity envelope. */
-export function soloistEntityInfoSync(item) {
-  return safe(() => {
-    const out = callStr(exportsRef.soloist_entity_info, JSON.stringify({ item }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Interpolate playback position from anchor. JS must supply now = Date.now(). */
-export function soloistPositionSync(anchor, status) {
-  return safe(() => {
-    const out = callStr(exportsRef.soloist_position, JSON.stringify({ anchor, status, now: Date.now() }));
-    return out ? parseFloat(out) : null;
-  });
-}
-
-/* ---------- Inference runtime facades ---------- */
-
-/** Prepare chat messages for inference (Qwen3 /no_think injection). */
-export function runtimePrepareMessagesSync(messages, modelId, noThink, thinking) {
-  return safe(() => {
-    const out = callStr(exportsRef.runtime_prepare_messages, JSON.stringify({ messages, modelId, noThink, thinking }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Estimate token count from text. */
-export function runtimeEstimateTokensSync(text) {
-  return safe(() => {
-    const out = callStr(exportsRef.runtime_estimate_tokens, JSON.stringify({ text }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Estimate total tokens across messages. */
-export function runtimeEstimateMessagesTokensSync(messages) {
-  return safe(() => {
-    const out = callStr(exportsRef.runtime_estimate_messages_tokens, JSON.stringify({ messages }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Trim messages to fit within a token budget. */
-export function runtimeTrimMessagesToContextSync(messages, maxTokens) {
-  return safe(() => {
-    const out = callStr(exportsRef.runtime_trim_messages_to_context, JSON.stringify({ messages, maxTokens }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Resolve tier or model ID to a downloaded model. */
-export function runtimeResolveModelSync(tierOrModelId, tiers, downloaded) {
-  return safe(() => {
-    const out = callStr(exportsRef.runtime_resolve_model, JSON.stringify({ tierOrModelId, tiers, downloaded }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Widget runtime facades ---------- */
-
-/** Filter widget entries from tree. */
-export function widgetFilterEntriesSync(tree, folderId) {
-  return safe(() => {
-    const out = callStr(exportsRef.widget_filter_entries, JSON.stringify({ tree, folderId }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Toggle id in enabled set. */
-export function widgetToggleEnabledSync(enabled, id, value) {
-  return safe(() => {
-    const out = callStr(exportsRef.widget_toggle_enabled, JSON.stringify({ enabled, id, value }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Find stale running widget ids. */
-export function widgetStaleRunningIdsSync(running, valid) {
-  return safe(() => {
-    const out = callStr(exportsRef.widget_stale_running_ids, JSON.stringify({ running, valid }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/* ---------- Browser facades ---------- */
-
-/** Resolve input as URL or search query. */
-export function browserResolveInputSync(input, searchUrl) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_resolve_input, JSON.stringify({ input, searchUrl }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Extract hostname from URL. */
-export function browserHostnameSync(url) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_hostname, JSON.stringify({ url }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Build proxy URL. */
-export function browserToProxyUrlSync(url, proxyOrigin, backendUrl) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_to_proxy_url, JSON.stringify({ url, proxyOrigin, backendUrl }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Increment shields stats. */
+/* ---------- Notification history ---------- */
+
+export function notifyFilterSync(jsonString, cutoffMs) { return safe(() => _call('notifyFilterSync', { jsonString, cutoffMs })); }
+export function notifyMarkAllReadSync(jsonString) { return safe(() => _call('notifyMarkAllReadSync', { jsonString })); }
+export function notifyMarkReadSync(jsonString, id) { return safe(() => _call('notifyMarkReadSync', { jsonString, id })); }
+export function notifyDismissSync(jsonString, id) { return safe(() => _call('notifyDismissSync', { jsonString, id })); }
+export function notifyUnreadCountSync(jsonString) { return safe(() => _call('notifyUnreadCountSync', { jsonString })); }
+
+/* ---------- Settings ---------- */
+
+export function settingsDefaultsSync() { return safe(() => _call('settingsDefaultsSync', {})); }
+export function settingsMergeSync(stored) { return safe(() => _call('settingsMergeSync', { stored })); }
+export function settingsSetAtPathSync(settings, path, value) { return safe(() => _call('settingsSetAtPathSync', { settings, path, value })); }
+
+/* ---------- Window snap ---------- */
+
+export function snapDetectZoneSync(x, y, screenWidth) { return safe(() => _call('snapDetectZoneSync', { x, y, screenWidth })); }
+export function snapBoundsSync(side, taskbarPosition, screenWidth, screenHeight) { return safe(() => _call('snapBoundsSync', { side, taskbarPosition, screenWidth, screenHeight })); }
+export function snapPreviewStyleSync(side, taskbarPosition, screenWidth, screenHeight) { return safe(() => _call('snapPreviewStyleSync', { side, taskbarPosition, screenWidth, screenHeight })); }
+
+/* ---------- Lock ---------- */
+
+export function lockVerifySync(pin, failCount, lockedUntil, now) { return safe(() => _call('lockVerifySync', { pin, failCount, lockedUntil, now })); }
+export function lockRecordFailureSync(failCount, now) { return safe(() => _call('lockRecordFailureSync', { failCount, now })); }
+
+/* ---------- Memory ---------- */
+
+export function memoryWriteSync(memory, key, value, now) { return safe(() => _call('memoryWriteSync', { memory, key, value, now })); }
+export function memoryDumpSync(memory, maxEntries = 40) { return safe(() => _call('memoryDumpSync', { memory, maxEntries })); }
+
+/* ---------- Agent ---------- */
+
+export function agentModeCatalogSync() { return safe(() => _call('agentModeCatalogSync', {})); }
+export function agentExtractApiCallsSync(text) { return safe(() => _call('agentExtractApiCallsSync', { text })); }
+export function agentExtractWidgetBlocksSync(text) { return safe(() => _call('agentExtractWidgetBlocksSync', { text })); }
+export function agentStripToolBlocksSync(text) { return safe(() => _call('agentStripToolBlocksSync', { text })); }
+
+/* ---------- Chat ---------- */
+
+export function chatsUpsertSync(chats, chat, now) { return safe(() => _call('chatsUpsertSync', { chats, chat, now })); }
+export function chatsDeleteSync(chats, id) { return safe(() => _call('chatsDeleteSync', { chats, id })); }
+export function chatsTrimSync(chats) { return safe(() => _call('chatsTrimSync', { chats })); }
+
+/* ---------- Storage calculation ---------- */
+
+export function storageFormatBytesSync(bytes) { return safe(() => _call('storageFormatBytesSync', { bytes })); }
+export function storageGuessDiskSync(quota) { return safe(() => _call('storageGuessDiskSync', { quota })); }
+export function storageSummarySync(snapshot) { return safe(() => _call('storageSummarySync', snapshot)); }
+
+/* ---------- Weather ---------- */
+
+export function weatherDescriptionSync(code) { return safe(() => _call('weatherDescriptionSync', { code })); }
+export function weatherEmojiSync(code, isDay) { return safe(() => _call('weatherEmojiSync', { code, isDay })); }
+export function weatherReportSync(data) { return safe(() => _call('weatherReportSync', data)); }
+export function weatherSummaryLineSync(params) { return safe(() => _call('weatherSummaryLineSync', params)); }
+
+/* ---------- KV tier ---------- */
+
+export function kvShouldOverflowSync(jsonLength) { return safe(() => _call('kvShouldOverflowSync', { jsonLength })); }
+export function kvOverflowBytesSync(entries) { return safe(() => _call('kvOverflowBytesSync', { entries })); }
+export function kvMigrationCandidatesSync(entries) { return safe(() => _call('kvMigrationCandidatesSync', { entries })); }
+
+/* ---------- Download sync ---------- */
+
+export function dlSlugSync(name) { return safe(() => _call('dlSlugSync', { name })); }
+export function dlProgressSync(received, total) { return safe(() => _call('dlProgressSync', { received, total })); }
+export function dlStateSync(received, total, error) { return safe(() => _call('dlStateSync', { received, total, error })); }
+
+/* ---------- Model ---------- */
+
+export function modelSlugifySync(text) { return safe(() => _call('modelSlugifySync', { text })); }
+export function modelParseHfUrlSync(url) { return safe(() => _call('modelParseHfUrlSync', { url })); }
+export function modelHfResolveUrlSync(repoId, file) { return safe(() => _call('modelHfResolveUrlSync', { repoId, file })); }
+export function modelSearchSync(models, query, tier) { return safe(() => _call('modelSearchSync', { models, query: query || '', tier: tier || '' })); }
+export function modelDownloadSlugSync(name) { return safe(() => _call('modelDownloadSlugSync', { name })); }
+
+/* ---------- Soloist ---------- */
+
+export function soloistEntityInfoSync(item) { return safe(() => _call('soloistEntityInfoSync', { item })); }
+export function soloistPositionSync(anchor, status) { return safe(() => { const o = _call('soloistPositionSync', { anchor, status, now: Date.now() }); return o ? parseFloat(o) : null; }); }
+
+/* ---------- Inference runtime ---------- */
+
+export function runtimePrepareMessagesSync(messages, modelId, noThink, thinking) { return safe(() => _call('runtimePrepareMessagesSync', { messages, modelId, noThink, thinking })); }
+export function runtimeEstimateTokensSync(text) { return safe(() => _call('runtimeEstimateTokensSync', { text })); }
+export function runtimeEstimateMessagesTokensSync(messages) { return safe(() => _call('runtimeEstimateMessagesTokensSync', { messages })); }
+export function runtimeTrimMessagesToContextSync(messages, maxTokens) { return safe(() => _call('runtimeTrimMessagesToContextSync', { messages, maxTokens })); }
+export function runtimeResolveModelSync(tierOrModelId, tiers, downloaded) { return safe(() => _call('runtimeResolveModelSync', { tierOrModelId, tiers, downloaded })); }
+
+/* ---------- Widget runtime ---------- */
+
+export function widgetFilterEntriesSync(tree, folderId) { return safe(() => _call('widgetFilterEntriesSync', { tree, folderId })); }
+export function widgetToggleEnabledSync(enabled, id, value) { return safe(() => _call('widgetToggleEnabledSync', { enabled, id, value })); }
+export function widgetStaleRunningIdsSync(running, valid) { return safe(() => _call('widgetStaleRunningIdsSync', { running, valid })); }
+
+/* ---------- Browser ---------- */
+
+export function browserResolveInputSync(input, searchUrl) { return safe(() => _call('browserResolveInputSync', { input, searchUrl })); }
+export function browserHostnameSync(url) { return safe(() => _call('browserHostnameSync', { url })); }
+export function browserToProxyUrlSync(url, proxyOrigin, backendUrl) { return safe(() => _call('browserToProxyUrlSync', { url, proxyOrigin, backendUrl })); }
 export function browserStatsIncrementSync(stats, ads, trackers, https, scripts, data) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_stats_increment, JSON.stringify({ stats: JSON.stringify(stats), ads: ads || 0, trackers: trackers || 0, https: https || 0, scripts: scripts || 0, data: data || 0 }));
-    return out ? JSON.parse(out) : null;
-  });
+  return safe(() => _call('browserStatsIncrementSync', { stats: JSON.stringify(stats), ads: ads || 0, trackers: trackers || 0, https: https || 0, scripts: scripts || 0, data: data || 0 }));
 }
-
-/** Daily reset check for shields stats. */
-export function browserStatsDailyResetSync(stats, now) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_stats_daily_reset, JSON.stringify({ stats: JSON.stringify(stats), now }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Format stat number for display. */
-export function browserFormatStatNumberSync(n) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_format_stat_number, JSON.stringify({ n }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Format time saved in seconds to human-readable. */
-export function browserFormatTimeSavedSync(seconds) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_format_time_saved, JSON.stringify({ seconds }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Build bookmark tree from flat array. */
-export function browserBookmarkTreeSync(bookmarks) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_bookmark_tree, JSON.stringify({ bookmarks }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Search bookmarks by query. */
-export function browserBookmarkSearchSync(bookmarks, query) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_bookmark_search, JSON.stringify({ bookmarks, query: query || '' }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Group history entries by date. */
-export function browserHistoryGroupSync(entries, now) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_history_group, JSON.stringify({ entries, now }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Search history by query. */
-export function browserHistorySearchSync(entries, query) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_history_search, JSON.stringify({ entries, query: query || '' }));
-    return out ? JSON.parse(out) : null;
-  });
-}
-
-/** Rank omnibox suggestions. */
+export function browserStatsDailyResetSync(stats, now) { return safe(() => _call('browserStatsDailyResetSync', { stats: JSON.stringify(stats), now })); }
+export function browserFormatStatNumberSync(n) { return safe(() => _call('browserFormatStatNumberSync', { n })); }
+export function browserFormatTimeSavedSync(seconds) { return safe(() => _call('browserFormatTimeSavedSync', { seconds })); }
+export function browserBookmarkTreeSync(bookmarks) { return safe(() => _call('browserBookmarkTreeSync', { bookmarks })); }
+export function browserBookmarkSearchSync(bookmarks, query) { return safe(() => _call('browserBookmarkSearchSync', { bookmarks, query: query || '' })); }
+export function browserHistoryGroupSync(entries, now) { return safe(() => _call('browserHistoryGroupSync', { entries, now })); }
+export function browserHistorySearchSync(entries, query) { return safe(() => _call('browserHistorySearchSync', { entries, query: query || '' })); }
 export function browserOmniboxRankSync(query, history, bookmarks, topSites) {
+  return safe(() => _call('browserOmniboxRankSync', { query: query || '', history: history || [], bookmarks: bookmarks || [], topSites: topSites || [] }));
+}
+export function browserSanitizeHtmlSync(html) { return safe(() => _call('browserSanitizeHtmlSync', { html })) || null; }
+export function browserSlugSync(text) { return safe(() => _call('browserSlugSync', { text })); }
+
+/* ---------- TAR archive (byte-level, special handling) ---------- */
+
+/** Build TAR stream from entries. Returns Uint8Array or null (no wasm). */
+export function tarBuildSync(entries) {
   return safe(() => {
-    const out = callStr(exportsRef.browser_omnibox_rank, JSON.stringify({ query: query || '', history: history || [], bookmarks: bookmarks || [], topSites: topSites || [] }));
-    return out ? JSON.parse(out) : null;
+    const jsonEntries = entries.map(e => {
+      let bin = '';
+      for (let i = 0; i < e.data.length; i += 32768) {
+        bin += String.fromCharCode.apply(null, e.data.subarray(i, Math.min(i + 32768, e.data.length)));
+      }
+      return { name: e.name, data_b64: btoa(bin) };
+    });
+    const json = JSON.stringify({ entries: jsonEntries });
+    const bytes = new TextEncoder().encode(json);
+    const len = getE().tar_build(toWasm(bytes), bytes.length);
+    return len ? fromOut(len) : null;
   });
 }
 
-/** Sanitize HTML by stripping dangerous tags. */
-export function browserSanitizeHtmlSync(html) {
+/** Parse TAR stream into file entries. Returns {files, count} or null. */
+export function tarParseSync(tarBytes) {
   return safe(() => {
-    const out = callStr(exportsRef.browser_sanitize_html, JSON.stringify({ html }));
-    return out || null;
-  });
-}
-
-/** Generate URL-safe slug from text. */
-export function browserSlugSync(text) {
-  return safe(() => {
-    const out = callStr(exportsRef.browser_slug, JSON.stringify({ text }));
-    return out ? JSON.parse(out) : null;
+    const len = getE().tar_parse(toWasm(tarBytes), tarBytes.length);
+    if (!len) return null;
+    return JSON.parse(new TextDecoder().decode(fromOut(len)));
   });
 }

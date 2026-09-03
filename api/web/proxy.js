@@ -3,6 +3,8 @@
  * Fetches any public URL, strips CSP headers/meta tags, and returns with CORS.
  */
 import { safeGet } from '../lib/urlGuard.js';
+import { corsOrigin } from '../lib/cors.js';
+import { rateLimit, clientIp } from '../lib/rateLimit.js';
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -17,16 +19,23 @@ export const config = { runtime: 'nodejs' };
 
 export default async function handler(req, res) {
   // CORS preflight
+  const origin = corsOrigin(req);
   if (req.method === 'OPTIONS') {
+    if (!origin) return res.status(403).json({ error: 'Origin not allowed' });
     return res.status(200)
-      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Access-Control-Allow-Origin', origin)
       .setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
-      .setHeader('Access-Control-Allow-Headers', '*')
+      .setHeader('Access-Control-Allow-Headers', 'Content-Type')
       .end();
   }
 
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Rate limiting
+  if (!rateLimit(clientIp(req))) {
+    return res.status(429).json({ error: 'Too many requests' });
   }
 
   const url = req.query.url;
@@ -64,13 +73,15 @@ export default async function handler(req, res) {
       body = Buffer.from(await upstream.arrayBuffer());
     }
 
-    // Build response headers — strip CSP-related + set CORS
+    // Build response headers — strip CSP-related + set origin-restricted CORS
     const headers = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': '*',
       'X-Content-Type-Options': 'nosniff',
     };
+    if (origin) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS';
+      headers['Access-Control-Allow-Headers'] = 'Content-Type';
+    }
 
     upstream.headers.forEach((value, key) => {
       const lk = key.toLowerCase();

@@ -3,6 +3,8 @@
  * Fetches a page and returns cleaned text content.
  */
 import { safeGet } from '../lib/urlGuard.js';
+import { corsOrigin } from '../lib/cors.js';
+import { rateLimit, clientIp } from '../lib/rateLimit.js';
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -22,16 +24,23 @@ function clean(value) {
 }
 
 export default async function handler(req, res) {
+  const origin = corsOrigin(req);
   if (req.method === 'OPTIONS') {
+    if (!origin) return res.status(403).json({ error: 'Origin not allowed' });
     return res.status(200)
-      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Access-Control-Allow-Origin', origin)
       .setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-      .setHeader('Access-Control-Allow-Headers', '*')
+      .setHeader('Access-Control-Allow-Headers', 'Content-Type')
       .end();
   }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Rate limiting
+  if (!rateLimit(clientIp(req))) {
+    return res.status(429).json({ error: 'Too many requests' });
   }
 
   const { url, max_chars = 12000 } = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
@@ -52,9 +61,8 @@ export default async function handler(req, res) {
     const titleMatch = /<title[^>]*>(.*?)<\/title>/i.exec(html);
     const title = titleMatch ? clean(titleMatch[1]) : url;
 
-    return res.status(200)
-      .setHeader('Access-Control-Allow-Origin', '*')
-      .json({
+    if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+    return res.status(200).json({
         url: response.url || url,
         title,
         content: text.slice(0, safeMaxChars),

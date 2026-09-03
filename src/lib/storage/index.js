@@ -25,3 +25,7 @@ export {
   coldArchive, coldRestore, coldRestoreAll, readColdEntry,
   coldStorageUsage, listColdArchives,
 } from './coldStorage';
+export {
+  initWorkspaceStorage, workspaceGet, workspaceSet, workspaceDelete,
+  foldCheckpoint, workspaceSnapshot, clearWorkspace,
+} from './workspaceStorageManager';

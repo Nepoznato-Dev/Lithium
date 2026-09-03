@@ -67,6 +67,7 @@ export default defineConfig({
     },
     chunkSizeWarningThreshold: 600,
     cssCodeSplit: true,
+    cssMinify: 'lightningcss',
     sourcemap: false,
     target: 'es2020',
   },

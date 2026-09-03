@@ -23,8 +23,13 @@ async def lifespan(_app):
 
 app = FastAPI(title='Lithium Backend', version=VERSION, lifespan=lifespan)
 
-# The desktop runs in a browser on the same machine — allow local origins.
-app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
+# The desktop runs in a browser on the same machine — allow local origins only.
+ALLOWED_ORIGINS = [
+    'http://localhost:5173',   # Vite dev server
+    'http://127.0.0.1:5173',
+    'http://localhost:4173',   # vite preview
+]
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=['*'], allow_headers=['*'])
 
 app.include_router(models.router)
 app.include_router(keys.router)

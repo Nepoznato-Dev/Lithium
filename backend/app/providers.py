@@ -6,6 +6,7 @@ Supported providers:
   google               → generativelanguage generateContent
   ollama               → local http://localhost:11434 (GGUF-class models)
 """
+import re
 import httpx
 
 OPENAI_COMPAT = {
@@ -51,7 +52,20 @@ def _raise_for(provider, response):
             detail = detail.get('message', detail) if isinstance(detail, dict) else detail
         except ValueError:
             detail = response.text[:200]
+        # Sanitize: strip any API keys or tokens that might appear in error text
+        detail = _sanitize(str(detail))
         raise RuntimeError(f'{provider}: {detail}')
+
+
+def _sanitize(text: str) -> str:
+    """Remove potential secrets from error text before raising/logging."""
+    # Strip ?key=... query parameters
+    text = re.sub(r'[?&]key=[^\s&\'"]+', '?key=***', text)
+    # Strip Bearer tokens
+    text = re.sub(r'Bearer\s+[^\s\'"]+', 'Bearer ***', text)
+    # Strip x-api-key values
+    text = re.sub(r'(x-api-key["\s:]+)[^\s\'"]+', r'\1***', text, flags=re.I)
+    return text
 
 
 async def _openai_compat(provider, model_name, messages, key, temperature):
