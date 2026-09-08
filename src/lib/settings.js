@@ -34,6 +34,30 @@ export const DEFAULT_SETTINGS = {
   browser: { searchEngine: 'brave', proxyEnabled: false, proxyUrl: '', scrapeProvider: 'brave' },
   window: { snapAssist: false, titlebarTranslucent: true },
   display: { fontSize: 14, brightness: 100, glassEffect: 30 },
+  customization: {
+    wallpaper: {
+      enabled: true,
+      type: 'color',
+      path: null,
+      url: null,
+      backgroundColor: '#0f1117',
+      gradient: 'linear-gradient(135deg, #0f1117, #1e1b4b)',
+      blur: 0,
+      brightness: 1,
+      contrast: 1,
+      opacity: 1,
+    },
+    cursor: {
+      enabled: true,
+      type: 'system',
+      path: null,
+      url: null,
+      hotspotX: 0,
+      hotspotY: 0,
+      size: 32,
+      fallback: 'auto',
+    },
+  },
   power: { batterySaver: false, autoDimOnLow: true, lowBatteryThreshold: 20 },
   security: { autoLockMinutes: 0 },
   notifications: { enabled: true, sound: true, position: 'top-right', duration: 3 },
@@ -86,4 +110,22 @@ export function applySettings(settings) {
   }
   // Window titlebar translucency
   root.dataset.titlebar = String(settings.window?.titlebarTranslucent !== false);
+
+  const cursor = settings.customization?.cursor;
+  const cursorSource = cursor?.path || cursor?.url;
+  const safeCursorSource = typeof cursorSource === 'string'
+    && /^(data:image\/|https?:\/\/)/i.test(cursorSource)
+    ? cursorSource
+    : null;
+  root.dataset.yukiCursor = String(Boolean(cursor?.enabled && cursor?.type === 'custom' && safeCursorSource));
+  if (safeCursorSource) {
+    root.style.setProperty(
+      '--yuki-cursor',
+      `url("${safeCursorSource.replaceAll('"', '%22')}") ${cursor.hotspotX || 0} ${cursor.hotspotY || 0}, ${cursor.fallback || 'auto'}`,
+    );
+    root.style.setProperty('--yuki-cursor-size', `${cursor.size || 32}px`);
+  } else {
+    root.style.removeProperty('--yuki-cursor');
+    root.style.removeProperty('--yuki-cursor-size');
+  }
 }

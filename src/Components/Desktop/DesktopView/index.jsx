@@ -51,6 +51,15 @@ export default function DesktopView() {
     volumeIconName, volumeColor, batteryColor,
     weatherEmoji, unitSymbol, weatherDescription,
   } = s;
+  const yukiWallpaper = settings.customization?.wallpaper;
+  const yukiImage = yukiWallpaper?.path || yukiWallpaper?.url;
+  const yukiWallpaperStyle = yukiWallpaper?.enabled !== false && yukiWallpaper
+    ? yukiWallpaper.type === 'image' && yukiImage
+      ? { backgroundImage: `url("${yukiImage}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
+      : yukiWallpaper.type === 'gradient'
+        ? { backgroundImage: yukiWallpaper.gradient || 'linear-gradient(135deg, #0f1117, #1e1b4b)' }
+        : { backgroundColor: yukiWallpaper.backgroundColor || '#0f1117' }
+    : {};
 
   if (shutdown) {
     return (
@@ -64,6 +73,7 @@ export default function DesktopView() {
       className="nx-desktop"
       data-taskbar={taskbarPrefs.position}
       style={{
+        ...yukiWallpaperStyle,
         ...(settings.background.enabled === false
           ? { backgroundColor: '#101014' }
           : wallpaper === 'custom' && customWallpaper
@@ -77,6 +87,18 @@ export default function DesktopView() {
       onContextMenu={desktopContextMenu}
     >
       {/* Wallpaper dimmer (Settings → Backgrounds → brightness) */}
+      {yukiWallpaper?.enabled !== false && (
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            backdropFilter: `blur(${yukiWallpaper?.blur || 0}px) brightness(${yukiWallpaper?.brightness || 1}) contrast(${yukiWallpaper?.contrast || 1})`,
+            opacity: yukiWallpaper?.opacity ?? 1,
+          }}
+        />
+      )}
       {settings.background.enabled !== false && settings.background.intensity < 1 && (
         <div aria-hidden style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${(1 - settings.background.intensity) * 0.75})`, pointerEvents: 'none' }} />
       )}

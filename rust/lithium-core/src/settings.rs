@@ -4,7 +4,7 @@ use crate::{get, write_json, Parser, Value};
 
 /// Default settings as a JSON object string.
 pub fn defaults() -> String {
-    r##"{"profile":{"username":"Player"},"theme":{"accent":"#22d3ee","contrast":"normal","appTint":true,"transparency":true},"layout":{"density":"compact"},"motion":{"animations":"full"},"background":{"enabled":true,"intensity":0.7},"performance":{"lowEndMode":false},"games":{"fullscreenOnLaunch":false,"escToClose":true},"browser":{"searchEngine":"duckduckgo"}}"##.to_string()
+    r##"{"profile":{"username":"Player"},"theme":{"accent":"#22d3ee","contrast":"normal","appTint":true,"transparency":true},"layout":{"density":"compact"},"motion":{"animations":"full"},"background":{"enabled":true,"intensity":0.7},"performance":{"lowEndMode":false},"customization":{"wallpaper":{"enabled":true,"type":"color","path":null,"url":null,"backgroundColor":"#0f1117","gradient":"linear-gradient(135deg, #0f1117, #1e1b4b)","blur":0,"brightness":1,"contrast":1,"opacity":1},"cursor":{"enabled":true,"type":"system","path":null,"url":null,"hotspotX":0,"hotspotY":0,"size":32,"fallback":"auto"}},"games":{"fullscreenOnLaunch":false,"escToClose":true},"browser":{"searchEngine":"duckduckgo"}}"##.to_string()
 }
 
 /// Deep-merge stored settings over defaults.

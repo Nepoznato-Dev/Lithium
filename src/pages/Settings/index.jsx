@@ -19,6 +19,7 @@ import GamesSection from './sections/GamesSection';
 import BrowserSection from './sections/BrowserSection';
 import DataSection from './sections/DataSection';
 import AboutSection from './sections/AboutSection';
+import YukisCustomizationSection from './sections/YukisCustomizationSection';
 
 /* ================================================================
    Section definitions
@@ -30,6 +31,7 @@ const SECTIONS = [
   { id: 'display', title: 'Display', icon: 'Monitor', keywords: ['display', 'font', 'size', 'brightness', 'blur', 'density', 'scaling'] },
   { id: 'motion', title: 'Motion & Perf', icon: 'Sparkles', keywords: ['animation', 'motion', 'transition', 'performance', 'low end', 'speed'] },
   { id: 'background', title: 'Backgrounds', icon: 'Image', keywords: ['background', 'wallpaper', 'ambient'] },
+  { id: 'yuki-customization', title: "Yuki's Customization", icon: 'Sparkles', keywords: ['yuki', 'customization', 'cursor', 'wallpaper', 'gradient'] },
   { id: 'power', title: 'Power & Battery', icon: 'Battery', keywords: ['battery', 'power', 'energy', 'saver', 'lock', 'auto-lock'] },
   { id: 'notifications', title: 'Notifications', icon: 'Bell', keywords: ['notification', 'toast', 'sound', 'alert'] },
   { id: 'window', title: 'Windows', icon: 'PanelRight', keywords: ['window', 'snap', 'assist', 'drag'] },
@@ -47,6 +49,7 @@ function getSectionDescription(id) {
     display: 'Adjust text size, brightness, and layout density',
     motion: 'Control animations and performance settings',
     background: 'Configure desktop wallpaper and ambient effects',
+    'yuki-customization': "Configure Yuki's wallpaper and cursor customization",
     power: 'Battery saver, auto-dim & power management',
     notifications: 'Toast position, duration, and sound preferences',
     window: 'Window snapping, keyboard shortcuts & title bar style',
@@ -200,6 +203,7 @@ export default function Settings({ windowed = false, closeSelf, minimizeSelf, ma
       case 'display': return <DisplaySection settings={settings} update={update} />;
       case 'motion': return <MotionSection settings={settings} update={update} />;
       case 'background': return <BackgroundSection settings={settings} update={update} />;
+      case 'yuki-customization': return <YukisCustomizationSection settings={settings} update={update} />;
       case 'power': return <PowerSection settings={settings} update={update} />;
       case 'notifications': return <NotificationsSection settings={settings} update={update} />;
       case 'window': return <WindowSection settings={settings} update={update} />;
