@@ -63,10 +63,21 @@ export const DEFAULT_SETTINGS = {
   notifications: { enabled: true, sound: true, position: 'top-right', duration: 3 },
 };
 
+function mergeDefaults(defaults, values) {
+  if (!values || typeof values !== 'object' || Array.isArray(values)) return defaults;
+  return Object.fromEntries(Object.keys({ ...defaults, ...values }).map(key => [
+    key,
+    defaults[key] && typeof defaults[key] === 'object' && !Array.isArray(defaults[key])
+      ? mergeDefaults(defaults[key], values[key])
+      : values[key] ?? defaults[key],
+  ]));
+}
+
 /** Deep-merge stored settings over defaults so new fields always exist. */
 export function loadSettings() {
   const stored = storage.get('settings', {});
-  return core.settingsMergeSync(stored) || { ...DEFAULT_SETTINGS };
+  const merged = core.settingsMergeSync(stored);
+  return mergeDefaults(DEFAULT_SETTINGS, merged || stored);
 }
 
 export function saveSettings(settings) {

@@ -73,12 +73,13 @@ export default function DesktopView() {
       className="nx-desktop"
       data-taskbar={taskbarPrefs.position}
       style={{
-        ...yukiWallpaperStyle,
-        ...(settings.background.enabled === false
-          ? { backgroundColor: '#101014' }
-          : wallpaper === 'custom' && customWallpaper
-            ? { backgroundColor: '#0a0a0f', backgroundImage: `url(${customWallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-            : WALLPAPERS[wallpaper]?.style || WALLPAPERS['nexus-default'].style),
+        ...(yukiWallpaper?.enabled !== false
+          ? yukiWallpaperStyle
+          : settings.background.enabled === false
+            ? { backgroundColor: '#101014' }
+            : wallpaper === 'custom' && customWallpaper
+              ? { backgroundColor: '#0a0a0f', backgroundImage: `url(${customWallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+              : WALLPAPERS[wallpaper]?.style || WALLPAPERS['nexus-default'].style),
         '--tb-left': taskbarPrefs.position === 'left' ? '58px' : '0px',
         '--tb-right': taskbarPrefs.position === 'right' ? '58px' : '0px',
         '--tb-bottom': taskbarPrefs.position === 'bottom' ? '48px' : '0px',
