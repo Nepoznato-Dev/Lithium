@@ -14,6 +14,12 @@ const Calculator = React.lazy(() => import('./pages/Calculator'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const Privacy = React.lazy(() => import('./pages/Privacy'));
 const Fake404 = React.lazy(() => import('./pages/Fake404'));
+const YukiStuff = React.lazy(() => import('./pages/YukiStuff'));
+const YukiCustomization = React.lazy(() => import('./pages/YukiCustomization'));
+const YukiSettings = React.lazy(() => import('./pages/YukiSettings'));
+const YukiThemes = React.lazy(() => import('./pages/YukiThemes'));
+const YukiAbout = React.lazy(() => import('./pages/YukiAbout'));
+
 import { DesktopWindowProvider } from './Components/Desktop/DesktopWindowManager';
 
 class ErrorBoundary extends Component {
@@ -80,16 +86,21 @@ export default function App() {
         <DesktopWindowProvider>
           <LockController locked={locked} setLocked={setLocked} />
           <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/privacy" element={<Suspense fallback={null}><Privacy /></Suspense>} />
-          <Route element={<Shell />}>
-            <Route path="/games" element={<Suspense fallback={null}><Games /></Suspense>} />
-            <Route path="/music" element={<Suspense fallback={null}><Music /></Suspense>} />
-            <Route path="/browser" element={<Suspense fallback={null}><Browser /></Suspense>} />
-            <Route path="/calculator" element={<Suspense fallback={null}><Calculator /></Suspense>} />
-            <Route path="/settings" element={<Suspense fallback={null}><Settings /></Suspense>} />
-          </Route>
-          <Route path="*" element={<Suspense fallback={null}><Fake404 /></Suspense>} />
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/privacy" element={<Suspense fallback={null}><Privacy /></Suspense>} />
+            <Route path="/yuki" element={<Suspense fallback={null}><YukiStuff /></Suspense>} />
+            <Route path="/yuki/customization" element={<Suspense fallback={null}><YukiCustomization /></Suspense>} />
+            <Route path="/yuki/settings" element={<Suspense fallback={null}><YukiSettings /></Suspense>} />
+            <Route path="/yuki/themes" element={<Suspense fallback={null}><YukiThemes /></Suspense>} />
+            <Route path="/yuki/about" element={<Suspense fallback={null}><YukiAbout /></Suspense>} />
+            <Route element={<Shell />}>
+              <Route path="/games" element={<Suspense fallback={null}><Games /></Suspense>} />
+              <Route path="/music" element={<Suspense fallback={null}><Music /></Suspense>} />
+              <Route path="/browser" element={<Suspense fallback={null}><Browser /></Suspense>} />
+              <Route path="/calculator" element={<Suspense fallback={null}><Calculator /></Suspense>} />
+              <Route path="/settings" element={<Suspense fallback={null}><Settings /></Suspense>} />
+            </Route>
+            <Route path="*" element={<Suspense fallback={null}><Fake404 /></Suspense>} />
           </Routes>
           {locked && <LockScreen onUnlock={() => setLocked(false)} />}
         </DesktopWindowProvider>

@@ -68,6 +68,22 @@ export default function Shell() {
         </nav>
         <div className="space-y-1">
           <NavLink
+            to="/yuki"
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                isActive ? 'nav-active' : 'text-white/55 hover:bg-white/5 hover:text-white'
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <Icon name="Sparkles" className="h-[18px] w-[18px]" />
+                Yuki's Stuff
+                {isActive && <span className="nav-dot ml-auto h-1.5 w-1.5 rounded-full" />}
+              </>
+            )}
+          </NavLink>
+          <NavLink
             to="/settings"
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
@@ -100,7 +116,7 @@ export default function Shell() {
 
       {/* Mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-white/[0.06] bg-[#0b0b12]/95 px-2 py-1.5 backdrop-blur-xl md:hidden">
-        {[...NAV_ITEMS, { to: '/settings', label: 'Settings', icon: 'Settings' }].map(({ to, label, icon, end }) => (
+        {[...NAV_ITEMS, { to: '/yuki', label: 'Yuki', icon: 'Sparkles' }, { to: '/settings', label: 'Settings', icon: 'Settings' }].map(({ to, label, icon, end }) => (
           <NavLink
             key={to}
             to={to}
