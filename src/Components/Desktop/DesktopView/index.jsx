@@ -52,10 +52,14 @@ export default function DesktopView() {
     weatherEmoji, unitSymbol, weatherDescription,
   } = s;
   const yukiWallpaper = settings.customization?.wallpaper;
-  const yukiImage = yukiWallpaper?.path || yukiWallpaper?.url;
+  const yukiImageCandidate = yukiWallpaper?.path || yukiWallpaper?.url;
+  const yukiImage = typeof yukiImageCandidate === 'string'
+    && /^(data:image\/|https?:\/\/)/i.test(yukiImageCandidate)
+    ? yukiImageCandidate
+    : null;
   const yukiWallpaperStyle = yukiWallpaper?.enabled !== false && yukiWallpaper
     ? yukiWallpaper.type === 'image' && yukiImage
-      ? { backgroundImage: `url("${yukiImage}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    ? { backgroundImage: `url("${yukiImage.replaceAll('"', '%22')}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
       : yukiWallpaper.type === 'gradient'
         ? { backgroundImage: yukiWallpaper.gradient || 'linear-gradient(135deg, #0f1117, #1e1b4b)' }
         : { backgroundColor: yukiWallpaper.backgroundColor || '#0f1117' }

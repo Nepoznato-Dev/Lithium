@@ -27,7 +27,7 @@ export default function YukiCustomization() {
             Back
           </button>
           <h1 className="text-4xl font-bold text-white mb-2">Better Customization</h1>
-          <p className="text-white/50">Landing pad for all of Yuki's customization features</p>
+          <p className="text-white/50">Landing pad for all of Yuki&apos;s customization features</p>
         </div>
 
         <YukisCustomizationSection settings={settings} update={updateSetting} />
