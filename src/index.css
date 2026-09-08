@@ -47,6 +47,11 @@ svg * { fill: inherit; }
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   }
 
+  html[data-yuki-cursor="true"] *,
+  html[data-yuki-cursor="true"] {
+    cursor: var(--yuki-cursor) !important;
+  }
+
   /* Ensure all form elements have readable text on dark backgrounds */
   input, textarea, select {
     color: inherit;

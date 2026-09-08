@@ -69,6 +69,18 @@ export default function YukisCustomizationSection({ settings, update }) {
           </SettingsRow>
         )}
 
+        {customization.wallpaper.type === 'gradient' && (
+          <SettingsRow title="Gradient" description="Enter a CSS gradient">
+            <input
+              type="text"
+              placeholder="linear-gradient(135deg, #0f1117, #1e1b4b)"
+              defaultValue={customization.wallpaper.gradient || 'linear-gradient(135deg, #0f1117, #1e1b4b)'}
+              onBlur={e => updateCustom('wallpaper.gradient', e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg bg-white/5 text-xs border border-white/10 placeholder-white/30"
+            />
+          </SettingsRow>
+        )}
+
         {customization.wallpaper.type === 'image' && (
           <SettingsRow title="Image source" description="Upload or link an image">
             <div className="flex gap-2">
@@ -141,7 +153,6 @@ export default function YukisCustomizationSection({ settings, update }) {
             min={0}
             max={1}
             step={0.05}
-            suffix="%"
             onChange={v => updateCustom('wallpaper.opacity', parseFloat(v.toFixed(2)))}
           />
         </SettingsRow>
