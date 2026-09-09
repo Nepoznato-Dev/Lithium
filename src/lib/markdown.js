@@ -1,5 +1,3 @@
-import { mdRenderEnhancedSync, mdWikiLinksSync } from './core';
-
 /**
  * Enhanced markdown renderer with Obsidian and GitHub Flavored Markdown support.
  *
@@ -233,12 +231,10 @@ const CALLOUT_MAP = {
  *  Every block-level element gets a data-source-line attribute for click-to-source. */
 export function renderMarkdown(source) {
   try {
-    const native = mdRenderEnhancedSync(source);
-    if (native !== null) return native;
     return renderMarkdownJs(source);
   } catch (err) {
     console.error('[markdown] render error:', err);
-    return renderMarkdownJs(source);
+    return '';
   }
 }
 
@@ -448,12 +444,10 @@ function renderMarkdownJs(source) {
 
 /** Extract all [[wiki link]] targets from a note body. */
 export function wikiLinks(source) {
-  const native = mdWikiLinksSync(source);
-  if (native !== null) return native;
   const found = new Set();
-  const regex = /\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g;
-  let match;
-  while ((match = regex.exec(source || '')) !== null) found.add(match[1].trim());
+  const re = /\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g;
+  let m;
+  while ((m = re.exec(source || '')) !== null) found.add(m[1].trim());
   return [...found];
 }
 

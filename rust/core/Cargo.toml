@@ -1,0 +1,13 @@
+[package]
+name = "core"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium core WASM: LZ4, xxh3, snapshot, markdown, fs, explorer, settings"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }
+lz4_flex = { version = "0.11", default-features = false, features = ["safe-encode", "safe-decode"] }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }

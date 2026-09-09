@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
+import { AppIcon } from './DesktopApps';
 import { useDesktopWindows } from './DesktopWindowManager';
 import ContextMenu, { useContextMenu } from './ContextMenu';
 import { detectSnapZone, snapBounds, snapPreviewStyle } from '../../lib/desktop/ui';
@@ -17,8 +18,36 @@ export default function DesktopWindow({ item, apps = [] }) {
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
   const [snapZone, setSnapZone] = useState(null);
+  const [animClass, setAnimClass] = useState('');
   const dragOffset = useRef({ x: 0, y: 0 });
   const resizeStart = useRef({ x: 0, y: 0, width: 0, height: 0 });
+  const prevMinimized = useRef(item.minimized);
+  const closingRef = useRef(false);
+
+  // Animate minimize/restore transitions
+  useEffect(() => {
+    if (item.minimized && !prevMinimized.current) {
+      setAnimClass('minimizing');
+      const t = setTimeout(() => setAnimClass(''), 220);
+      prevMinimized.current = true;
+      return () => clearTimeout(t);
+    }
+    if (!item.minimized && prevMinimized.current) {
+      setAnimClass('restoring');
+      const t = setTimeout(() => setAnimClass(''), 250);
+      prevMinimized.current = false;
+      return () => clearTimeout(t);
+    }
+    prevMinimized.current = item.minimized;
+  }, [item.minimized]);
+
+  // Animated close: play exit animation then actually close
+  const animatedClose = () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setAnimClass('closing');
+    setTimeout(() => closeWindow(item.id), 200);
+  };
 
   const tabs = item.tabs || [];
   const active = tabs.find(tab => tab.key === item.activeTab) || tabs[0];
@@ -26,14 +55,30 @@ export default function DesktopWindow({ item, apps = [] }) {
   useEffect(() => {
     if (!dragging) return undefined;
     const snapAssist = storage.get('settings', {})?.window?.snapAssist;
+    let rafId = null;
+    let pendingPos = null;
     const move = event => {
       if (snapAssist) setSnapZone(detectSnapZone(event.clientX, event.clientY));
-      updateWindow(item.id, {
+      // Throttle position updates with requestAnimationFrame
+      pendingPos = {
         x: Math.max(0, Math.min(event.clientX - dragOffset.current.x, window.innerWidth - 100)),
         y: Math.max(0, Math.min(event.clientY - dragOffset.current.y, window.innerHeight - 100)),
-      });
+      };
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          if (pendingPos) {
+            updateWindow(item.id, pendingPos);
+            pendingPos = null;
+          }
+          rafId = null;
+        });
+      }
     };
     const stop = event => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
       const zone = snapAssist ? detectSnapZone(event.clientX, event.clientY) : null;
       if (zone === 'maximize') updateWindow(item.id, { maximized: true });
       else if (zone) updateWindow(item.id, snapBounds(zone));
@@ -42,19 +87,39 @@ export default function DesktopWindow({ item, apps = [] }) {
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', stop);
-    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', stop); };
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', stop); if (rafId) cancelAnimationFrame(rafId); };
   }, [dragging, item.id, updateWindow]);
 
   useEffect(() => {
     if (!resizing) return undefined;
-    const move = event => updateWindow(item.id, {
-      width: Math.max(320, resizeStart.current.width + (event.clientX - resizeStart.current.x)),
-      height: Math.max(220, resizeStart.current.height + (event.clientY - resizeStart.current.y)),
-    });
-    const stop = () => setResizing(false);
+    let rafId = null;
+    let pendingSize = null;
+    const move = event => {
+      // Throttle size updates with requestAnimationFrame
+      pendingSize = {
+        width: Math.max(320, resizeStart.current.width + (event.clientX - resizeStart.current.x)),
+        height: Math.max(220, resizeStart.current.height + (event.clientY - resizeStart.current.y)),
+      };
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          if (pendingSize) {
+            updateWindow(item.id, pendingSize);
+            pendingSize = null;
+          }
+          rafId = null;
+        });
+      }
+    };
+    const stop = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      setResizing(false);
+    };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', stop);
-    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', stop); };
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', stop); if (rafId) cancelAnimationFrame(rafId); };
   }, [resizing, item.id, updateWindow]);
 
   if (item.minimized) return null;
@@ -73,7 +138,10 @@ export default function DesktopWindow({ item, apps = [] }) {
       <React.Suspense fallback={<div className="flex h-full w-full items-center justify-center text-xs text-white/30">Loading…</div>}>
         {React.cloneElement(active.component, {
           windowed: true,
-          closeSelf: () => closeTab(item.id, active.key),
+          closeSelf: () => {
+            if (tabs.length > 1) closeTab(item.id, active.key);
+            else animatedClose();
+          },
           minimizeSelf: () => updateWindow(item.id, { minimized: true }),
           maximizeSelf: () => updateWindow(item.id, { maximized: !item.maximized }),
           isMaximized: item.maximized,
@@ -116,7 +184,7 @@ export default function DesktopWindow({ item, apps = [] }) {
             })),
           { id: 'new-tab', label: 'Open new app', icon: 'Plus', action: () => {
             const firstApp = apps[0];
-            if (firstApp) addTab(item.id, { appId: firstApp.id, title: firstApp.name, icon: <Icon name={firstApp.icon} size={16} />, component: firstApp.component });
+            if (firstApp) addTab(item.id, { appId: firstApp.id, title: firstApp.name, icon: <AppIcon icon={firstApp.icon} iconFile={firstApp.iconFile} color={firstApp.color} size={14} />, component: firstApp.component });
           }},
           { id: 'tab-sep', type: 'separator' },
         ]
@@ -129,14 +197,18 @@ export default function DesktopWindow({ item, apps = [] }) {
       { id: 'maximize', label: item.maximized ? 'Restore down' : 'Maximize', icon: 'Maximize2', action: () => updateWindow(item.id, { maximized: !item.maximized }) },
       { id: 'snap-left', label: 'Snap to left half', icon: 'PanelLeft', action: () => updateWindow(item.id, snapBounds('left')) },
       { id: 'snap-right', label: 'Snap to right half', icon: 'PanelRight', action: () => updateWindow(item.id, snapBounds('right')) },
+      { id: 'snap-tl', label: 'Snap to top-left', icon: 'ArrowUpLeft', action: () => updateWindow(item.id, { ...snapBounds('quarter-top-left'), maximized: false }) },
+      { id: 'snap-tr', label: 'Snap to top-right', icon: 'ArrowUpRight', action: () => updateWindow(item.id, { ...snapBounds('quarter-top-right'), maximized: false }) },
+      { id: 'snap-bl', label: 'Snap to bottom-left', icon: 'ArrowDownLeft', action: () => updateWindow(item.id, { ...snapBounds('quarter-bottom-left'), maximized: false }) },
+      { id: 'snap-br', label: 'Snap to bottom-right', icon: 'ArrowDownRight', action: () => updateWindow(item.id, { ...snapBounds('quarter-bottom-right'), maximized: false }) },
       { id: 'sep', type: 'separator' },
-      { id: 'close', label: 'Close window', icon: 'X', danger: true, action: () => closeWindow(item.id) },
+      { id: 'close', label: 'Close window', icon: 'X', danger: true, action: animatedClose },
     ]);
   };
 
   return (
     <section
-      className={`nx-window ${item.maximized ? 'maximized' : ''}`}
+      className={`nx-window ${item.maximized ? 'maximized' : ''} ${animClass}`}
       data-app={active?.appId || ''}
       style={{ ...style, zIndex: item.zIndex }}
       onMouseDown={() => focusWindow(item.id)}

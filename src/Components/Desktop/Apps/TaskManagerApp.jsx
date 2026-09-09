@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 import { useDesktopWindows } from '../DesktopWindowManager';
 import { useSystemMetrics } from '../DesktopView';
@@ -16,13 +16,20 @@ function windowLoad(id) {
 }
 
 function StatBar({ label, value }) {
+  const color = barColor(value);
   return (
-    <div className="flex items-center gap-2 text-[11px]">
-      <span className="w-8 text-white/45">{label}</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${value}%`, backgroundColor: barColor(value) }} />
+    <div className="tm-stat-row">
+      <span className="tm-stat-label">{label}</span>
+      <div className="tm-stat-track">
+        <div
+          className="tm-stat-fill"
+          style={{
+            width: `${value}%`,
+            background: `linear-gradient(90deg, ${color}cc, ${color})`,
+          }}
+        />
       </div>
-      <span className="w-9 text-right tabular-nums text-white/70">{value}%</span>
+      <span className="tm-stat-value">{value}%</span>
     </div>
   );
 }
@@ -35,89 +42,107 @@ export default function TaskManagerApp({ windowed = false, closeSelf, minimizeSe
   const [menu, openMenu, closeMenu] = useContextMenu();
   const shellMB = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null;
 
+  const totalCpu = metrics.cpu;
+  const totalRam = metrics.ram;
+
   return (
-    <div className="flex h-full min-w-0 flex-col bg-[#14161d] text-white">
-      {/* System overview */}
-      <div className="space-y-1.5 border-b border-white/[0.06] px-4 py-3">
-        <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-white/80">
-          <Icon name="Activity" size={14} className="text-cyan-300" /> System performance
-          <span className={`ml-auto flex items-center gap-1 text-[10px] font-normal ${metrics.connected ? 'text-emerald-400' : 'text-amber-400/70'}`}>
-            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: metrics.connected ? '#34d399' : '#fbbf24' }} />
-            {metrics.connected ? 'Live' : 'Simulated'}
-          </span>
+    <div className="tm-root">
+      {/* System overview header */}
+      <div className="tm-header">
+        <div className="tm-header-top">
+          <div className="tm-header-title">
+            <Icon name="Activity" size={14} className="tm-header-icon" />
+            <span>System</span>
+          </div>
+          <div className="tm-header-meta">
+            <span className={`tm-status-dot ${metrics.connected ? 'live' : 'simulated'}`} />
+            <span className="tm-status-text">{metrics.connected ? 'Live' : 'Simulated'}</span>
+          </div>
           {windowed && <WinControls onClose={closeSelf} onMinimize={minimizeSelf} onMaximize={maximizeSelf} isMaximized={isMaximized} />}
         </div>
-        <StatBar label="CPU" value={metrics.cpu} />
-        <StatBar label="GPU" value={metrics.gpu} />
-        <StatBar label="RAM" value={metrics.ram} />
+        <div className="tm-stats">
+          <StatBar label="CPU" value={totalCpu} />
+          <StatBar label="GPU" value={metrics.gpu} />
+          <StatBar label="RAM" value={totalRam} />
+        </div>
       </div>
 
       {/* Process table */}
-      <div className="flex-1 overflow-y-auto px-2 py-2">
-        <table className="w-full text-left text-xs text-white/80">
-          <thead>
-            <tr className="text-white/40">
-              <th className="px-2 py-1.5 font-medium">Process</th>
-              <th className="w-14 px-2 py-1.5 font-medium">CPU</th>
-              <th className="w-20 px-2 py-1.5 font-medium">Memory</th>
-              <th className="w-20 px-2 py-1.5" />
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-white/[0.04] text-white/60">
-              <td className="px-2 py-2">Lithium Shell</td>
-              <td className="px-2 py-2 tabular-nums">{metrics.connected ? `${Math.max(1, Math.round(metrics.cpu * 0.03))}%` : '2%'}</td>
-              <td className="px-2 py-2 tabular-nums">{shellMB != null ? `${shellMB} MB` : '38 MB'}</td>
-              <td className="px-2 py-2" />
-            </tr>
-            {windows.map(item => {
-              const load = windowLoad(item.id);
-              return (
-                <tr key={item.id} className="border-b border-white/[0.04] hover:bg-white/[0.04]" onContextMenu={event => openMenu(event, [
+      <div className="tm-list">
+        <div className="tm-list-header">
+          <span className="tm-col-process">Process</span>
+          <span className="tm-col-cpu">CPU</span>
+          <span className="tm-col-mem">Memory</span>
+          <span className="tm-col-action"></span>
+        </div>
+        <div className="tm-list-body">
+          {/* Shell row */}
+          <div className="tm-row">
+            <div className="tm-cell tm-col-process">
+              <span className="tm-proc-icon" style={{ color: '#22d3ee' }}>
+                <Icon name="Cpu" size={13} />
+              </span>
+              <span className="tm-proc-name">Lithium Shell</span>
+            </div>
+            <div className="tm-cell tm-col-cpu tm-num">{metrics.connected ? `${Math.max(1, Math.round(totalCpu * 0.03))}%` : '2%'}</div>
+            <div className="tm-cell tm-col-mem tm-num">{shellMB != null ? `${shellMB} MB` : '38 MB'}</div>
+            <div className="tm-cell tm-col-action"></div>
+          </div>
+          {windows.map((item, idx) => {
+            const load = windowLoad(item.id);
+            return (
+              <div
+                key={item.id}
+                className={`tm-row ${idx % 2 === 1 ? 'alt' : ''}`}
+                onContextMenu={event => openMenu(event, [
                   { id: 'heading', type: 'heading', label: item.title },
                   { id: 'focus', label: 'Focus window', icon: 'Eye', action: () => { updateWindow(item.id, { minimized: false }); focusWindow(item.id); } },
                   { id: 'minimize', label: item.minimized ? 'Restore' : 'Minimize', icon: 'Minus', action: () => updateWindow(item.id, { minimized: !item.minimized }) },
                   { id: 'end', label: 'End task', icon: 'X', danger: true, action: () => closeWindow(item.id) },
-                ])}>
-                  <td className="px-2 py-2">
-                    <button className="flex items-center gap-2 text-left hover:text-cyan-300" title="Bring to front" onClick={() => { updateWindow(item.id, { minimized: false }); focusWindow(item.id); }}>
-                      <span className="flex w-4 justify-center">{item.icon}</span>
+                ])}
+              >
+                <div className="tm-cell tm-col-process">
+                  <button className="tm-proc-btn" title="Bring to front" onClick={() => { updateWindow(item.id, { minimized: false }); focusWindow(item.id); }}>
+                    <span className="tm-proc-icon">{item.icon}</span>
+                    <span className="tm-proc-name">
                       {item.title}
-                      {item.minimized && <span className="text-[10px] text-white/35">(minimized)</span>}
-                    </button>
-                  </td>
-                  <td className="px-2 py-2 tabular-nums">{load.cpu}%</td>
-                  <td className="px-2 py-2 tabular-nums">{load.ram} MB</td>
-                  <td className="px-2 py-2 text-right">
-                    <button
-                      className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-white/70 transition-colors hover:border-red-400/40 hover:bg-red-500/15 hover:text-red-300"
-                      onClick={() => closeWindow(item.id)}
-                    >
-                      <Icon name="X" size={11} /> End task
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      {item.minimized && <span className="tm-proc-min">(minimized)</span>}
+                    </span>
+                  </button>
+                </div>
+                <div className="tm-cell tm-col-cpu tm-num">{load.cpu}%</div>
+                <div className="tm-cell tm-col-mem tm-num">{load.ram} MB</div>
+                <div className="tm-cell tm-col-action">
+                  <button
+                    className="tm-end-btn"
+                    onClick={() => closeWindow(item.id)}
+                    title="End task"
+                  >
+                    <Icon name="X" size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
         {windows.length === 0 && (
-          <p className="px-2 py-6 text-center text-white/35">No apps are running.</p>
+          <p className="tm-empty">No apps are running.</p>
         )}
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-2 text-[11px] text-white/40" onContextMenu={event => openMenu(event, [
+      <div className="tm-footer" onContextMenu={event => openMenu(event, [
         { id: 'end-all', label: 'End all tasks', icon: 'X', danger: true, disabled: windows.length === 0, action: () => windows.forEach(item => closeWindow(item.id)) },
         { id: 'refresh', label: 'Refresh', icon: 'RotateCw', action: () => {} },
       ])}>
-        <span>{windows.length + 1} processes</span>
+        <span className="tm-footer-count">{windows.length + 1} processes</span>
         <button
-          className="rounded-md border border-white/10 px-2.5 py-1 text-white/70 transition-colors hover:border-red-400/40 hover:bg-red-500/15 hover:text-red-300 disabled:pointer-events-none disabled:opacity-40"
+          className="tm-end-all-btn"
           disabled={windows.length === 0}
           onClick={() => windows.forEach(item => closeWindow(item.id))}
         >
-          End all tasks
+          <Icon name="X" size={11} />
+          End all
         </button>
       </div>
       {menu && <ContextMenu menu={menu} onClose={closeMenu} />}

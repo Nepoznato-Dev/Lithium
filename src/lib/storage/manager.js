@@ -1,6 +1,5 @@
 import { idbAll, idbDelete, idbGet, idbPut, idbKeys } from './indexedDB';
 import { kvOverflowBytes } from './kvTier';
-import * as core from '../core';
 
 /**
  * Unified storage tiers:
@@ -20,8 +19,13 @@ export const LOCAL_CAP = 5 * 1024 ** 2; // ~5 MB (informational — overflow pre
 export const SITE_CACHE_NAME = 'lithium-site-v2';
 export const LEGACY_GAME_CACHE = 'lithium-games-v1'; // purged on sw activate
 
+const _UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 export function formatBytes(bytes) {
-  return core.storageFormatBytesSync(bytes || 0) || '0 B';
+  const b = bytes || 0;
+  if (b === 0) return '0 B';
+  const i = Math.min(_UNITS.length - 1, Math.floor(Math.log(b) / Math.log(1024)));
+  const v = b / Math.pow(1024, i);
+  return v >= 100 || i === 0 ? `${Math.round(v)} ${_UNITS[i]}` : `${v.toFixed(1)} ${_UNITS[i]}`;
 }
 
 /** Browser-reported usage & quota (the "educated guess" source). */
@@ -34,8 +38,7 @@ export async function browserEstimate() {
 
 /** Chromium grants ~60% of disk — invert to guess total capacity. */
 export function guessTotalDisk(quota) {
-  const result = core.storageGuessDiskSync(quota || 0);
-  return result?.estimatedDisk ?? 0;
+  return quota > 0 ? Math.round(quota / 0.6) : 0;
 }
 
 /* ---------- localStorage tier ---------- */
@@ -109,9 +112,22 @@ export async function cacheUsage() {
     const keys = await siteCacheKeys();
     if (!keys.length) return 0;
     const cache = await caches.open(SITE_CACHE_NAME);
-    const responses = await Promise.all(keys.map(key => cache.match(key)));
-    const blobs = await Promise.all(responses.filter(Boolean).map(response => response.blob()));
-    return blobs.reduce((total, blob) => total + blob.size, 0);
+    // Don't load full blobs into memory - just sum sizes from Content-Length headers
+    let total = 0;
+    for (const key of keys) {
+      const response = await cache.match(key);
+      if (response) {
+        const contentLength = response.headers.get('Content-Length');
+        if (contentLength) {
+          total += parseInt(contentLength, 10);
+        } else {
+          // Fallback: clone and get size without keeping the blob
+          const blob = await response.clone().blob();
+          total += blob.size;
+        }
+      }
+    }
+    return total;
   } catch {
     return 0;
   }
@@ -162,7 +178,12 @@ async function coldStorageUsage() {
       if (typeof key === 'string' && key.startsWith('cold:')) {
         archives++;
         const record = await idbGet('blobs', key);
-        if (record?.data) compressedBytes += record.data.size || record.size || 0;
+        // Use stored size metadata instead of loading the blob data
+        if (record?.size) {
+          compressedBytes += record.size;
+        } else if (record?.data) {
+          compressedBytes += record.data.size || 0;
+        }
       }
     }
     return { archives, compressedBytes };

@@ -19,10 +19,9 @@ export default function ProfileSection({ settings, update }) {
       <CardGroup label="Profile Picture">
         <div className="settings-row">
           {avatar ? (
-            <img src={avatar} alt="Profile" className="h-12 w-12 rounded-full border-2 border-white/15 object-cover" />
+            <img src={avatar} alt="Profile" className="settings-avatar" />
           ) : (
-            <span className="flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold"
-              style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)' }}>
+            <span className="settings-avatar-initial">
               {settings.profile.username.charAt(0).toUpperCase() || 'U'}
             </span>
           )}
@@ -61,7 +60,7 @@ export default function ProfileSection({ settings, update }) {
                 <div className="settings-row-title" style={{ fontSize: 16 }}>{settings.profile.username}</div>
                 <div className="settings-row-desc">This name appears in the Start menu and profile</div>
               </div>
-              <button className="btn-ghost px-3 py-1.5 text-xs" onClick={() => { setEditingUsername(true); setUsernameDraft(settings.profile.username); }}>
+              <button className="settings-edit-btn" onClick={() => { setEditingUsername(true); setUsernameDraft(settings.profile.username); }}>
                 Edit
               </button>
             </>

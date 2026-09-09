@@ -20,6 +20,10 @@ import BrowserSection from './sections/BrowserSection';
 import DataSection from './sections/DataSection';
 import AboutSection from './sections/AboutSection';
 import YukisCustomizationSection from './sections/YukisCustomizationSection';
+import PrivacySettingsSection from './sections/PrivacySettingsSection';
+import AiSection from './sections/AiSection';
+import SearchEnginesSection from './sections/SearchEnginesSection';
+import ProfilesSection from './sections/ProfilesSection';
 
 /* ================================================================
    Section definitions
@@ -37,6 +41,10 @@ const SECTIONS = [
   { id: 'window', title: 'Windows', icon: 'PanelRight', keywords: ['window', 'snap', 'assist', 'drag'] },
   { id: 'games', title: 'Games', icon: 'Gamepad2', keywords: ['games', 'fullscreen', 'esc', 'player'] },
   { id: 'browser', title: 'Browser', icon: 'Globe', keywords: ['browser', 'search', 'engine'] },
+  { id: 'privacy', title: 'Privacy & Security', icon: 'ShieldCheck', keywords: ['privacy', 'shield', 'tracker', 'ad block', 'gpc', 'security'] },
+  { id: 'ai', title: 'AI & Intelligence', icon: 'BrainCircuit', keywords: ['ai', 'model', 'provider', 'prompt', 'context', 'memory'] },
+  { id: 'search-engines', title: 'Search Engines', icon: 'Search', keywords: ['search', 'engine', 'keyword', 'omnibox'] },
+  { id: 'profiles', title: 'Profiles', icon: 'Users', keywords: ['profile', 'user', 'workspace', 'avatar', 'switch'] },
   { id: 'security', title: 'Security', icon: 'Shield', keywords: ['security', 'pin', 'lock', 'password'] },
   { id: 'data', title: 'Data & Backup', icon: 'Download', keywords: ['data', 'backup', 'export', 'import', 'delete', 'reset'] },
   { id: 'about', title: 'About', icon: 'Info', keywords: ['about', 'version', 'privacy', 'info'] },
@@ -56,6 +64,10 @@ function getSectionDescription(id) {
     games: 'Fullscreen and ESC behavior for the game player',
     browser: 'Search engine and browsing preferences',
     security: 'Lock-screen PIN, auto-lock & security options',
+    privacy: 'Shields, tracking protection, GPC & privacy stats',
+    ai: 'AI model, provider, system prompt & context settings',
+    'search-engines': 'Manage search engines, add custom engines & keyword shortcuts',
+    profiles: 'Multi-user profiles with isolated data and settings',
     data: 'Export, import, or delete your settings and data',
     about: 'Version info, features, tech stack & privacy',
   };
@@ -210,6 +222,10 @@ export default function Settings({ windowed = false, closeSelf, minimizeSelf, ma
       case 'games': return <GamesSection settings={settings} update={update} />;
       case 'browser': return <BrowserSection settings={settings} update={update} />;
       case 'security': return <SecuritySection settings={settings} update={update} />;
+      case 'privacy': return <PrivacySettingsSection settings={settings} update={update} />;
+      case 'ai': return <AiSection settings={settings} update={update} />;
+      case 'search-engines': return <SearchEnginesSection settings={settings} update={update} />;
+      case 'profiles': return <ProfilesSection settings={settings} update={update} />;
       case 'data': return <DataSection exportSettings={exportSettings} importSettings={importSettings} exportAllData={exportAllData} exportFullZip={exportFullZip} importFullZip={importFullZip} zipBusy={zipBusy} deleteAllData={deleteAllData} />;
       case 'about': return <AboutSection />;
       default: return null;
@@ -217,11 +233,11 @@ export default function Settings({ windowed = false, closeSelf, minimizeSelf, ma
   };
 
   return (
-    <div className="flex h-full min-w-0 flex-col bg-[#0f1117]">
+    <div className="flex h-full min-w-0 flex-col" style={{ background: 'hsl(var(--background))' }}>
       {/* Top bar: search + window controls */}
-      <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-2.5">
-        <div className="relative flex-1 max-w-xs">
-          <Icon name="Search" className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/30" />
+      <div className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: '1px solid color-mix(in srgb, var(--accent) 6%, rgba(255, 255, 255, 0.04))' }}>
+        <div className="relative flex-1 max-w-xs settings-search-wrap">
+          <Icon name="Search" className="settings-search-icon pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/25 transition-all duration-300" />
           <input
             className="text-input py-1.5 pl-9 text-xs"
             value={searchQuery}
@@ -236,7 +252,11 @@ export default function Settings({ windowed = false, closeSelf, minimizeSelf, ma
 
       {/* Saved toast */}
       {saveNotification && (
-        <div className="fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl bg-emerald-500/90 px-4 py-2 text-sm text-white shadow-lg backdrop-blur">
+        <div className="fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm text-white shadow-lg backdrop-blur" style={{
+          background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 80%, #10b981), color-mix(in srgb, var(--accent) 60%, #059669))',
+          boxShadow: '0 4px 20px color-mix(in srgb, var(--accent) 25%, transparent), 0 2px 8px rgba(0,0,0,0.2)',
+          animation: 'settings-card-in 0.3s ease',
+        }}>
           <Icon name="Check" className="h-4 w-4" /> {saveNotification}
         </div>
       )}
@@ -270,7 +290,9 @@ export default function Settings({ windowed = false, closeSelf, minimizeSelf, ma
             <h2>{currentSection?.title}</h2>
             <p>{getSectionDescription(currentSection?.id)}</p>
           </div>
-          {renderSection()}
+          <div key={currentSection?.id} className="settings-section-body">
+            {renderSection()}
+          </div>
         </main>
       </div>
     </div>

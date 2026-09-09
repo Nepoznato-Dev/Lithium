@@ -1,0 +1,14 @@
+C:\Users\PC\Downloads\Lithium\Lithium\rust\target\debug\build\serde/79a82c471a55097f\out\serde-79a82c471a55097f.d: C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\target\debug\build\serde/85e7a359a24a40d9\out/private.rs
+
+C:\Users\PC\Downloads\Lithium\Lithium\rust\target\debug\build\serde/79a82c471a55097f\out\libserde-79a82c471a55097f.rlib: C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\target\debug\build\serde/85e7a359a24a40d9\out/private.rs
+
+C:\Users\PC\Downloads\Lithium\Lithium\rust\target\debug\build\serde/79a82c471a55097f\out\libserde-79a82c471a55097f.rmeta: C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\target\debug\build\serde/85e7a359a24a40d9\out/private.rs
+
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs:
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs:
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs:
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs:
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs:
+C:\Users\PC\Downloads\Lithium\Lithium\rust\target\debug\build\serde/85e7a359a24a40d9\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\PC\\Downloads\\Lithium\\Lithium\\rust\\target\\debug\\build\\serde/85e7a359a24a40d9\\out

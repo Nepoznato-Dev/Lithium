@@ -100,13 +100,13 @@ export default function DownloaderApp({ windowed = false, closeSelf, minimizeSel
   };
 
   return (
-    <div className="flex h-full min-w-0 flex-col bg-[#14161d] text-white">
+    <div className="flex h-full min-w-0 flex-col bg-[#161821] text-white">
       {/* URL bar */}
-      <div className="space-y-2 border-b border-white/[0.06] p-4">
-        <div className="flex items-center gap-2">
+      <div className="space-y-3 border-b border-white/[0.08] bg-[#1a1c27] px-5 py-4">
+        <div className="flex items-center gap-2.5">
           <Icon name="ArrowDownToLine" size={16} className="shrink-0 acc-text" />
-          <span className="text-sm font-semibold">Downloader</span>
-          <span className="text-[10px] text-white/35">files · webpages · models — saved into the site&apos;s Downloads folder</span>
+          <span className="text-[13px] font-semibold tracking-tight">Downloader</span>
+          <span className="text-[11px] text-white/30">files · webpages · models — saved into Downloads</span>
           {windowed && <WinControls onClose={closeSelf} onMinimize={minimizeSelf} onMaximize={maximizeSelf} isMaximized={isMaximized} />}
         </div>
         <div className="flex gap-2">
@@ -137,7 +137,7 @@ export default function DownloaderApp({ windowed = false, closeSelf, minimizeSel
       ]); }}>
         {/* HF repo browser */}
         {hfNav && (
-          <div className="space-y-1.5 rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">
+          <div className="space-y-1.5 rounded-xl border border-white/[0.1] bg-[#1a1c27] p-3.5">
             <div className="flex flex-wrap items-center gap-1 text-[11px] text-white/55">
               <Icon name="Folder" size={12} className="shrink-0 text-amber-300" />
               <button className="font-mono text-cyan-300 hover:underline" onClick={() => navigateHf(hfNav.repo, '')}>{hfNav.repo}</button>
@@ -154,7 +154,7 @@ export default function DownloaderApp({ windowed = false, closeSelf, minimizeSel
             ) : hfNav.entries.length === 0 ? (
               <p className="text-[11px] text-white/30">This folder is empty.</p>
             ) : hfNav.entries.map(entry => (entry.type === 'directory' ? (
-              <button key={entry.path} className="flex w-full items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-left hover:bg-white/[0.06]" onClick={() => navigateHf(hfNav.repo, entry.path)} title="Open folder">
+              <button key={entry.path} className="flex w-full items-center gap-2 rounded-lg border border-white/[0.08] bg-[#1e2029] px-3 py-2 text-left hover:bg-[#232530]" onClick={() => navigateHf(hfNav.repo, entry.path)} title="Open folder">
                 <Icon name="Folder" size={12} className="shrink-0 text-amber-300" />
                 <span className="truncate font-mono text-[11px] text-white/70">{entry.name}</span>
                 <span className="ml-auto text-white/25">›</span>
@@ -162,7 +162,7 @@ export default function DownloaderApp({ windowed = false, closeSelf, minimizeSel
             ) : (
               <button
                 key={entry.path}
-                className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left ${entry.name.toLowerCase().endsWith('.gguf') ? 'border-cyan-400/20 bg-cyan-400/[0.05] hover:border-cyan-400/40 hover:bg-cyan-400/[0.1]' : 'border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.06]'}`}
+                className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left ${entry.name.toLowerCase().endsWith('.gguf') ? 'border-cyan-400/20 bg-[#162028] hover:border-cyan-400/40 hover:bg-[#1a2830]' : 'border-white/[0.08] bg-[#1e2029] hover:bg-[#232530]'}`}
                 onClick={() => start(hfResolveUrl(hfNav.repo, entry.path), entry.name)}
                 title="Download this file into the site"
               >
@@ -180,11 +180,11 @@ export default function DownloaderApp({ windowed = false, closeSelf, minimizeSel
         {/* Active downloads */}
         {active.length > 0 && (
           <div className="space-y-2">
-            <div className="text-[10px] uppercase tracking-widest text-white/40">Downloading</div>
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-white/45">Downloading</div>
             {active.map(job => {
               const pct = job.total ? Math.min(100, (job.received / job.total) * 100) : 0;
               return (
-                <div key={job.id} className="rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2" data-ctx onContextMenu={event => openMenu(event, [
+                <div key={job.id} className="rounded-lg border border-white/[0.1] bg-[#1e2029] px-4 py-3" data-ctx onContextMenu={event => openMenu(event, [
                   { id: 'name', type: 'heading', label: job.name },
                   { id: 'cancel', label: 'Cancel download', icon: 'X', action: () => aborters.current[job.id]?.abort() },
                   { id: 'copy-url', label: 'Copy URL', icon: 'Copy', action: () => navigator.clipboard?.writeText(job.url) },
@@ -199,7 +199,7 @@ export default function DownloaderApp({ windowed = false, closeSelf, minimizeSel
                       <Icon name="X" size={12} />
                     </button>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-white/[0.07]">
                     <div className="h-full rounded-full acc-bg transition-all" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
@@ -212,12 +212,12 @@ export default function DownloaderApp({ windowed = false, closeSelf, minimizeSel
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Icon name="History" size={12} className="text-white/40" />
-            <span className="text-[10px] uppercase tracking-widest text-white/40">History</span>
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-white/45">History</span>
             <button className="ml-auto rounded-md px-2 py-1 text-[10px] text-white/40 hover:bg-white/10" onClick={clearHistory}>Clear finished</button>
           </div>
           {history.length === 0 && <p className="text-[11px] text-white/30">Nothing downloaded yet. Paste a URL above, or browse a Hugging Face repo.</p>}
           {history.map(item => (
-            <div key={item.id} className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2" data-ctx onContextMenu={event => openMenu(event, [
+            <div key={item.id} className="flex items-center gap-2.5 rounded-lg border border-white/[0.1] bg-[#1e2029] px-4 py-2.5" data-ctx onContextMenu={event => openMenu(event, [
               { id: 'name', type: 'heading', label: item.name || item.url },
               ...(item.status === 'done' ? [
                 { id: 'show', label: 'Show in Files', icon: 'FolderOpen', action: () => item.entryId && showInFiles(item.entryId) },
@@ -236,7 +236,7 @@ export default function DownloaderApp({ windowed = false, closeSelf, minimizeSel
                 </div>
               </div>
               {item.status === 'done' && item.entryId && (
-                <button className="rounded-md border border-white/[0.1] px-2 py-1 text-[10px] text-white/60 hover:bg-white/10" title="Open the Downloads folder at this file" onClick={() => showInFiles(item.entryId)}>
+                <button className="rounded-md border border-white/[0.08] px-2.5 py-1 text-[10px] text-white/55 hover:bg-white/[0.08] hover:text-white/80" title="Open the Downloads folder at this file" onClick={() => showInFiles(item.entryId)}>
                   <Icon name="FolderOpen" size={11} /> Show in Files
                 </button>
               )}

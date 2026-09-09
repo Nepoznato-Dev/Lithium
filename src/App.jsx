@@ -1,10 +1,11 @@
-import React, { Component, Suspense, useEffect, useState } from 'react';
+import React, { Component, lazy, Suspense, useEffect, useState } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import Shell from './Components/layout/Shell';
 import { SettingsProvider } from './Components/SettingsContext';
 import Dashboard from './pages/Dashboard';
-import LockScreen from './Components/Desktop/LockScreen';
 import { hasPin } from './lib/desktop/ui';
+
+const LockScreen = lazy(() => import('./Components/Desktop/LockScreen'));
 
 /* Shell routes are lazy so the idle desktop bundle stays small. */
 const Games = React.lazy(() => import('./pages/Games'));
@@ -102,7 +103,11 @@ export default function App() {
             </Route>
             <Route path="*" element={<Suspense fallback={null}><Fake404 /></Suspense>} />
           </Routes>
-          {locked && <LockScreen onUnlock={() => setLocked(false)} />}
+          {locked && (
+            <Suspense fallback={null}>
+              <LockScreen onUnlock={() => setLocked(false)} />
+            </Suspense>
+          )}
         </DesktopWindowProvider>
       </SettingsProvider>
     </ErrorBoundary>

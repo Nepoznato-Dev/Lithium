@@ -22,22 +22,41 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5173" ^| findstr "LISTENING
     taskkill /PID %%a /F >nul 2>&1
 )
 
-REM Kill any stray python processes running run.py
-for /f "tokens=2" %%a in ('tasklist /fi "imagename eq python.exe" /fo csv /nh 2^>nul ^| findstr /i "run.py"') do (
-    echo   Killing stray python %%a
-    taskkill /PID %%a /F >nul 2>&1
-)
-
 timeout /t 1 /nobreak >nul
 echo   Done.
 echo.
 
-echo [2/3] Starting backend on http://127.0.0.1:8734 ...
-start "Lithium Backend" cmd /k "cd /d "%~dp0backend" && python run.py"
+REM --- Build the Rust server if needed ---
+echo [2/3] Building Rust server...
+cd /d "%~dp0rust"
+
+REM Check if CC/AR need to be set for MinGW
+if exist "C:\Users\PC\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe" (
+    set "CC=C:\Users\PC\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe"
+    set "AR=C:\Users\PC\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\ar.exe"
+)
+
+cargo build -p lithium-server 2>nul
+if errorlevel 1 (
+    echo   Build failed! Trying without custom CC/AR...
+    set "CC="
+    set "AR="
+    cargo build -p lithium-server
+    if errorlevel 1 (
+        echo   ERROR: Rust server build failed.
+        pause
+        exit /b 1
+    )
+)
+echo   Build complete.
+echo.
+
+echo [3/3] Starting Rust server on http://127.0.0.1:8734 ...
+start "Lithium Backend" cmd /k "cd /d "%~dp0rust" && "%~dp0rust\target\debug\lithium-server.exe""
 
 timeout /t 2 /nobreak >nul
 
-echo [3/3] Starting Vite dev server and opening browser...
+echo Starting Vite dev server and opening browser...
 echo.
 cd /d "%~dp0"
 npx vite --open

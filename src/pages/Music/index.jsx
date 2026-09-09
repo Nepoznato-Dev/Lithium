@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { storage } from '../../lib/storage/localStorage';
 import { searchAudius, searchJamendo, searchRadio, connectSoloist, soloistEntityInfo, getState, onEnded, onError, playTrack, subscribe, togglePlay, isSupportedAudioFile, saveLocalAudioBlob, getLocalAudioBlob, saveLocalPicture, getLocalPicture } from '../../lib/music';
 import { loadMusicApis, resolveSoundCloudStream, saveMusicApis, searchConfiguredServices, testSpotify } from '../../lib/serviceApis';
-import { parseBlob } from 'music-metadata-browser';
 import { searchYouTubeInvidious, searchSpotifyProvider, fetchAudioBlob } from '../../lib/musicProviders';
 import Icon from '../../Components/Icon';
 import WinControls from '../../Components/Desktop/WinControls';
@@ -262,6 +261,7 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
       let artwork = null;
       // Extract metadata + album cover from the audio file.
       try {
+        const { parseBlob } = await import('music-metadata-browser');
         const meta = await parseBlob(file);
         if (meta.common?.title) title = meta.common.title;
         if (meta.common?.artist) artist = meta.common.artist;
@@ -313,6 +313,7 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
       let artwork = track.artwork || null;
       // Try extracting embedded album art from the downloaded file.
       try {
+        const { parseBlob } = await import('music-metadata-browser');
         const meta = await parseBlob(blob);
         const pic = meta.common?.picture?.[0];
         if (pic) {
@@ -337,20 +338,20 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
   /* ---------- render ---------- */
 
   return (
-    <div className={`relative flex min-w-0 flex-col bg-[#121216] text-white ${windowed ? 'h-full' : 'h-[calc(100dvh-57px)] md:h-dvh'}`}>
+    <div className={`relative flex min-w-0 flex-col bg-gradient-to-b from-[#121216] to-[#0e0e12] text-white ${windowed ? 'h-full' : 'h-[calc(100dvh-57px)] md:h-dvh'}`}>
       {/* Top bar */}
-      <header className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-2">
-        <button className={`icon-btn h-8 w-8 ${leftOpen ? 'acc-text' : ''}`} title="Toggle library sidebar" onClick={() => setLeftOpen(value => !value)}>
+      <header className="flex items-center gap-2 border-b border-white/[0.06] bg-[#16161c] px-4 py-2.5">
+        <button className={`icon-btn h-8 w-8 ${leftOpen ? 'text-cyan-400' : ''}`} title="Toggle library sidebar" onClick={() => setLeftOpen(value => !value)}>
           <Icon name="Library" size={16} />
         </button>
-        <button className={`icon-btn h-8 w-8 ${rightOpen ? 'acc-text' : ''}`} title="Toggle now-playing sidebar" onClick={() => setRightOpen(value => !value)}>
+        <button className={`icon-btn h-8 w-8 ${rightOpen ? 'text-cyan-400' : ''}`} title="Toggle now-playing sidebar" onClick={() => setRightOpen(value => !value)}>
           {rightOpen ? <Icon name="PanelRightClose" size={16} /> : <Icon name="PanelRightOpen" size={16} />}
         </button>
-        <div className="ml-1 flex items-center gap-1">
+        <div className="ml-1 flex items-center gap-1 rounded-lg bg-white/[0.04] p-0.5">
           {['songs', 'radio'].map(item => (
             <button
               key={item}
-              className={`rounded-full px-3 py-1 text-[11px] font-medium capitalize transition-colors ${mode === item ? 'acc-soft acc-text' : 'text-white/50 hover:bg-white/[0.07]'}`}
+              className={`music-mode-tab rounded-md px-3 py-1 text-[11px] font-medium capitalize ${mode === item ? 'active bg-[#1c1c28] text-white' : 'text-white/40 hover:text-white/70'}`}
               onClick={() => { setMode(item); setResults([]); }}
             >
               {item}
@@ -362,7 +363,7 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
             {[{ id: 'all', label: 'All' }, { id: 'youtube', label: 'YouTube' }, { id: 'spotify', label: 'Spotify' }, { id: 'library', label: 'Library' }].map(s => (
               <button
                 key={s.id}
-                className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${source === s.id ? 'bg-cyan-500/15 text-cyan-300' : 'text-white/40 hover:bg-white/[0.07]'}`}
+                className={`music-source-tab rounded-md px-2.5 py-1 text-[10px] font-medium ${source === s.id ? 'active' : 'text-white/35'}`}
                 onClick={() => { setSource(s.id); setResults([]); }}
               >
                 {s.label}
@@ -370,20 +371,20 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
             ))}
           </div>
         )}
-        <form className="relative mx-auto w-full max-w-xl" onSubmit={runSearch}>
-          <Icon name="Search" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
+        <form className="music-search-wrap relative mx-auto w-full max-w-xl" onSubmit={runSearch}>
+          <Icon name="Search" className="music-search-icon pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/20 transition-colors duration-200" />
           <input
-            className="text-input rounded-full py-2.5 pl-10 pr-24"
-            placeholder={mode === 'radio' ? 'Search 45k+ live stations…' : source === 'youtube' ? 'Search YouTube Music…' : source === 'spotify' ? 'Search Spotify…' : source === 'library' ? 'Filter your library…' : 'What do you want to play?'}
+            className="music-search-input peer w-full rounded-full border border-white/[0.08] bg-[#1c1c28] py-2.5 pl-10 pr-24 text-sm text-white placeholder:text-white/20 outline-none transition-all duration-200 focus:border-cyan-400/30 focus:bg-[#1e1e2e]"
+            placeholder={mode === 'radio' ? 'Search 45k+ live stations\u2026' : source === 'youtube' ? 'Search YouTube Music\u2026' : source === 'spotify' ? 'Search Spotify\u2026' : source === 'library' ? 'Filter your library\u2026' : 'What do you want to play?'}
             value={query}
             onChange={event => setQuery(event.target.value)}
             aria-label="Search music"
           />
-          <button className="btn-primary absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full px-4 py-1.5 text-xs" disabled={searching || !query.trim()}>
+          <button className="btn-primary absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full px-4 py-1.5 text-xs transition-all duration-150" disabled={searching || !query.trim()}>
             {searching ? <Icon name="Loader2" className="h-4 w-4 animate-spin" /> : 'Search'}
           </button>
         </form>
-        <button className={`icon-btn h-8 w-8 ${settingsOpen ? 'acc-text' : ''}`} title="Player settings & service APIs" onClick={() => setSettingsOpen(value => !value)}>
+        <button className={`icon-btn h-8 w-8 ${settingsOpen ? 'text-cyan-400' : ''}`} title="Player settings & service APIs" onClick={() => setSettingsOpen(value => !value)}>
           <Icon name="Settings2" size={16} />
         </button>
         {windowed && <WinControls onClose={closeSelf} onMinimize={minimizeSelf} onMaximize={maximizeSelf} isMaximized={isMaximized} />}
@@ -397,8 +398,8 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
         />
 
         {/* Main pane */}
-        <main className="min-w-0 flex-1 overflow-y-auto p-4">
-          {error && <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</p>}
+        <main className="min-w-0 flex-1 overflow-y-auto p-5">
+          {error && <p className="mb-4 rounded-lg border border-red-400/15 bg-red-500/8 px-4 py-2.5 text-xs text-red-300">{error}</p>}
 
           {view === 'liked-songs' && (
             <TrackList
@@ -449,9 +450,31 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
             <>
               {searching && <p className="text-xs text-white/40">Searching…</p>}
               {!searching && resultsList.length === 0 && (
-                <div className="flex h-full flex-col items-center justify-center gap-3 text-white/30">
-                  <Icon name="Music" size={44} strokeWidth={1} />
-                  <p className="text-sm">{mode === 'radio' ? 'Search live radio by name or tag.' : source === 'youtube' ? 'Search YouTube for full-length songs and download them.' : source === 'spotify' ? 'Search Spotify (set credentials in settings).' : 'Search songs across all sources — Audius, Jamendo, Spotify, YouTube.'}</p>
+                <div className="music-empty-state relative flex h-full flex-col items-center justify-center gap-5 overflow-hidden text-white/30">
+                  <div className="music-empty-bg-orb music-empty-bg-orb-1" aria-hidden="true" />
+                  <div className="music-empty-bg-orb music-empty-bg-orb-2" aria-hidden="true" />
+                  <div className="music-empty-bg-orb music-empty-bg-orb-3" aria-hidden="true" />
+                  <div className="music-empty-icon flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-white/[0.04] to-white/[0.01] ring-1 ring-white/[0.08] shadow-lg shadow-black/20">
+                    <Icon name={mode === 'radio' ? 'Radio' : 'Music'} size={42} strokeWidth={1} className="text-cyan-400/50" />
+                  </div>
+                  <div className="space-y-2 text-center">
+                    <p className="text-base font-semibold text-white/50">
+                      {mode === 'radio' ? 'Discover live radio stations' : 'Find something to play'}
+                    </p>
+                    <p className="mx-auto max-w-xs text-xs leading-relaxed text-white/25">
+                      {mode === 'radio'
+                        ? 'Search by station name, genre, or tag to tune in to live streams from around the world.'
+                        : source === 'youtube'
+                          ? 'Search YouTube for full-length songs and download them to your library.'
+                          : source === 'spotify'
+                            ? 'Search Spotify \u2014 set up credentials in player settings first.'
+                            : 'Search across Audius, Jamendo, Spotify, and YouTube all at once.'}
+                    </p>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-[10px] text-white/20">
+                    <Icon name="Search" size={11} />
+                    <span>Tip: Press Enter or click Search to get started</span>
+                  </div>
                 </div>
               )}
               {resultsList.length > 0 && (

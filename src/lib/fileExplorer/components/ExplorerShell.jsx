@@ -3,7 +3,9 @@
  * Extracted from the monolithic FileManagerApp's return block.
  */
 import { useEffect, useCallback, useMemo, useRef } from 'react';
+import { useMemoCompare } from '../hooks/useMemoCompare.js';
 import Icon from '../../../Components/Icon';
+import { PngIcon } from './common/PngIcon.jsx';
 import ContextMenu from '../../../Components/Desktop/ContextMenu';
 import {
   childrenOf, createEntry, duplicateSubtreeDeep, getEntry, isTrashed,
@@ -17,6 +19,8 @@ import {
   renameItem as cloudRename, uploadFile,
 } from '../../cloudDrives.js';
 import { storage, getSnapshotStats, putBlob, getBlob } from '../../storage';
+import { invalidateBreakdown } from '../../storage/storageBreakdown.js';
+import { startAppSweeper } from '../../storage/appStateSerializer.js';
 import { registerBlobDownload } from '../../downloads.js';
 import {
   exportFolderZip, importZipToFolder,
@@ -24,11 +28,13 @@ import {
 import {
   exportFolderTar, importTarToFolder,
 } from '../../storage/tarArchive.js';
+import { getDefaultApp, FILE_ASSOCIATIONS } from '../../fileSystem/fileAssociations.js';
+import { notify } from '../../../lib/desktop/notify.js';
 
 import {
   tabs, activeTabId, nav, view, viewMode, selectedItems, clipboard,
   draggingId, dialog, editor, preview, connectOpen, storageOpen,
-  cloudError, cloudLoading, cloudItems, authIssue, reconnectConfig,
+  archiveDialog, cloudError, cloudLoading, cloudItems, authIssue, reconnectConfig,
   snapshot, draft, pins, showSidebar, showPreviewPane,
 } from '../state/signals.jsx';
 
@@ -40,10 +46,13 @@ import PreviewPane from './PreviewPane/PreviewPane.jsx';
 import StatusBar from './StatusBar/StatusBar.jsx';
 import DragOverlay from './common/DragOverlay.jsx';
 import { useExplorerContextMenu } from './ContextMenu/ExplorerContextMenu.jsx';
+import { useExplorerShortcuts } from '../contextMenu/shortcutManager.js';
 import RenameDialog from './Dialogs/RenameDialog.jsx';
 import NewItemDialog from './Dialogs/NewItemDialog.jsx';
 import ConnectDialog from './Dialogs/ConnectDialog.jsx';
 import StoragePanel from './Dialogs/StoragePanel.jsx';
+import ArchiveDialog from './Dialogs/ArchiveDialog.jsx';
+import GalleryVirtualized from './GalleryVirtualized.jsx';
 
 const QUICK_META = {
   Desktop: { icon: 'Monitor', color: '#38bdf8' },
@@ -54,8 +63,27 @@ const QUICK_META = {
   Videos: { icon: 'Film', color: '#a78bfa' },
 };
 
+/** Map icon names to PNG filenames in public/icons/ */
+const ICON_PNG_MAP = {
+  Folder: 'files',
+  Image: 'gallery',
+  Film: 'film',
+  Music: 'music-note',
+  FileText: 'notes',
+  Archive: 'archive',
+  BrainCircuit: 'cortex',
+  Code2: 'code-studio',
+  Gamepad2: 'hydrux',
+  Snowflake: 'snowflake',
+  FileJson: 'file-json',
+};
+
 export default function ExplorerShell({ tree, commit, configs, setConfigs, closeSelf, minimizeSelf, maximizeSelf, isMaximized, windowed }) {
   const uploadRef = useRef(null);
+  const treeRef = useRef(tree);
+  treeRef.current = tree;
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
 
   const drive = nav.value.driveId === 'local' ? null : configs.find(c => c.id === nav.value.driveId) || null;
   const folderId = nav.value.stack[nav.value.stack.length - 1]?.id;
@@ -90,6 +118,12 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
   // Migrate oversized content
   useEffect(() => { migrateTree(tree, commit); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Start the app-state idle sweeper once
+  useEffect(() => { startAppSweeper(); }, []);
+
+  // Invalidate breakdown cache on every tree mutation
+  useEffect(() => { invalidateBreakdown(); }, [tree]);
+
   // Storage snapshot — live-refresh after every tree mutation and while the panel is open
   const snapTimer = useRef(null);
   const refreshSnapshot = useCallback(async () => {
@@ -101,13 +135,8 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
     snapTimer.current = setTimeout(refreshSnapshot, 600);
     return () => clearTimeout(snapTimer.current);
   }, [tree, refreshSnapshot]);
-  // Immediate refresh when the panel opens + periodic refresh while visible
-  useEffect(() => {
-    if (!storageOpen.value) return;
-    refreshSnapshot();
-    const id = setInterval(refreshSnapshot, 4000);
-    return () => clearInterval(id);
-  }, [storageOpen.value, refreshSnapshot]);
+  // Note: periodic refresh is now handled internally by StoragePanel to avoid
+  // cascading re-renders through ExplorerShell every 4 seconds.
 
   // Cloud refresh
   const refreshCloud = useCallback(async (config, id) => {
@@ -129,10 +158,32 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
     if (view.value === 'files' && drive) refreshCloud(drive, folderId);
   }, [view.value, drive, folderId, refreshCloud]);
 
-  const items = view.value === 'files' ? (drive ? cloudItems.value : childrenOf(tree, folderId)) : [];
+  // Content-stable items: same folder content → same array reference →
+  // FileGrid/FileTable memo can bail out even when tree reference changes.
+  const items = useMemoCompare(
+    () => {
+      if (view.value !== 'files') return [];
+      return drive ? cloudItems.value : childrenOf(tree, folderId);
+    },
+    [view.value, drive, folderId, tree, cloudItems.value],
+    (prev, next) => prev.length === next.length && prev.every((e, i) => e === next[i])
+  );
   const allLocalFiles = useMemo(() => tree.filter(e => e.type !== 'folder'), [tree]);
   const recentFiles = useMemo(() => [...allLocalFiles].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 12), [allLocalFiles]);
   const allImages = useMemo(() => allLocalFiles.filter(e => e.type === 'image'), [allLocalFiles]);
+
+  // Memoize childrenOf calls to avoid repeated tree filtering
+  const rootChildren = useMemo(() => childrenOf(tree, 'root'), [tree]);
+  const currentFolderChildren = useMemo(() => childrenOf(tree, folderId), [tree, folderId]);
+
+  // Pre-compute folder children counts for home view (moved out of renderHome to satisfy Rules of Hooks)
+  const folderChildrenCounts = useMemo(() => {
+    const counts = {};
+    rootChildren.filter(e => e.type === 'folder').forEach(folder => {
+      counts[folder.id] = childrenOf(tree, folder.id).length;
+    });
+    return counts;
+  }, [tree, rootChildren]);
 
   // Navigation helpers
   const goDrive = useCallback((driveId) => {
@@ -167,6 +218,14 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
       const local = getEntry(tree, entry.id);
       if (local?.ref) {
         window.dispatchEvent(new CustomEvent('lithium:open-browser', { detail: local.ref }));
+        return;
+      }
+      // Check file associations — dispatch to the registered app
+      const assoc = getDefaultApp(entry.name);
+      if (assoc && assoc.appId !== 'files') {
+        window.dispatchEvent(new CustomEvent('lithium:launch-app', {
+          detail: { appId: assoc.appId, fileEntry: entry },
+        }));
         return;
       }
       if (entry.type === 'text') {
@@ -304,6 +363,18 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
     catch (err) { cloudError.value = err.message || 'TAR compression failed'; }
   }, [compressToEntry]);
 
+  // Multi-format compress via ArchiveDialog
+  const handleCompressArchive = useCallback((entries, format) => {
+    const list = Array.isArray(entries) ? entries : [entries];
+    archiveDialog.value = { mode: 'compress', entries: list, format };
+  }, []);
+
+  // Extract archive via ArchiveDialog
+  const handleExtractArchive = useCallback((entries) => {
+    const list = Array.isArray(entries) ? entries : [entries];
+    archiveDialog.value = { mode: 'extract', entries: list };
+  }, []);
+
   const handleDownload = useCallback(async (entry) => {
     if (!entry || drive) return;
     try {
@@ -358,27 +429,76 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
   // Context menu
   const { menu, closeMenu, onItemContext, onEmptyContext } = useExplorerContextMenu({
     tree, commit, drive, openItem, handleDelete, handleRestore,
-    handleCompressZip, handleCompressTar, handleDownload, handleImportArchive,
+    handleCompressZip, handleCompressTar, handleCompressArchive,
+    handleExtractArchive, handleDownload, handleImportArchive,
     refreshCloud, goDrive, updateConfigs, openReconnect,
   });
 
-  // Drag & drop
-  const dragProps = useCallback((entry) => (!drive ? {
-    draggable: true,
-    onDragStart: (event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', entry.id); draggingId.value = entry.id; },
-    onDragEnd: () => { draggingId.value = null; },
-  } : {}), [drive]);
-
-  const dropTarget = useCallback((targetId) => (!drive && draggingId.value && draggingId.value !== targetId ? {
-    onDragOver: (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; },
-    onDrop: (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const id = draggingId.value;
-      draggingId.value = null;
-      if (id && id !== targetId) runAction(async () => commit(moveEntry(tree, id, targetId)));
+  // Keyboard shortcuts (Ctrl+C, Ctrl+V, Del, F2, etc.)
+  useExplorerShortcuts({
+    tree,
+    commit,
+    selectedItems,
+    ctx: {
+      drive, folderId, clipboard, openItem, dialog, viewMode,
+      pins,
+      togglePin: (id) => { pins.value = pins.value.includes(id) ? pins.value.filter(p => p !== id) : [...pins.value, id]; },
+      notify,
+      archiveDialog, handleDownload, handleImportArchive,
+      handleCompressZip, handleCompressTar, handleCompressArchive,
+      handleExtractArchive, refreshCloud,
     },
-  } : {}), [tree, commit, drive, runAction]);
+  });
+
+  // Upload event listener — dispatched by the context menu's "Upload file..." action.
+  useEffect(() => {
+    const onUpload = () => { uploadRef.current?.click(); };
+    window.addEventListener('lithium:explorer-upload', onUpload);
+    return () => window.removeEventListener('lithium:explorer-upload', onUpload);
+  }, []);
+
+  // Drag & drop — per-entry cached objects so FileItem/FileRow memo
+  // is not defeated by new prop objects on every render / drag tick.
+  const dragCacheRef = useRef(new Map());
+  const emptyDragRef = useRef({});
+  const dragProps = useCallback((entry) => {
+    if (drive) return emptyDragRef.current;
+    let obj = dragCacheRef.current.get(entry.id);
+    if (!obj) {
+      obj = {
+        draggable: true,
+        onDragStart: (event) => {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', entry.id);
+          draggingId.value = entry.id;
+        },
+        onDragEnd: () => { draggingId.value = null; },
+      };
+      dragCacheRef.current.set(entry.id, obj);
+    }
+    return obj;
+  }, [drive]);
+
+  const dropCacheRef = useRef(new Map());
+  const emptyDropRef = useRef({});
+  const dropTarget = useCallback((targetId) => {
+    if (drive) return emptyDropRef.current;
+    let obj = dropCacheRef.current.get(targetId);
+    if (!obj) {
+      obj = {
+        onDragOver: (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; },
+        onDrop: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const id = draggingId.value;
+          draggingId.value = null;
+          if (id && id !== targetId) runAction(async () => commitRef.current(moveEntry(treeRef.current, id, targetId)));
+        },
+      };
+      dropCacheRef.current.set(targetId, obj);
+    }
+    return obj;
+  }, [drive, runAction]);
 
   const togglePin = useCallback((id) => {
     pins.value = pins.value.includes(id) ? pins.value.filter(p => p !== id) : [...pins.value, id];
@@ -390,67 +510,32 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
     return entry && (entry.parentId === TRASH_ID || isTrashed(entry));
   })();
 
-  // Home view
-  const renderHome = () => (
-    <div className="flex-1 overflow-y-auto p-4">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">Quick access</div>
-      <div className="mb-6 grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-2">
-        {childrenOf(tree, 'root').filter(e => e.type === 'folder').map(folder => {
-          const meta = QUICK_META[folder.name] || { icon: 'Folder', color: '#f59e0b' };
-          const pinned = pins.value.includes(folder.id);
-          return (
-            <div key={folder.id} className="group flex items-center gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 text-xs text-white/80 transition-colors hover:bg-white/[0.07]">
-              <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left" onClick={() => { view.value = 'files'; nav.value = { driveId: 'local', stack: [{ id: 'root', name: 'Local Disk (C:)' }, { id: folder.id, name: folder.name }] }; }}>
-                <Icon name={meta.icon} size={16} style={{ color: meta.color }} /> <span className="truncate">{folder.name}</span>
-                <span className="ml-auto text-white/30">{childrenOf(tree, folder.id).length}</span>
-              </button>
-              <button
-                className={`${pinned ? 'text-cyan-300' : 'text-white/25 opacity-0 group-hover:opacity-100'} hover:text-white`}
-                title={pinned ? 'Unpin' : 'Pin'}
-                onClick={() => togglePin(folder.id)}
-              >
-                <Icon name="Pin" size={13} className={pinned ? '' : 'rotate-45'} />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-white/35">Recent files</div>
-      <div className="space-y-1">
-        {recentFiles.map(entry => (
-          <button key={entry.id} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-white/75 transition-colors hover:bg-white/[0.06]" onDoubleClick={() => openItem(entry)} onClick={() => selectedItems.value = new Set([entry.id])} onContextMenu={event => { event.stopPropagation(); onItemContext(event, entry); }}>
-            <Icon name={entry.type === 'image' ? 'Image' : entry.type === 'video' ? 'Film' : 'FileText'} size={18} color={entry.type === 'image' ? '#f472b6' : entry.type === 'video' ? '#a78bfa' : '#60a5fa'} strokeWidth={1.4} />
-            <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-            <span className="text-white/30">{new Date(entry.updatedAt).toLocaleDateString()}</span>
-          </button>
-        ))}
-        {recentFiles.length === 0 && <p className="text-xs text-white/30">No files yet.</p>}
-      </div>
-    </div>
+  // Home view — extracted to its own component so pins.value reads
+  // don't cascade through ExplorerShell (see HomeView below).
+  const homeView = (
+    <HomeView
+      rootChildren={rootChildren}
+      folderChildrenCounts={folderChildrenCounts}
+      recentFiles={recentFiles}
+      openItem={openItem}
+      onItemContext={onItemContext}
+      togglePin={togglePin}
+    />
   );
 
-  // Gallery view
-  const renderGallery = () => (
-    <div className="flex-1 overflow-y-auto p-4">
-      <div className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-white/35">All pictures · {allImages.length}</div>
-      {allImages.length === 0 ? (
-        <p className="text-xs text-white/30">No images yet.</p>
-      ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2">
-          {allImages.map(entry => (
-            <button key={entry.id} className="aspect-square overflow-hidden rounded-lg border border-white/[0.06]" onClick={async () => preview.value = { name: entry.name, url: await readEntryContent(entry), kind: 'image' }} onContextMenu={event => { event.stopPropagation(); onItemContext(event, entry); }}>
-              <div className="h-full w-full animate-pulse bg-white/[0.08]" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-  const selected = selectedItems.value.size === 1 ? tree.find(e => selectedItems.value.has(e.id)) : null;
+  // Gallery view with virtualization
+  const renderGallery = () => {
+    return (
+      <GalleryVirtualized
+        allImages={allImages}
+        openItem={openItem}
+        onItemContext={onItemContext}
+      />
+    );
+  };
 
   return (
-    <div className="relative flex h-full min-w-0 flex-col bg-[#19191d] text-white">
+    <div className="relative flex h-full min-w-0 flex-col bg-[#1a1b1f] text-white">
       <TabBar windowed={windowed} closeSelf={closeSelf} minimizeSelf={minimizeSelf} maximizeSelf={maximizeSelf} isMaximized={isMaximized} />
       <div className="relative flex min-h-0 flex-1">
         {showSidebar.value && (
@@ -464,14 +549,13 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
         )}
         <div className="flex min-w-0 flex-1 flex-col">
           <AddressBar dropTarget={dropTarget} />
-          {view.value === 'home' && renderHome()}
+          {view.value === 'home' && homeView}
           {view.value === 'gallery' && renderGallery()}
           {view.value === 'files' && (
             <FileList
-              tree={tree} drive={drive} items={items}
+              treeRef={treeRef} drive={drive} items={items}
               openItem={openItem} onItemContext={onItemContext} onEmptyContext={onEmptyContext}
               dragProps={dragProps} dropTarget={dropTarget}
-              togglePin={togglePin} pins={pins.value}
             />
           )}
           <StatusBar tree={tree} drive={drive} items={items} />
@@ -495,38 +579,38 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
 
       {/* Text editor overlay */}
       {editor.value && (
-        <div className="absolute inset-0 z-20 flex flex-col bg-[#19191d]">
-          <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-2.5">
-            <Icon name="FileText" size={15} color="#60a5fa" />
-            <span className="flex-1 truncate text-sm font-medium">{editor.value.name}</span>
+        <div className="absolute inset-0 z-20 flex flex-col bg-[#1a1b1f]">
+          <div className="flex items-center gap-3 border-b border-white/[0.08] px-4 py-3">
+            <PngIcon name="FileText" size={15} color="#60a5fa" />
+            <span className="flex-1 truncate text-sm font-medium text-white/90">{editor.value.name}</span>
             <button className="btn-primary px-3 py-1.5 text-xs" onClick={async () => {
               const updated = await storeEntryContent(editor.value, draft.value);
               commit(updateEntry(tree, editor.value.id, { content: updated.content, idb: updated.idb, size: updated.size }));
               editor.value = null;
             }}>Save</button>
-            <button className="icon-btn h-8 w-8" onClick={() => editor.value = null} aria-label="Close editor"><Icon name="X" size={15} /></button>
+            <button className="icon-btn h-8 w-8 rounded-lg hover:bg-white/[0.08]" onClick={() => editor.value = null} aria-label="Close editor"><PngIcon name="X" size={15} /></button>
           </div>
-          <textarea className="flex-1 resize-none bg-transparent p-4 font-mono text-sm text-white/90 outline-none" value={draft.value} onChange={event => draft.value = event.target.value} spellCheck={false} />
+          <textarea className="flex-1 resize-none bg-[#1e1f23] p-5 font-mono text-sm text-white/90 outline-none" value={draft.value} onChange={event => draft.value = event.target.value} spellCheck={false} />
         </div>
       )}
 
       {/* Preview overlay */}
       {preview.value && (
-        <div className="absolute inset-0 z-20 flex flex-col bg-black/90" onClick={() => { if (preview.value.url?.startsWith('blob:')) URL.revokeObjectURL(preview.value.url); preview.value = null; }}>
-          <div className="flex items-center gap-2 px-4 py-2.5">
-            <span className="flex-1 truncate text-sm text-white/80">{preview.value.name}</span>
-            <button className="icon-btn h-8 w-8" aria-label="Close preview"><Icon name="X" size={15} /></button>
+        <div className="absolute inset-0 z-20 flex flex-col bg-[#141416]" onClick={() => { if (preview.value.url?.startsWith('blob:')) URL.revokeObjectURL(preview.value.url); preview.value = null; }}>
+          <div className="flex items-center gap-3 px-5 py-3">
+            <span className="flex-1 truncate text-sm font-medium text-white/85">{preview.value.name}</span>
+            <button className="icon-btn h-8 w-8 rounded-lg hover:bg-white/[0.08]" aria-label="Close preview"><PngIcon name="X" size={15} /></button>
           </div>
           {preview.value.kind === 'image' ? (
-            <div className="flex flex-1 items-center justify-center p-4">
-              <img src={preview.value.url} alt={preview.value.name} className="max-h-full max-w-full rounded object-contain" />
+            <div className="flex flex-1 items-center justify-center p-6">
+              <img src={preview.value.url} alt={preview.value.name} className="max-h-full max-w-full rounded-lg object-contain shadow-lg" />
             </div>
           ) : preview.value.kind === 'video' ? (
-            <div className="flex flex-1 items-center justify-center p-4">
-              <video src={preview.value.url} controls autoPlay className="max-h-full max-w-full rounded" />
+            <div className="flex flex-1 items-center justify-center p-6">
+              <video src={preview.value.url} controls autoPlay className="max-h-full max-w-full rounded-lg shadow-lg" />
             </div>
           ) : (
-            <pre className="flex-1 overflow-auto p-4 font-mono text-xs text-white/80">{preview.value.text}</pre>
+            <pre className="flex-1 overflow-auto p-5 font-mono text-xs text-white/80">{preview.value.text}</pre>
           )}
         </div>
       )}
@@ -544,7 +628,6 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
 
       {storageOpen.value && (
         <StoragePanel
-          snapshot={snapshot.value}
           onRefresh={refreshSnapshot}
           onClose={() => storageOpen.value = false}
           tree={tree}
@@ -552,8 +635,74 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
         />
       )}
 
+      {archiveDialog.value && (
+        <ArchiveDialog
+          mode={archiveDialog.value.mode}
+          entries={archiveDialog.value.entries}
+          tree={tree}
+          commit={commit}
+          parentId={folderId}
+          onClose={() => { archiveDialog.value = null; }}
+          onError={(msg) => { cloudError.value = msg; archiveDialog.value = null; }}
+        />
+      )}
+
       {menu && <ContextMenu menu={menu} onClose={closeMenu} />}
+      {/* Screen-reader live region for context-menu announcements */}
+      <div id="nx-ctx-live" aria-live="polite" aria-atomic="true" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }} />
       <DragOverlay />
+    </div>
+  );
+}
+
+/**
+ * HomeView — isolated component so pins.value reads don't cascade
+ * through ExplorerShell.  Only this component re-renders when pins change.
+ */
+function HomeView({ rootChildren, folderChildrenCounts, recentFiles, openItem, onItemContext, togglePin }) {
+  return (
+    <div className="flex-1 overflow-y-auto p-5">
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-white/45">Quick access</div>
+      <div className="mb-8 grid grid-cols-[repeat(auto-fill,minmax(175px,1fr))] gap-2.5">
+        {rootChildren.filter(e => e.type === 'folder').map(folder => {
+          const meta = QUICK_META[folder.name] || { icon: 'Folder', color: '#f59e0b' };
+          const pinned = pins.value.includes(folder.id);
+          return (
+            <div key={folder.id} className="group flex items-center gap-3 rounded-lg border border-white/[0.08] bg-[#222328] px-3.5 py-3 text-xs text-white/80 transition-colors hover:bg-[#2a2b31]">
+              <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => { view.value = 'files'; nav.value = { driveId: 'local', stack: [{ id: 'root', name: 'Local Disk (C:)' }, { id: folder.id, name: folder.name }] }; }}>
+                <PngIcon name={meta.icon} size={16} style={{ color: meta.color }} /> <span className="truncate font-medium">{folder.name}</span>
+                <span className="ml-auto text-white/35">{folderChildrenCounts[folder.id] || 0}</span>
+              </button>
+              <button
+                className={`${pinned ? 'text-cyan-400' : 'text-white/25 opacity-0 group-hover:opacity-100'} hover:text-white transition-opacity`}
+                title={pinned ? 'Unpin' : 'Pin'}
+                onClick={() => togglePin(folder.id)}
+              >
+                <PngIcon name="Pin" size={13} className={pinned ? '' : 'rotate-45'} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-white/45">Recent files</div>
+      <div className="space-y-0.5">
+        {recentFiles.map(entry => {
+          const iconName = entry.type === 'image' ? 'Image' : entry.type === 'video' ? 'Film' : 'FileText';
+          const iconColor = entry.type === 'image' ? '#f472b6' : entry.type === 'video' ? '#a78bfa' : '#60a5fa';
+          const pngName = ICON_PNG_MAP[iconName];
+          return (
+            <button key={entry.id} className="flex w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left text-xs text-white/75 transition-colors hover:bg-[#222328]" onDoubleClick={() => openItem(entry)} onClick={() => selectedItems.value = new Set([entry.id])} onContextMenu={event => { event.stopPropagation(); onItemContext(event, entry); }}>
+              {pngName
+                ? <img src={`/icons/${pngName}.png`} alt="" style={{ width: 18, height: 18 }} className="object-contain" />
+                : <Icon name={iconName} size={18} color={iconColor} strokeWidth={1.4} />
+              }
+              <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+              <span className="text-white/35 tabular-nums">{new Date(entry.updatedAt).toLocaleDateString()}</span>
+            </button>
+          );
+        })}
+        {recentFiles.length === 0 && <p className="text-xs text-white/35">No files yet.</p>}
+      </div>
     </div>
   );
 }

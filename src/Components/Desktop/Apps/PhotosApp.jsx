@@ -119,7 +119,7 @@ export default function PhotosApp({ windowed = false, closeSelf, minimizeSelf, m
 
   const step = direction => {
     if (!media.length) return;
-    setViewerIndex((viewerIndex + direction + media.length) % media.length);
+    setViewerIndex(prev => (prev + direction + media.length) % media.length);
   };
 
   const deleteCurrent = () => {
@@ -132,18 +132,18 @@ export default function PhotosApp({ windowed = false, closeSelf, minimizeSelf, m
   };
 
   return (
-    <div className="relative flex h-full min-w-0 flex-col bg-[#19191d] text-white">
+    <div className="relative flex h-full min-w-0 flex-col bg-[#1a1b1f] text-white">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3">
+      <div className="flex items-center gap-4 border-b border-white/[0.08] px-5 py-3.5">
         <div className="min-w-0 shrink-0">
-          <h2 className="text-sm font-semibold">Gallery</h2>
-          <p className="text-xs text-white/40">{media.length} item{media.length === 1 ? '' : 's'} · Pictures & Videos, grouped by time</p>
+          <h2 className="text-sm font-semibold text-white/95">Gallery</h2>
+          <p className="text-[11px] text-white/45">{media.length} item{media.length === 1 ? '' : 's'} · Pictures & Videos</p>
         </div>
         <div className="flex items-center gap-1">
           {FILTERS.map(item => (
             <button
               key={item.id}
-              className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${filter === item.id ? 'acc-soft acc-text' : 'text-white/50 hover:bg-white/[0.07] hover:text-white'}`}
+              className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors ${filter === item.id ? 'acc-soft acc-text' : 'text-white/50 hover:bg-[#2a2b31] hover:text-white/80'}`}
               onClick={() => { setFilter(item.id); setViewerIndex(null); }}
             >
               {item.label}
@@ -165,28 +165,28 @@ export default function PhotosApp({ windowed = false, closeSelf, minimizeSelf, m
 
       {/* Gallery */}
       {media.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-white/30" onContextMenu={event => openMenu(event, [
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-white/35" onContextMenu={event => openMenu(event, [
           { id: 'import', label: 'Import photos', icon: 'Upload', action: () => document.querySelector('input[type="file"][accept*=".png"]')?.click() },
           { id: 'refresh', label: 'Refresh gallery', icon: 'RefreshCw', action: () => setFilter(f => { setFilter('all'); }) },
         ])}>
           <Icon name="Image" size={48} strokeWidth={1} />
-          <p className="text-sm">Nothing here yet</p>
-          <p className="max-w-xs text-center text-xs text-white/25">
+          <p className="text-sm font-medium text-white/45">Nothing here yet</p>
+          <p className="max-w-xs text-center text-xs text-white/30 leading-relaxed">
             Add photos or videos — supports PNG, JPEG, GIF, TIFF, SVG, MP4, MOV, AVI, MKV, WebM, and more. Files are saved locally and grouped by date.
           </p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="flex-1 overflow-y-auto p-4">
           {groups.map(group => (
-            <section key={group.label} className="mb-5">
-              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-white/40">{group.label}</h3>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            <section key={group.label} className="mb-6">
+              <h3 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-white/45">{group.label}</h3>
+              <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
                 {group.items.map(entry => {
                   const index = media.indexOf(entry);
                   return (
                     <button
                       key={entry.id}
-                      className="group relative aspect-square overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.03]"
+                      className="group relative aspect-square overflow-hidden rounded-lg border border-white/[0.08] bg-[#222328] transition-all hover:border-white/[0.15]"
                       onClick={() => setViewerIndex(index)}
                       title={entry.name}
                       onContextMenu={event => { event.stopPropagation(); openMenu(event, [
@@ -199,7 +199,7 @@ export default function PhotosApp({ windowed = false, closeSelf, minimizeSelf, m
                       ]); }}
                     >
                       {entry.type === 'image' ? <MediaThumb entry={entry} /> : <VideoThumb entry={entry} />}
-                      <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/80 to-transparent px-2 pb-1 pt-4 text-left text-[10px] text-white/80 opacity-0 transition-opacity group-hover:opacity-100">
+                      <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-1.5 pt-5 text-left text-[10px] text-white/85 opacity-0 transition-opacity group-hover:opacity-100">
                         {entry.name}
                       </span>
                     </button>
@@ -269,19 +269,19 @@ function MediaThumb({ entry }) {
     if (!entry.content) readEntryContent(entry).then(data => { if (active) setUrl(data); });
     return () => { active = false; };
   }, [entry]);
-  if (!url) return <div className="h-full w-full animate-pulse bg-white/[0.08]" />;
-  return <img src={url} alt={entry.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />;
+  if (!url) return <div className="h-full w-full animate-pulse bg-[#2a2b31]" />;
+  return <img src={url} alt={entry.name} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]" />;
 }
 
 function VideoThumb({ entry }) {
   const ext = extOf(entry.name);
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-white/[0.04] to-black/40">
-      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-[#2a2b31]">
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08]">
         <Icon name="Film" size={16} className="acc-text" strokeWidth={1.5} />
       </div>
       {ext && (
-        <span className="rounded bg-black/50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-white/50">
+        <span className="rounded bg-black/40 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-white/45">
           {ext}
         </span>
       )}
@@ -461,47 +461,47 @@ function Viewer({ entry, index, total, onStep, onDelete, onClose, onSetWallpaper
   };
 
   return (
-    <div className="absolute inset-0 z-20 flex flex-col bg-black/95">
-      <div className="flex items-center gap-2 px-4 py-2.5">
-        <span className="flex-1 truncate text-sm text-white/80">{entry.name}</span>
+    <div className="absolute inset-0 z-20 flex flex-col bg-[#141416]">
+      <div className="flex items-center gap-2.5 px-5 py-3 border-b border-white/[0.06]">
+        <span className="flex-1 truncate text-sm font-medium text-white/85">{entry.name}</span>
         {!isVideo && (
           <>
             <button
-              className={`icon-btn h-8 w-8 ${editing ? 'acc-text acc-soft' : ''}`}
+              className={`icon-btn h-8 w-8 rounded-lg hover:bg-white/[0.08] ${editing ? 'acc-text acc-soft' : ''}`}
               onClick={() => { setEditing(e => !e); setHistory([]); }}
               title={editing ? 'Exit editor' : 'Edit image'}
             >
               <Icon name="Pencil" size={15} />
             </button>
-            <button className="icon-btn h-8 w-8" disabled={!url} onClick={() => onSetWallpaper(url)} title="Set as desktop background">
+            <button className="icon-btn h-8 w-8 rounded-lg hover:bg-white/[0.08]" disabled={!url} onClick={() => onSetWallpaper(url)} title="Set as desktop background">
               <Icon name="Monitor" size={15} />
             </button>
-            <button className="icon-btn h-8 w-8" disabled={!url} onClick={() => onSetAvatar(url)} title="Set as profile picture">
+            <button className="icon-btn h-8 w-8 rounded-lg hover:bg-white/[0.08]" disabled={!url} onClick={() => onSetAvatar(url)} title="Set as profile picture">
               <Icon name="User" size={15} />
             </button>
           </>
         )}
-        <button className="icon-btn h-8 w-8 hover:bg-red-500/15 hover:text-red-300" onClick={onDelete} title="Delete">
+        <button className="icon-btn h-8 w-8 rounded-lg hover:bg-red-500/15 hover:text-red-300" onClick={onDelete} title="Delete">
           <Icon name="Trash2" size={15} />
         </button>
-        <button className="icon-btn h-8 w-8" onClick={onClose} aria-label="Close viewer">
+        <button className="icon-btn h-8 w-8 rounded-lg hover:bg-white/[0.08]" onClick={onClose} aria-label="Close viewer">
           <Icon name="X" size={15} />
         </button>
       </div>
 
       {/* Drawing toolbar */}
       {editing && (
-        <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2">
+        <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.08] bg-[#1e1f23] px-4 py-2.5">
           {/* Tool toggle */}
-          <div className="flex gap-1 rounded-lg bg-white/[0.06] p-0.5">
+          <div className="flex gap-1 rounded-md bg-[#2a2b31] p-0.5">
             <button
-              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${tool === 'brush' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white'}`}
+              className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${tool === 'brush' ? 'bg-white/[0.12] text-white' : 'text-white/50 hover:text-white/80'}`}
               onClick={() => setTool('brush')}
             >
               <Icon name="Pencil" size={13} className="inline mr-1" /> Brush
             </button>
             <button
-              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${tool === 'eraser' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white'}`}
+              className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${tool === 'eraser' ? 'bg-white/[0.12] text-white' : 'text-white/50 hover:text-white/80'}`}
               onClick={() => setTool('eraser')}
             >
               <Icon name="Eraser" size={13} className="inline mr-1" /> Eraser
@@ -526,8 +526,8 @@ function Viewer({ entry, index, total, onStep, onDelete, onClose, onSetWallpaper
             {BRUSH_SIZES.map(size => (
               <button
                 key={size}
-                className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors ${
-                  brushSize === size ? 'bg-white/20' : 'hover:bg-white/10'
+                className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+                  brushSize === size ? 'bg-[#35363d]' : 'hover:bg-[#2a2b31]'
                 }`}
                 onClick={() => setBrushSize(size)}
                 aria-label={`Brush size ${size}`}
@@ -552,26 +552,26 @@ function Viewer({ entry, index, total, onStep, onDelete, onClose, onSetWallpaper
         </div>
       )}
 
-      <div ref={containerRef} className="relative flex flex-1 items-center justify-center overflow-hidden p-4">
+      <div ref={containerRef} className="relative flex flex-1 items-center justify-center overflow-hidden p-5">
         {url ? (
           isVideo ? (
-            <video src={url} controls autoPlay className="max-h-full max-w-full rounded" />
+            <video src={url} controls autoPlay className="max-h-full max-w-full rounded-lg shadow-lg" />
           ) : (
             <img
               src={url}
               alt={entry.name}
-              className={`max-h-full max-w-full rounded object-contain ${editing ? 'opacity-60' : ''}`}
+              className={`max-h-full max-w-full rounded-lg object-contain shadow-lg ${editing ? 'opacity-60' : ''}`}
               draggable={false}
             />
           )
         ) : (
-          <div className="h-24 w-24 animate-pulse rounded bg-white/[0.08]" />
+          <div className="h-24 w-24 animate-pulse rounded-lg bg-[#2a2b31]" />
         )}
         {/* Drawing canvas overlay */}
         {editing && !isVideo && (
           <canvas
             ref={canvasRef}
-            className="absolute inset-4 cursor-crosshair"
+            className="absolute inset-5 cursor-crosshair"
             style={{ touchAction: 'none' }}
             onMouseDown={handlePointerDown}
             onMouseMove={handlePointerMove}
@@ -584,16 +584,16 @@ function Viewer({ entry, index, total, onStep, onDelete, onClose, onSetWallpaper
         )}
         {total > 1 && !editing && (
           <>
-            <button className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-2 hover:bg-white/20" onClick={() => onStep(-1)} aria-label="Previous">
+            <button className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-[#2a2b31] p-2.5 shadow-md transition-colors hover:bg-[#35363d]" onClick={() => onStep(-1)} aria-label="Previous">
               <Icon name="ChevronLeft" size={18} />
             </button>
-            <button className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-2 hover:bg-white/20" onClick={() => onStep(1)} aria-label="Next">
+            <button className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-[#2a2b31] p-2.5 shadow-md transition-colors hover:bg-[#35363d]" onClick={() => onStep(1)} aria-label="Next">
               <Icon name="ChevronRight" size={18} />
             </button>
           </>
         )}
       </div>
-      <div className="pb-3 text-center text-xs text-white/40">
+      <div className="pb-3 text-center text-xs text-white/40 font-medium">
         {editing ? 'Draw on the image, then click Save to download' : `${index + 1} of ${total}`}
       </div>
     </div>
@@ -735,27 +735,27 @@ function DrawingCanvas({ onSave, onClose }) {
   };
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-[#1a1a2e]">
+    <div className="absolute inset-0 z-30 flex flex-col bg-[#1e1e24]">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2">
+      <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.08] bg-[#1e1f23] px-4 py-2.5">
         {/* Name input */}
         <input
-          className="text-input w-44 py-1.5 text-xs"
+          className="text-input w-44 rounded-md py-1.5 text-xs"
           value={name}
           onChange={e => setName(e.target.value)}
           placeholder="Drawing name…"
         />
 
         {/* Tool toggle */}
-        <div className="flex gap-1 rounded-lg bg-white/[0.06] p-0.5">
+        <div className="flex gap-1 rounded-md bg-[#2a2b31] p-0.5">
           <button
-            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${tool === 'brush' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white'}`}
+            className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${tool === 'brush' ? 'bg-white/[0.12] text-white' : 'text-white/50 hover:text-white/80'}`}
             onClick={() => setTool('brush')}
           >
             <Icon name="Pencil" size={13} className="inline mr-1" /> Brush
           </button>
           <button
-            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${tool === 'eraser' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white'}`}
+            className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${tool === 'eraser' ? 'bg-white/[0.12] text-white' : 'text-white/50 hover:text-white/80'}`}
             onClick={() => setTool('eraser')}
           >
             <Icon name="Eraser" size={13} className="inline mr-1" /> Eraser
@@ -780,8 +780,8 @@ function DrawingCanvas({ onSave, onClose }) {
           {BRUSH_SIZES.map(size => (
             <button
               key={size}
-              className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors ${
-                brushSize === size ? 'bg-white/20' : 'hover:bg-white/10'
+              className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+                brushSize === size ? 'bg-[#35363d]' : 'hover:bg-[#2a2b31]'
               }`}
               onClick={() => setBrushSize(size)}
               aria-label={`Brush size ${size}`}
@@ -809,7 +809,7 @@ function DrawingCanvas({ onSave, onClose }) {
       </div>
 
       {/* Canvas area */}
-      <div ref={containerRef} className="relative flex flex-1 items-center justify-center overflow-hidden bg-[#0d0d1a] p-4">
+      <div ref={containerRef} className="relative flex flex-1 items-center justify-center overflow-hidden bg-[#151520] p-5">
         <div className="relative h-full w-full max-w-4xl overflow-hidden rounded-lg shadow-2xl">
           <canvas
             ref={canvasRef}
@@ -826,7 +826,7 @@ function DrawingCanvas({ onSave, onClose }) {
         </div>
       </div>
 
-      <div className="pb-2 text-center text-xs text-white/35">
+      <div className="pb-2.5 text-center text-xs text-white/40 font-medium">
         Draw something, then click Save — it will appear in your Gallery
       </div>
     </div>

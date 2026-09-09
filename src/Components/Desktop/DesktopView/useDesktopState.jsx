@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../Icon';
+import { AppIcon } from '../DesktopApps';
 import { useDesktopWindows } from '../DesktopWindowManager';
 import { useContextMenu } from '../ContextMenu';
 import { storage } from '../../../lib/storage';
@@ -16,6 +17,8 @@ import useDeviceDetection from './useDeviceDetection';
 import useWeather from './useWeather';
 import useKeyboardShortcuts from './useKeyboardShortcuts';
 import useContextMenus from './useContextMenus';
+import { discoverAppsFromLauncher } from '../../../lib/li-apps/liLauncher';
+import { getInstalledApps, registerApp } from '../../../lib/li-apps/liRegistry';
 
 /* Lazy app components — imported here so the apps array can live inside the hook. */
 const FileManagerApp = React.lazy(() => import('../Apps/FileManagerApp'));
@@ -33,6 +36,9 @@ const MusicPage = React.lazy(() => import('../../../pages/Music'));
 const Browser = React.lazy(() => import('../../../pages/Browser'));
 const CalculatorPage = React.lazy(() => import('../../../pages/Calculator'));
 const SettingsPage = React.lazy(() => import('../../../pages/Settings'));
+const OnboardingApp = React.lazy(() => import('../Apps/OnboardingApp'));
+const LiAppHost = React.lazy(() => import('../Apps/LiAppHost'));
+const AppStudioApp = React.lazy(() => import('../Apps/AppStudioApp'));
 
 // StrictMode double-mount guard for the one-shot 'boot' widget event.
 let bootEmitted = false;
@@ -41,25 +47,87 @@ let bootEmitted = false;
  *  derived value, and handler the JSX renderer needs. */
 export default function useDesktopState() {
   const { windows, openWindow, updateWindow, focusWindow, closeWindow, closeApp, focusApp } = useDesktopWindows();
-  const { settings } = useSettings();
+  const { settings, updateSetting } = useSettings();
 
-  /* --- App registry --- */
-  const apps = useMemo(() => [
-    { id: 'games', name: 'Hydrux', icon: 'Gamepad2', color: '#ec4899', width: 1100, height: 750, component: <Games />, desc: 'Game library and launcher', category: 'media' },
-    { id: 'media-player', name: 'Media Player', icon: 'Music', color: '#22d3ee', width: 1150, height: 720, component: <MusicPage />, desc: 'Music, radio & media player', category: 'media' },
-    { id: 'browser', name: 'Browser', icon: 'Globe', color: '#06b6d4', width: 1000, height: 700, component: <Browser />, desc: 'Browse the web', category: 'tools' },
-    { id: 'calculator', name: 'Calculator', icon: 'Calculator', color: '#3b82f6', width: 420, height: 640, component: <CalculatorPage />, desc: 'Quick calculations', category: 'tools' },
-    { id: 'clock', name: 'Clock', icon: 'Clock', color: '#22c55e', width: 560, height: 620, component: <CalendarClockApp />, desc: 'Clock, calendar & pomodoro', category: 'productivity' },
-    { id: 'files', name: 'File Explorer', icon: 'Folder', color: '#f59e0b', width: 880, height: 560, component: <FileManagerApp />, desc: 'Browse and manage files', category: 'productivity' },
-    { id: 'photos', name: 'Gallery', icon: 'Image', color: '#f472b6', width: 860, height: 600, component: <PhotosApp />, desc: 'View photos and images', category: 'media' },
-    { id: 'notepad', name: 'Notes', icon: 'FileText', color: '#8b5cf6', width: 900, height: 600, component: <NotesApp />, desc: 'Markdown note-taking', category: 'productivity' },
-    { id: 'downloader', name: 'Downloader', icon: 'ArrowDownToLine', color: '#38bdf8', width: 880, height: 640, component: <DownloaderApp />, desc: 'Download files and models', category: 'tools' },
-    { id: 'code-studio', name: 'Code Studio', icon: 'Code', color: '#4ade80', width: 1150, height: 720, component: <CodeStudioApp />, desc: 'Write and run code', category: 'productivity' },
-    { id: 'ai-hub', name: 'Cortex', icon: 'BrainCircuit', color: '#06b6d4', width: 980, height: 700, component: <ModelHubApp />, desc: 'AI models and chat', category: 'tools' },
-    { id: 'api-manager', name: 'API Manager', icon: 'Plug2', color: '#f59e0b', width: 960, height: 660, component: <ApiManagerApp />, desc: 'Manage API connections', category: 'tools' },
-    { id: 'task-manager', name: 'Task Manager', icon: 'Activity', color: '#f59e0b', width: 640, height: 520, component: <TaskManagerApp />, desc: 'Monitor running processes', category: 'system', desktopIcon: false },
-    { id: 'settings', name: 'Settings', icon: 'Settings', color: '#64748b', width: 900, height: 700, component: <SettingsPage />, desc: 'System preferences', category: 'system', showInStart: false, desktopIcon: false },
+  /* --- .li app discovery (via launcher.li + dynamic apps) --- */
+  const [liApps, setLiApps] = useState([]);
+
+  const refreshLiApps = useCallback(async () => {
+    try {
+      const discovered = await discoverAppsFromLauncher();
+      setLiApps(discovered);
+    } catch {
+      // Non-fatal.
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const installed = getInstalledApps();
+        const discovered = await discoverAppsFromLauncher();
+        for (const app of discovered) {
+          if (!installed.some(a => a.id === app.id)) registerApp(app);
+        }
+        if (!cancelled) setLiApps(discovered.length ? discovered : installed);
+      } catch {
+        // Launcher failure is non-fatal — built-in apps still work.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Re-discover when dynamic apps change (created/updated/deleted).
+  useEffect(() => {
+    const onChange = () => refreshLiApps();
+    window.addEventListener('lithium:li-dynamic-apps-changed', onChange);
+    return () => window.removeEventListener('lithium:li-dynamic-apps-changed', onChange);
+  }, [refreshLiApps]);
+
+  /* --- App registry (built-in + .li) --- */
+  const builtinApps = useMemo(() => [
+    { id: 'games', name: 'Hydrux', icon: 'Gamepad2', iconFile: 'hydrux', color: '#ec4899', width: 1100, height: 750, component: <Games />, desc: 'Game library and launcher', category: 'media' },
+    { id: 'media-player', name: 'Media Player', icon: 'Music', iconFile: 'media-player', color: '#22d3ee', width: 1150, height: 720, component: <MusicPage />, desc: 'Music, radio & media player', category: 'media' },
+    { id: 'browser', name: 'Browser', icon: 'Globe', iconFile: 'browser', color: '#06b6d4', width: 1000, height: 700, component: <Browser />, desc: 'Browse the web', category: 'tools' },
+    { id: 'calculator', name: 'Calculator', icon: 'Calculator', iconFile: 'calculator', color: '#3b82f6', width: 420, height: 640, component: <CalculatorPage />, desc: 'Quick calculations', category: 'tools' },
+    { id: 'clock', name: 'Clock', icon: 'Clock', iconFile: 'clock', color: '#22c55e', width: 560, height: 620, component: <CalendarClockApp />, desc: 'Clock, calendar & pomodoro', category: 'productivity' },
+    { id: 'files', name: 'File Explorer', icon: 'Folder', iconFile: 'files', color: '#f59e0b', width: 880, height: 560, component: <FileManagerApp />, desc: 'Browse and manage files', category: 'productivity' },
+    { id: 'photos', name: 'Gallery', icon: 'Image', iconFile: 'gallery', color: '#f472b6', width: 860, height: 600, component: <PhotosApp />, desc: 'View photos and images', category: 'media' },
+    { id: 'notepad', name: 'Notes', icon: 'FileText', iconFile: 'notes', color: '#8b5cf6', width: 900, height: 600, component: <NotesApp />, desc: 'Markdown note-taking', category: 'productivity' },
+    { id: 'downloader', name: 'Downloader', icon: 'ArrowDownToLine', iconFile: 'downloader', color: '#38bdf8', width: 880, height: 640, component: <DownloaderApp />, desc: 'Download files and models', category: 'tools' },
+    { id: 'code-studio', name: 'Code Studio', icon: 'Code', iconFile: 'code-studio', color: '#4ade80', width: 1150, height: 720, component: <CodeStudioApp />, desc: 'Write and run code', category: 'productivity' },
+    { id: 'app-studio', name: 'App Studio', icon: 'Blocks', color: '#a78bfa', width: 1050, height: 680, component: <AppStudioApp />, desc: 'Create and edit .li apps', category: 'productivity' },
+    { id: 'ai-hub', name: 'Cortex', icon: 'BrainCircuit', iconFile: 'cortex', color: '#06b6d4', width: 980, height: 700, component: <ModelHubApp />, desc: 'AI models and chat', category: 'tools' },
+    { id: 'api-manager', name: 'API Manager', icon: 'Plug2', iconFile: 'api-manager', color: '#f59e0b', width: 960, height: 660, component: <ApiManagerApp />, desc: 'Manage API connections', category: 'tools' },
+
+    { id: 'onboarding', name: 'Setup Wizard', icon: 'Sparkles', color: '#22d3ee', width: 640, height: 520, component: <OnboardingApp />, desc: 'First-run setup wizard', category: 'system', desktopIcon: false, showInStart: false },
+    { id: 'task-manager', name: 'Task Manager', icon: 'Activity', iconFile: 'task-manager', color: '#f59e0b', width: 640, height: 520, component: <TaskManagerApp />, desc: 'Monitor running processes', category: 'system', desktopIcon: false },
+    { id: 'settings', name: 'Settings', icon: 'Settings', iconFile: 'settings', color: '#64748b', width: 900, height: 700, component: <SettingsPage />, desc: 'System preferences', category: 'system', showInStart: false, desktopIcon: false },
   ], []);
+
+  const apps = useMemo(() => {
+    const liEntries = liApps.map(m => {
+      const caps = m._capabilities || {};
+      return {
+        id: `li-${m.id}`,
+        name: m.name,
+        icon: m.icon,
+        color: m.color,
+        width: m.width,
+        height: m.height,
+        desc: m.description,
+        category: m.category,
+        component: <LiAppHost manifest={m} />,
+        isLiApp: true,
+        // Capability flags from launcher.li — the core reads these
+        // to decide visibility without knowing the app's internals.
+        showInStart: caps.showInStart !== false,
+        desktopIcon: caps.desktopIcon !== false,
+      };
+    });
+    return [...builtinApps, ...liEntries];
+  }, [builtinApps, liApps]);
 
   const getApp = useCallback(id => apps.find(app => app.id === id), [apps]);
 
@@ -169,7 +237,7 @@ export default function useDesktopState() {
     } else {
       openWindow({
         id: target.id, title: target.name,
-        icon: <Icon name={target.icon} size={16} />,
+        icon: <AppIcon icon={target.icon} iconFile={target.iconFile} color={target.color} size={14} />,
         component: target.component,
         x: 110, y: 70,
         width: target.width || 900, height: target.height || 640,
@@ -217,11 +285,45 @@ export default function useDesktopState() {
       if (cmd === 'set_volume') setSoundLevel(Math.max(0, Math.min(100, Math.round(level ?? 50))));
     };
     window.addEventListener('lithium:api-command', onCommand);
+    // Handle app launch requests from file explorer (file associations)
+    const onLaunchApp = event => {
+      const { appId, fileEntry } = event.detail || {};
+      if (!appId) return;
+      launchRef.current(appId);
+      // Forward the file entry to the app after a short delay for mount
+      if (fileEntry) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('lithium:open-file-entry', { detail: { fileEntry, appId } }));
+        }, 150);
+      }
+    };
+    window.addEventListener('lithium:launch-app', onLaunchApp);
+    // Handle workspace restore requests
+    const onRestoreWorkspace = async event => {
+      const { name } = event.detail || {};
+      if (!name) return;
+      try {
+        const { loadWorkspace, getAppsFromLayout } = await import('../../../lib/services/workspaceService');
+        const layout = loadWorkspace(name);
+        if (!layout) return;
+        const appIds = getAppsFromLayout(layout);
+        // Open each app from the layout
+        for (const appId of appIds) {
+          const app = apps.find(a => a.id === appId);
+          if (app) launchRef.current(appId);
+        }
+      } catch {}
+    };
+    window.addEventListener('lithium:restore-workspace', onRestoreWorkspace);
     startEnabledWidgets();
     if (!bootEmitted) { bootEmitted = true; emitEvent('boot'); }
     watchDownloads();
     syncDownloads().catch(() => {});
-    return () => window.removeEventListener('lithium:api-command', onCommand);
+    return () => {
+      window.removeEventListener('lithium:api-command', onCommand);
+      window.removeEventListener('lithium:launch-app', onLaunchApp);
+      window.removeEventListener('lithium:restore-workspace', onRestoreWorkspace);
+    };
   }, [apps, closeWindow, focusWindow, updateWindow, windows]);
 
   /* --- Desktop signals for widgets --- */
@@ -235,7 +337,7 @@ export default function useDesktopState() {
       const url = event.detail;
       const target = getApp('browser');
       if (!target) return;
-      openWindow({ id: target.id, title: target.name, icon: <Icon name={target.icon} size={16} />, component: <Browser initialUrl={url} />, replaceTab: true, newWindow: false, x: 120, y: 60, width: 1000, height: 700 });
+      openWindow({ id: target.id, title: target.name, icon: <AppIcon icon={target.icon} iconFile={target.iconFile} color={target.color} size={16} />, component: <Browser initialUrl={url} />, replaceTab: true, newWindow: false, x: 120, y: 60, width: 1000, height: 700 });
     };
     window.addEventListener('lithium:open-browser', onOpenBrowser);
     return () => window.removeEventListener('lithium:open-browser', onOpenBrowser);
@@ -252,7 +354,7 @@ export default function useDesktopState() {
       const game = event.detail;
       const id = `game-${game.id}`;
       openWindow({
-        id, title: game.title, icon: <Icon name="Gamepad2" size={16} />,
+        id, title: game.title, icon: <AppIcon icon="Gamepad2" iconFile="hydrux" color="#ec4899" size={16} />,
         component: <GamePlayer embedded game={game} onClose={() => closeWindow(id)} />,
         newWindow: true, x: Math.max(20, window.innerWidth - 1060), y: 60,
         width: 1000, height: 700,
@@ -350,7 +452,7 @@ export default function useDesktopState() {
   const handlePower = action => {
     setPowerMenuOpen(false);
     setStartMenuOpen(false);
-    if (action === 'logout') closeAllWindows();
+    if (action === 'logout') { closeAllWindows(); window.dispatchEvent(new CustomEvent('lithium:lock-screen')); }
     else if (action === 'restart') window.location.reload();
     else if (action === 'shutdown') setShutdown(true);
   };
@@ -368,7 +470,7 @@ export default function useDesktopState() {
     windows, openWindow, updateWindow, focusWindow, closeWindow, closeApp, focusApp,
     apps, getApp,
     // Settings
-    settings,
+    settings, updateSetting,
     // Sub-hook: device
     online, netSpeed, battery, batteryTooltip, networkTooltip,
     // Sub-hook: weather

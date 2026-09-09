@@ -38,7 +38,7 @@ function CatalogTab({ onCtxMenu }) {
   const [drafts, setDrafts] = useState({});
   const [results, setResults] = useState({});
 
-  useEffect(() => { getCatalog().then(setCatalog); }, []);
+  useEffect(() => { setCatalog(getCatalog()); }, []);
 
   const groups = useMemo(() => {
     const byNs = new Map();
@@ -72,11 +72,11 @@ function CatalogTab({ onCtxMenu }) {
         · {catalog.length} APIs · {engineInfo().handlers} handlers registered
       </div>
       {groups.map(([ns, specs]) => (
-        <div key={ns} className="overflow-hidden rounded-lg border border-white/[0.07]">
-          <div className="bg-white/[0.05] px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white/50">{ns}</div>
+        <div key={ns} className="overflow-hidden rounded-lg border border-white/[0.1]">
+          <div className="bg-[#1e2029] px-3.5 py-2 text-[11px] font-bold uppercase tracking-widest text-white/50">{ns}</div>
           {specs.map(spec => (
-            <div key={spec.api} className="border-t border-white/[0.05]">
-              <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-white/[0.04]" onClick={() => setOpen(open === spec.api ? null : spec.api)} onContextMenu={event => { event.stopPropagation(); onCtxMenu?.(event, [
+            <div key={spec.api} className="border-t border-white/[0.06]">
+              <button className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-xs hover:bg-white/[0.04]" onClick={() => setOpen(open === spec.api ? null : spec.api)} onContextMenu={event => { event.stopPropagation(); onCtxMenu?.(event, [
                 { id: 'name', type: 'heading', label: spec.api },
                 { id: 'copy-spec', label: 'Copy API spec', icon: 'Copy', action: () => navigator.clipboard?.writeText(JSON.stringify(spec, null, 2)) },
                 { id: 'test', label: 'Test call', icon: 'Play', action: () => { setOpen(spec.api); run(spec); } },
@@ -90,7 +90,7 @@ function CatalogTab({ onCtxMenu }) {
                 ))}
               </button>
               {open === spec.api && (
-                <div className="space-y-2 bg-black/25 px-4 pb-3 pt-1">
+                <div className="space-y-2 bg-[#131520] px-4 pb-3 pt-1.5">
                   {spec.params.length > 0 && (
                     <textarea
                       className="h-16 w-full rounded-md border border-white/10 bg-black/40 p-2 font-mono text-[11px] text-white/85 outline-none acc-border-focus"
@@ -179,14 +179,14 @@ function WidgetsTab({ onCtxMenu }) {
         <span className="font-mono text-white/60"> every(ms, fn)</span> and <span className="font-mono text-white/60">log(...)</span>. Events: boot,
         app.opened, app.closed, startMenu.opened, startMenu.closed, volume.changed, weather.updated.
       </p>
-      <details className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2">
+      <details className="rounded-lg border border-white/[0.1] bg-[#1a1c27] px-3.5 py-2.5">
         <summary className="cursor-pointer text-[11px] font-semibold text-white/60 hover:text-white">Widget sandbox reference (what widgets can use)</summary>
         <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-white/55">{WIDGET_API_DOC}</pre>
       </details>
       {widgets.length === 0 && <p className="text-xs text-white/30">No widgets yet — create one from a template above.</p>}
       <div className="space-y-1.5">
         {widgets.map(widget => (
-          <div key={widget.id} className="flex items-center gap-3 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2" onContextMenu={event => onCtxMenu?.(event, [
+          <div key={widget.id} className="flex items-center gap-3 rounded-lg border border-white/[0.1] bg-[#1e2029] px-4 py-2.5" onContextMenu={event => onCtxMenu?.(event, [
             { id: 'name', type: 'heading', label: widget.name },
             { id: 'toggle', label: widget.enabled ? 'Disable widget' : 'Enable widget', icon: widget.enabled ? 'Power' : 'Zap', action: () => setWidgetEnabled(widget.id, !widget.enabled) },
             { id: 'edit', label: 'Edit source', icon: 'Pencil', action: () => openEditor(widget) },
@@ -261,7 +261,7 @@ function ExternalTab() {
         {drives.length === 0 && <p className="text-xs text-white/30">No cloud drives connected — use File Explorer → Network to mount Google Drive or OneDrive.</p>}
         <div className="space-y-1.5">
           {drives.map(config => (
-            <div key={config.id} className="flex items-center gap-3 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-xs">
+            <div key={config.id} className="flex items-center gap-3 rounded-lg border border-white/[0.1] bg-[#1e2029] px-4 py-2.5 text-xs">
               <span className="font-semibold text-white">{config.label}</span>
               <span className="text-white/35">{config.letter}: · {config.provider}</span>
               <span className={`ml-auto text-[11px] ${String(testResults[config.id] || '').startsWith('✕') ? 'text-red-300' : 'text-emerald-300'}`}>{testResults[config.id]}</span>
@@ -274,7 +274,7 @@ function ExternalTab() {
         <h3 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/50"><Icon name="KeyRound" size={13} /> AI model providers</h3>
         <div className="space-y-1.5">
           {Object.entries(AI_PROVIDERS).filter(([id]) => id !== 'builtin').map(([id, provider]) => (
-            <div key={id} className="flex items-center gap-3 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-xs">
+            <div key={id} className="flex items-center gap-3 rounded-lg border border-white/[0.1] bg-[#1e2029] px-4 py-2.5 text-xs">
               <span className="font-semibold text-white">{provider.label}</span>
               <span className="font-mono text-white/35">{provider.model}</span>
               <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${keys[id] ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-white/40'}`}>
@@ -315,7 +315,7 @@ function AuditTab({ onCtxMenu }) {
       {log.length === 0 && <p className="text-xs text-white/30">No API calls recorded yet — try one in the Catalog tab.</p>}
       <div className="space-y-1">
         {log.map((entry, index) => (
-          <div key={`${entry.t}-${index}`} className="flex items-center gap-2.5 rounded-md bg-white/[0.03] px-2.5 py-1.5 text-[11px]" onContextMenu={event => onCtxMenu?.(event, [
+          <div key={`${entry.t}-${index}`} className="flex items-center gap-2.5 rounded-md bg-[#1a1c27] px-3 py-2 text-[11px]" onContextMenu={event => onCtxMenu?.(event, [
             { id: 'copy', label: 'Copy entry', icon: 'Copy', action: () => navigator.clipboard?.writeText(`${entry.api} [${entry.caller}] ${entry.ok ? 'OK' : entry.error || ''}`) },
             { id: 'clear', label: 'Clear audit log', icon: 'Trash2', danger: true, action: clearAudit },
           ])}>
@@ -339,8 +339,8 @@ export default function ApiManagerApp({ windowed = false, closeSelf, minimizeSel
   const [menu, openMenu, closeMenu] = useContextMenu();
 
   return (
-    <div className="flex h-full min-w-0 flex-col bg-[#19191d] text-white">
-      <div className="flex min-w-0 items-center gap-1 overflow-hidden border-b border-white/[0.07] px-3 py-2" onContextMenu={event => openMenu(event, [
+    <div className="flex h-full min-w-0 flex-col bg-[#161821] text-white">
+      <div className="flex min-w-0 items-center gap-1 overflow-hidden border-b border-white/[0.1] px-3 py-2" onContextMenu={event => openMenu(event, [
         { id: 'switch', type: 'heading', label: 'Tabs' },
         ...TABS.map(t => ({ id: t.id, label: t.label, icon: t.icon, checked: tab === t.id, action: () => setTab(t.id) })),
         { id: 'sep', type: 'separator' },

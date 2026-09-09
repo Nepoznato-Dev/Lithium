@@ -2,7 +2,6 @@ import { allModels, loadModelMeta } from './ai/models';
 import { cacheEntries, putBlob } from './storage/manager';
 import { hydrate } from './storage/unifiedStore';
 import { childrenOf, createEntry, loadTree, saveTree, storeEntryContent, updateEntry } from './fileSystem';
-import * as core from './core';
 
 /**
  * Dynamic Downloads folder — everything downloaded or saved on the site lands
@@ -20,7 +19,13 @@ const MODEL_PREFIX = 'dl-model:';
 const GAME_PREFIX = 'dl-game:';
 export const DOWNLOADS_EVENT = 'lithium:downloads-changed';
 
-const slug = name => core.dlSlugSync(name) || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+const slug = name => {
+  const clean = (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  let r = '', pd = true;
+  for (const c of clean) { if (c === '-') { if (!pd) r += '-'; pd = true; } else { r += c; pd = false; } }
+  if (r.endsWith('-')) r = r.slice(0, -1);
+  return r.slice(0, 60);
+};
 
 /** Reconcile Downloads with downloaded models (legacy game mirrors pruned). */
 export async function syncDownloads() {

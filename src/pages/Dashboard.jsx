@@ -1,7 +1,12 @@
-import React from 'react';
-import DesktopView from '../Components/Desktop/DesktopView';
+import React, { lazy, Suspense } from 'react';
 
-/** Dashboard route renders the full desktop experience (like Nexus DashboardWrapper → DesktopView). */
+const DesktopView = lazy(() => import('../Components/Desktop/DesktopView'));
+
+/** Dashboard route renders the full desktop experience. */
 export default function Dashboard() {
-  return <DesktopView />;
+  return (
+    <Suspense fallback={null}>
+      <DesktopView />
+    </Suspense>
+  );
 }

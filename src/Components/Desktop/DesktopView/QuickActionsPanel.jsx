@@ -1,8 +1,16 @@
 import Icon from '../../Icon';
+import { isDndEnabled, setDndEnabled } from '../../../lib/services/notificationService';
+import { listWorkspaces, saveWorkspace, deleteWorkspace, getActiveWorkspace } from '../../../lib/services/workspaceService';
+import { useState } from 'react';
 
 /** Quick Actions panel — Windows 11-style quick settings with toggles & sliders. */
-export default function QuickActionsPanel({ settings, soundLevel, setSoundLevel, prevVolumeRef, online, netSpeed, battery, onClose, onOpenSettings }) {
+export default function QuickActionsPanel({ settings, update, soundLevel, setSoundLevel, prevVolumeRef, online, netSpeed, battery, onClose, onOpenSettings, windows }) {
   const isMuted = soundLevel === 0;
+  const [dnd, setDnd] = useState(() => isDndEnabled());
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [showWorkspaceInput, setShowWorkspaceInput] = useState(false);
+  const workspaces = listWorkspaces();
+  const activeWs = getActiveWorkspace();
 
   const toggleMute = () => {
     if (isMuted) {
@@ -43,10 +51,25 @@ export default function QuickActionsPanel({ settings, soundLevel, setSoundLevel,
           </button>
         )}
 
-        {/* Focus mode placeholder */}
-        <button className="nx-qs-tile">
+        {/* Focus / DND mode */}
+        <button className={`nx-qs-tile ${dnd ? 'active' : ''}`} onClick={() => { const next = !dnd; setDnd(next); setDndEnabled(next); }}>
           <Icon name="Moon" size={18} />
-          <span className="nx-qs-tile-label">Focus</span>
+          <span className="nx-qs-tile-label">{dnd ? 'DND On' : 'Focus'}</span>
+        </button>
+
+        {/* Privacy shields */}
+        <button className={`nx-qs-tile ${(settings.privacy?.shieldLevel ?? 'standard') !== 'off' ? 'active' : ''}`} onClick={() => {
+          const current = settings.privacy?.shieldLevel ?? 'standard';
+          update?.('privacy.shieldLevel', current === 'off' ? 'standard' : 'off');
+        }}>
+          <Icon name="Shield" size={18} />
+          <span className="nx-qs-tile-label">{(settings.privacy?.shieldLevel ?? 'standard') === 'off' ? 'Shields Off' : 'Shields On'}</span>
+        </button>
+
+        {/* Lock screen */}
+        <button className="nx-qs-tile" onClick={() => window.dispatchEvent(new CustomEvent('lithium:lock-screen'))}>
+          <Icon name="Lock" size={18} />
+          <span className="nx-qs-tile-label">Lock</span>
         </button>
 
         {/* Brightness */}
@@ -60,7 +83,69 @@ export default function QuickActionsPanel({ settings, soundLevel, setSoundLevel,
           <Icon name="Eye" size={18} />
           <span className="nx-qs-tile-label">Transparency</span>
         </button>
+
+        {/* Save workspace */}
+        <button className="nx-qs-tile" onClick={() => setShowWorkspaceInput(!showWorkspaceInput)}>
+          <Icon name="Save" size={18} />
+          <span className="nx-qs-tile-label">Save layout</span>
+        </button>
+
+        {/* Load workspace */}
+        <button className={`nx-qs-tile ${activeWs ? 'active' : ''}`} onClick={() => {
+          if (workspaces.length > 0) {
+            const ws = workspaces[workspaces.length - 1];
+            window.dispatchEvent(new CustomEvent('lithium:restore-workspace', { detail: { name: ws.name } }));
+          }
+        }}>
+          <Icon name="LayoutGrid" size={18} />
+          <span className="nx-qs-tile-label">{activeWs || 'Load layout'}</span>
+        </button>
       </div>
+
+      {/* Workspace save input */}
+      {showWorkspaceInput && (
+        <div className="nx-qs-slider-row" style={{ gap: 6 }}>
+          <input
+            className="text-input flex-1 rounded-full py-1 text-xs"
+            placeholder="Workspace name…"
+            value={workspaceName}
+            onChange={e => setWorkspaceName(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && workspaceName.trim()) {
+                saveWorkspace(workspaceName.trim(), windows || []);
+                setWorkspaceName('');
+                setShowWorkspaceInput(false);
+              }
+            }}
+          />
+          <button className="btn-primary px-2 py-1 text-xs" onClick={() => {
+            if (workspaceName.trim()) {
+              saveWorkspace(workspaceName.trim(), windows || []);
+              setWorkspaceName('');
+              setShowWorkspaceInput(false);
+            }
+          }}>Save</button>
+        </div>
+      )}
+
+      {/* Saved workspaces list */}
+      {workspaces.length > 0 && (
+        <div style={{ padding: '4px 14px 8px', display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {workspaces.map(ws => (
+            <button key={ws.name} onClick={() => {
+              window.dispatchEvent(new CustomEvent('lithium:restore-workspace', { detail: { name: ws.name } }));
+            }} style={{
+              fontSize: 10, padding: '3px 8px', borderRadius: 4,
+              background: activeWs === ws.name ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)',
+              color: activeWs === ws.name ? '#22d3ee' : 'rgba(255,255,255,0.5)',
+              border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+            }}>
+              {ws.name}
+              <span style={{ opacity: 0.4 }}>({ws.windowCount})</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Volume slider */}
       <div className="nx-qs-slider-row">

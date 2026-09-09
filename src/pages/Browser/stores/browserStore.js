@@ -38,6 +38,9 @@ export const menuOpen = signal(false);
 /** Shields panel open state. */
 export const shieldsPanelOpen = signal(false);
 
+/** Whether an article was detected on the current page (for reader mode trigger). */
+export const articleDetected = signal(false);
+
 /* ---------- Actions ---------- */
 
 export function setViewportMode(mode) {

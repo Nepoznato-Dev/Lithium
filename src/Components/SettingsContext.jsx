@@ -39,6 +39,15 @@ export function SettingsProvider({ children }) {
     });
   }, [settings, updateSetting]);
 
+  // Listen for OS theme changes when mode is 'system'
+  useEffect(() => {
+    if (settings.theme.mode !== 'system') return;
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const handler = () => applySettings(settings);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [settings]);
+
   const value = useMemo(() => ({ settings, updateSetting, replaceSettings }), [settings, updateSetting, replaceSettings]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

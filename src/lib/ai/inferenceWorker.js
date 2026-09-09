@@ -20,10 +20,10 @@
 
 let wllama = null;
 
-/** Lazily import the Wllama class (bundled by Vite into the worker chunk). */
+/** Load Wllama class from CDN (not bundled). */
 async function getWllama() {
   if (!getWllama._class) {
-    const mod = await import('@wllama/wllama');
+    const mod = await import('https://cdn.jsdelivr.net/npm/@wllama/wllama@2.2.2/esm/+esm');
     getWllama._class = mod.Wllama;
   }
   return getWllama._class;

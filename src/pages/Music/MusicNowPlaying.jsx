@@ -5,12 +5,12 @@ import { soloistPosition } from '../../lib/music';
 export default function MusicNowPlaying({ rightOpen, engine, solo, soloCtl, related, relatedStations, currentLiked, isLikedStation, toggleLikeTrack, toggleLikeStation, play, disconnectSoloist }) {
   if (!rightOpen) return null;
   return (
-    <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-white/[0.06] bg-[#17171c] p-3">
+    <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-white/[0.06] bg-[#16161c] p-4">
       {solo.status !== 'off' && (
-        <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] p-3">
+        <div className="rounded-xl border border-white/[0.06] bg-[#1c1c26] p-3">
           <div className="mb-2 flex items-center gap-2">
-            <span className={`h-2 w-2 shrink-0 rounded-full ${solo.status === 'connected' ? (solo.auth?.logged_in ? 'bg-emerald-400' : 'bg-amber-400') : 'bg-white/30'}`} />
-            <span className="min-w-0 flex-1 truncate text-xs font-bold">{solo.auth?.device_name || 'Spotify Soloist'}</span>
+            <span className={`h-2 w-2 shrink-0 rounded-full ${solo.status === 'connected' ? (solo.auth?.logged_in ? 'bg-emerald-400' : 'bg-amber-400') : 'bg-white/25'}`} />
+            <span className="min-w-0 flex-1 truncate text-xs font-bold text-white/85">{solo.auth?.device_name || 'Spotify Soloist'}</span>
             <button className="icon-btn h-7 w-7" title="Disconnect" onClick={disconnectSoloist}><Icon name="X" size={13} /></button>
           </div>
           {solo.status === 'connecting' && <p className="text-[11px] text-white/40">Connecting…</p>}
@@ -65,14 +65,14 @@ export default function MusicNowPlaying({ rightOpen, engine, solo, soloCtl, rela
       )}
       {engine.track ? (
         <>
-          <div className="rounded-xl bg-white/[0.04] p-3">
+          <div className="rounded-xl border border-white/[0.06] bg-[#1c1c26] p-4">
             {engine.track.artwork
-              ? <img src={engine.track.artwork} alt="" className="mb-3 aspect-square w-full rounded-lg object-cover" />
-              : <div className="mb-3 flex aspect-square w-full items-center justify-center rounded-lg bg-white/[0.06]"><Icon name="Music" size={40} className="text-white/25" /></div>}
-            <div className="flex items-start gap-2">
+              ? <img src={engine.track.artwork} alt="" className="mb-4 aspect-square w-full rounded-lg object-cover shadow-lg" />
+              : <div className="mb-4 flex aspect-square w-full items-center justify-center rounded-lg bg-gradient-to-br from-white/[0.05] to-white/[0.02] ring-1 ring-inset ring-white/[0.06]"><Icon name="Music" size={40} className="text-white/15" /></div>}
+            <div className="flex items-start gap-2.5">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold">{engine.track.title}</p>
-                <p className="truncate text-xs text-white/45">{engine.track.artist}</p>
+                <p className="truncate text-sm font-bold text-white/90">{engine.track.title}</p>
+                <p className="truncate text-xs text-white/40">{engine.track.artist}</p>
               </div>
               {!engine.track.live && (
                 <button className={`icon-btn h-8 w-8 ${currentLiked ? 'text-red-400' : ''}`} title="Like" onClick={() => toggleLikeTrack(engine.track)}>
@@ -88,9 +88,9 @@ export default function MusicNowPlaying({ rightOpen, engine, solo, soloCtl, rela
           </div>
           {related.length > 0 && (
             <div>
-              <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-white/40">Related music</h3>
+              <h3 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-white/30">Related music</h3>
               {related.map(track => (
-                <button key={track.id} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-white/[0.05]" onClick={() => play(track, related)}>
+                <button key={track.id} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/[0.05]" onClick={() => play(track, related)}>
                   {track.artwork ? <img src={track.artwork} alt="" className="h-9 w-9 rounded object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded bg-white/[0.06]"><Icon name="Music" size={14} className="text-white/40" /></span>}
                   <span className="min-w-0">
                     <span className="block truncate text-xs text-white/85">{track.title}</span>
@@ -102,9 +102,9 @@ export default function MusicNowPlaying({ rightOpen, engine, solo, soloCtl, rela
           )}
           {relatedStations.length > 0 && (
             <div>
-              <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-white/40">More stations like this</h3>
+              <h3 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-white/30">More stations like this</h3>
               {relatedStations.map(station => (
-                <button key={station.id} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-white/[0.05]" onClick={() => play(station, relatedStations)}>
+                <button key={station.id} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/[0.05]" onClick={() => play(station, relatedStations)}>
                   <span className="flex h-9 w-9 items-center justify-center rounded bg-white/[0.06]"><Icon name="Radio" size={14} className="text-white/40" /></span>
                   <span className="min-w-0">
                     <span className="block truncate text-xs text-white/85">{station.title}</span>
@@ -116,7 +116,15 @@ export default function MusicNowPlaying({ rightOpen, engine, solo, soloCtl, rela
           )}
         </>
       ) : (
-        <p className="px-2 py-6 text-center text-xs text-white/30">Nothing playing yet.<br />Pick a track and it shows up here with related music.</p>
+        <div className="flex flex-col items-center gap-4 px-2 py-10 text-center">
+          <div className="music-empty-icon flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-white/[0.04] to-white/[0.01] ring-1 ring-white/[0.08] shadow-md shadow-black/20">
+            <Icon name="Music" size={32} strokeWidth={1} className="text-cyan-400/40" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-sm font-semibold text-white/45">Nothing playing yet</p>
+            <p className="text-[11px] leading-relaxed text-white/20">Pick a track and it shows up here<br />with related music and stations.</p>
+          </div>
+        </div>
       )}
     </aside>
   );

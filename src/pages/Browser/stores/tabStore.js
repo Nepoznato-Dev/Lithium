@@ -3,6 +3,7 @@
  * Uses @preact/signals for fine-grained reactivity.
  */
 import { signal, computed } from '@preact/signals';
+import { activeContainer } from './containerStore';
 
 let tabCounter = 0;
 
@@ -19,6 +20,7 @@ export function createTab(url) {
     isPinned: false,
     isMuted: false,
     groupId: null,
+    containerId: activeContainer.value || 'default',
     history: [{ url: initialUrl, mode: 'normal' }],
     index: 0,
     reloadKey: 0,

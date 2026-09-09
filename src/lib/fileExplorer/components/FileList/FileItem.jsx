@@ -2,36 +2,107 @@
  * Individual grid tile — icon/thumbnail + name.
  * Extracted from the grid item rendering in the monolith.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import Icon from '../../../../Components/Icon';
-import { readEntryContent } from '../../../fileSystem.js';
-import { selectedItems } from '../../state/signals.jsx';
+import { getThumbUrl, getCachedThumbUrl } from '../../thumbCache.js';
+import { selectedItems, draggingId } from '../../state/signals.jsx';
+
+/** Pick the best Icon name + colour for an entry, matching the pattern used
+ *  across Sidebar, CodeStudio, Notes, Downloader, etc. */
+function glyphFor(entry) {
+  if (entry.cold)  return { name: 'Snowflake', color: '#93c5fd' };
+  if (entry.ref)   return { name: 'Gamepad2',  color: '#ff6b6b' };
+
+  const ext = (entry.name || '').split('.').pop()?.toLowerCase();
+
+  if (entry.type === 'folder') return { name: 'Folder',    color: '#fbbf24' };
+  if (entry.type === 'image')  return { name: 'Image',     color: '#f472b6' };
+  if (entry.type === 'video')  return { name: 'Film',      color: '#a78bfa' };
+
+  // Extension-specific icons — same pattern as CodeStudio / Downloader
+  switch (ext) {
+    case 'mp3': case 'ogg': case 'wav': case 'flac': case 'm4a': case 'aac':
+      return { name: 'Music', color: '#f472b6' };
+    case 'pdf':
+      return { name: 'FileText', color: '#ef4444' };
+    case 'zip': case 'tar': case 'gz': case 'rar': case '7z':
+      return { name: 'Archive', color: '#f59e0b' };
+    case 'json':
+      return { name: 'FileJson', color: '#fbbf24' };
+    case 'gguf':
+      return { name: 'BrainCircuit', color: '#22d3ee' };
+    case 'js': case 'jsx': case 'ts': case 'tsx': case 'py': case 'rs':
+    case 'html': case 'css': case 'xml': case 'yaml': case 'yml': case 'toml':
+      return { name: 'Code2', color: '#4ade80' };
+    case 'csv': case 'xls': case 'xlsx':
+      return { name: 'Files', color: '#22c55e' };
+    default:
+      if (entry.type === 'text') return { name: 'FileText', color: '#60a5fa' };
+      return { name: 'FileText', color: '#9ca3af' };
+  }
+}
+
+/** Map icon names to PNG filenames in public/icons/ */
+const ICON_PNG_MAP = {
+  Folder: 'files',
+  Image: 'gallery',
+  Film: 'film',
+  Music: 'music-note',
+  FileText: 'notes',
+  Archive: 'archive',
+  BrainCircuit: 'cortex',
+  Code2: 'code-studio',
+  Gamepad2: 'hydrux',
+  Snowflake: 'snowflake',
+  FileJson: 'file-json',
+};
 
 function EntryGlyph({ entry, size = 36 }) {
-  if (entry.cold) return <Icon name="Snowflake" size={size} color="#93c5fd" strokeWidth={1.4} />;
-  if (entry.type === 'folder') return <Icon name="Folder" size={size} color="#f59e0b" strokeWidth={1.4} />;
-  if (entry.type === 'image') return <Icon name="Image" size={size} color="#f472b6" strokeWidth={1.4} />;
-  if (entry.type === 'video') return <Icon name="Film" size={size} color="#a78bfa" strokeWidth={1.4} />;
-  if (entry.type === 'text') return <Icon name="FileText" size={size} color="#60a5fa" strokeWidth={1.4} />;
-  if (entry.name?.toLowerCase().endsWith('.gguf')) return <Icon name="BrainCircuit" size={size} color="#22d3ee" strokeWidth={1.4} />;
-  if (entry.ref) return <Icon name="Gamepad2" size={size} color="#ff6b6b" strokeWidth={1.4} />;
-  return <Icon name="FileText" size={size} color="#9ca3af" strokeWidth={1.4} />;
+  const { name, color } = glyphFor(entry);
+  const pngName = ICON_PNG_MAP[name];
+  if (pngName) {
+    return <img src={`/icons/${pngName}.png`} alt="" style={{ width: size, height: size }} className="object-contain" />;
+  }
+  return <Icon name={name} size={size} color={color} strokeWidth={1.4} />;
 }
 
 function EntryThumb({ entry, className }) {
-  const [url, setUrl] = useState(entry.content || null);
+  const [url, setUrl] = useState(() => getCachedThumbUrl(entry) || null);
+  const [visible, setVisible] = useState(false);
+  const imgRef = useRef(null);
+
+  // IntersectionObserver: only load when actually visible
   useEffect(() => {
+    if (url) return; // already loaded
+    const el = imgRef.current;
+    if (!el || (!entry.idb && !entry.content)) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { setVisible(true); io.disconnect(); }
+    }, { rootMargin: '200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [entry, url]);
+
+  // Async load via shared cache — reads from IDB only once per session
+  useEffect(() => {
+    if (!visible || url) return;
     let active = true;
-    if (!entry.content && entry.idb) {
-      readEntryContent(entry).then(data => { if (active) setUrl(data); });
-    }
+    getThumbUrl(entry).then(data => {
+      if (active && data) setUrl(data);
+    });
     return () => { active = false; };
-  }, [entry]);
-  if (!url) return <div className={`${className} animate-pulse bg-white/[0.08]`} />;
+  }, [entry, visible, url]);
+
+  if (!url) return <div ref={imgRef} className={`${className} animate-pulse bg-[#2a2b31]`} />;
   return <img src={url} alt="" className={className} />;
 }
 
-export default function FileItem({ entry, tree, drive, selected, dragging, openItem, onItemContext, dragProps, dropTarget }) {
+const FileItem = memo(function FileItem({ entry, treeRef, drive, openItem, onItemContext, dragProps, dropTarget }) {
+  // Read signals directly — only THIS item re-renders on selection change,
+  // not the entire list. Signal subscriptions are per-component.
+  const selected = selectedItems.value.has(entry.id);
+  const dragging = draggingId.value;
+
   const handleClick = (event) => {
     event.stopPropagation();
     if (event.ctrlKey || event.metaKey) {
@@ -50,7 +121,7 @@ export default function FileItem({ entry, tree, drive, selected, dragging, openI
 
   return (
     <button
-      className={`flex flex-col items-center gap-1.5 rounded-lg p-3 text-center transition-colors ${selected ? 'acc-soft acc-ring-soft' : 'hover:bg-white/[0.06]'} ${dragging && entry.type === 'folder' && dragging !== entry.id ? 'acc-ring-soft' : ''}`}
+      className={`flex flex-col items-center gap-2 rounded-lg p-3 text-center transition-colors ${selected ? 'acc-soft acc-ring-soft' : 'hover:bg-[#2a2b31]'} ${dragging && entry.type === 'folder' && dragging !== entry.id ? 'acc-ring-soft' : ''}`}
       onClick={handleClick}
       onContextMenu={event => { event.stopPropagation(); onItemContext(event, entry); }}
       onDoubleClick={() => openItem(entry)}
@@ -59,11 +130,15 @@ export default function FileItem({ entry, tree, drive, selected, dragging, openI
       title={entry.name}
     >
       {entry.type === 'image' && !drive ? (
-        <EntryThumb entry={entry} className="h-10 w-10 rounded object-cover" />
+        <EntryThumb entry={entry} className="h-10 w-10 rounded-md object-cover" />
       ) : (
         <EntryGlyph entry={entry} size={38} />
       )}
-      <span className="line-clamp-2 w-full break-words text-[11px] leading-tight text-white/80">{entry.name}</span>
+      <span className="line-clamp-2 w-full break-words text-[11px] leading-snug text-white/80">{entry.name}</span>
     </button>
   );
-}
+}, (prev, next) => {
+  return prev.entry === next.entry && prev.drive === next.drive;
+});
+
+export default FileItem;

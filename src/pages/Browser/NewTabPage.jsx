@@ -16,7 +16,7 @@ import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
 import { currentUrl, navigateTab, activeTab, updateTab } from './stores/tabStore';
 import { clearAllModes } from './stores/browserStore';
 import { activeSearchProvider } from './stores/searchStore';
-import { topSites, currentBackground, showTopSites, showClock, showStatsWidget, showNewsWidget } from './stores/newTabStore';
+import { topSites, currentBackground, showTopSites, showClock, showStatsWidget, showNewsWidget, showAiWidget } from './stores/newTabStore';
 import { checkDailyReset } from './stores/shieldsStore';
 import { SCRAPE_PROVIDERS } from '../../lib/searchProxy';
 import { renderSearchResults } from '../../lib/searchResultsRenderer';
@@ -28,11 +28,11 @@ import BackgroundControls from './BackgroundControls';
 import SearchWidget from './SearchWidget';
 import TopSitesGrid from './TopSitesGrid';
 import BraveStatsWidget from './BraveStatsWidget';
+import AiQuickAccessWidget from './AiQuickAccessWidget';
 import ClockWidget from './ClockWidget';
 import NewsWidget from './NewsWidget';
 import WidgetStack from './WidgetStack';
 import NtpSettingsModal from './NtpSettingsModal';
-import * as core from '../../lib/core';
 
 export default function NewTabPage() {
   const { settings } = useSettings();
@@ -95,8 +95,22 @@ export default function NewTabPage() {
     e.preventDefault();
     if (!value.trim()) return;
     const trimmed = value.trim();
-    // Resolve via Rust
-    const resolved = core.browserResolveInputSync(trimmed, searchUrl);
+    // Resolve input: URL or search
+    let resolved;
+    {
+      const t = trimmed;
+      if (/^lithium:\/\//.test(t)) resolved = { kind: 'url', value: t };
+      else if (/^https?:\/\//.test(t)) resolved = { kind: 'url', value: t };
+      else {
+        const host = t.split(/[/:?]/)[0];
+        const dots = host.split('.');
+        if (dots.length >= 2 && dots.every(s => s.length > 0 && /^[a-zA-Z0-9-]+$/.test(s)) && t.length >= 4) {
+          resolved = { kind: 'url', value: `https://${t}` };
+        } else {
+          resolved = { kind: 'search', value: `${searchUrl}${t}` };
+        }
+      }
+    }
     if (resolved) {
       if (resolved.kind === 'url') {
         handleNavigate(resolved.value);
@@ -105,9 +119,9 @@ export default function NewTabPage() {
       }
     } else {
       // JS fallback
-      const looksLikeUrl = /^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(trimmed) || /^https?:\/\//i.test(trimmed);
+      const looksLikeUrl = /^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(trimmed) || /^(https?|lithium):\/\//i.test(trimmed);
       if (looksLikeUrl) {
-        const finalUrl = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+        const finalUrl = /^(https?|lithium):\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
         handleNavigate(finalUrl);
       } else {
         handleSearch(trimmed);
@@ -176,6 +190,13 @@ export default function NewTabPage() {
           </div>
         )}
 
+        {/* AI Quick Access widget (C8) */}
+        {showAiWidget.value && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+            <AiQuickAccessWidget />
+          </div>
+        )}
+
         {/* Footer — photo credits at bottom */}
         <footer className="ntp-footer">
           <div className="ntp-credits">
@@ -188,8 +209,8 @@ export default function NewTabPage() {
         </footer>
       </div>
 
-      {/* Floating bottom controls: provider pills + background rotation */}
-      <BackgroundControls />
+      {/* Floating bottom controls: background nav + customize button (matches Brave) */}
+      <BackgroundControls onCustomize={() => setSettingsOpen(true)} />
 
       {/* NTP Settings Modal */}
       <NtpSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />

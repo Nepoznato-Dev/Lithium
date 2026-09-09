@@ -1,0 +1,11 @@
+[package]
+name = "tar"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium TAR archive WASM"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }

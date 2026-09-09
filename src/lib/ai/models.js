@@ -2,7 +2,6 @@ import { storage } from '../storage/localStorage';
 import { deleteBlob, getBlob, putBlob } from '../storage/manager';
 import { backendUrl } from '../backendApi';
 import { opfsAvailable, opfsDelete, opfsGetFile, opfsWriteStream } from '../storage/indexedDB';
-import * as core from '../core';
 
 /**
  * Lightweight local model catalog (GGUF, Q4_K_M) downloaded from Hugging Face
@@ -88,8 +87,14 @@ function saveModelMeta(meta) {
 
 /* ---------- Custom models (user-added GGUFs, fully in-browser) ---------- */
 
-const slugify = text =>
-  core.modelSlugifySync(text || 'model') || String(text || 'model').toLowerCase().replace(/\.[a-z0-9]+$/i, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'model';
+function _slugify(text, maxLen = 48) {
+  const clean = (text || 'model').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  let r = '', pd = true;
+  for (const c of clean) { if (c === '-') { if (!pd) r += '-'; pd = true; } else { r += c; pd = false; } }
+  if (r.endsWith('-')) r = r.slice(0, -1);
+  return (r.slice(0, maxLen)) || 'model';
+}
+const slugify = text => _slugify(text);
 
 /** User-added models persist in localStorage; their GGUF blobs live in IndexedDB. */
 export function loadCustomModels() {
@@ -218,12 +223,27 @@ async function fetchMaybeProxied(url, options = {}) {
  * Returns null for non-HF URLs, /resolve/ file links and unrelated pages.
  */
 export function parseHfUrl(url) {
-  return core.modelParseHfUrlSync(url);
+  if (!url) return null;
+  const trimmed = url.trim();
+  const afterScheme = trimmed.startsWith('https://') ? trimmed.slice(8) : trimmed.startsWith('http://') ? trimmed.slice(7) : null;
+  if (!afterScheme) return null;
+  const hostEnd = afterScheme.indexOf('/');
+  const host = hostEnd === -1 ? afterScheme : afterScheme.slice(0, hostEnd);
+  if (!host.endsWith('huggingface.co') && !host.endsWith('huggingface.co.')) return null;
+  if (hostEnd === -1) return null;
+  const parts = afterScheme.slice(hostEnd + 1).split('/').filter(Boolean);
+  if (parts.length < 2) return null;
+  const repoId = `${parts[0]}/${parts[1]}`;
+  if (parts.length < 3) return { repoId, path: '' };
+  if (parts[2] === 'resolve') return null;
+  if (parts[2] === 'tree') return { repoId, path: parts.slice(3).join('/') };
+  if (parts[2] === 'blob') return { repoId, path: parts.length > 4 ? parts.slice(3, parts.length - 1).join('/') : '' };
+  return null;
 }
 
 /** Direct download link for one file of a HF repo. */
 export const hfResolveUrl = (repoId, file) =>
-  core.modelHfResolveUrlSync(repoId, file) || `https://huggingface.co/${repoId}/resolve/main/${file}`;
+  `https://huggingface.co/${repoId || ''}/resolve/main/${file || ''}`;
 
 /** List one directory of a HF repo (GitHub-style browsing).
  * Proxy-first: the local backend's server-side fetch is the proven-reliable
@@ -261,11 +281,26 @@ export async function listHfDir(repoId, path = '') {
 /* ---------- Inference tiers (benchmarked placements) ---------- */
 
 export const TIERS = [
-  { id: 'lite', label: 'Lite', modelId: 'qwen3-0.6b', hint: 'quick answers & overviews' },
-  { id: 'efficient', label: 'Efficient', modelId: 'qwen2.5-1.5b', alt: 'gemma-4-e2b', hint: 'balanced chat' },
-  { id: 'performance', label: 'Performance', modelId: 'smollm3-3b', alt: 'phi-4-mini', hint: 'stronger reasoning' },
-  { id: 'ultra', label: 'Ultra', modelId: 'qwen3-4b', hint: 'thinking mode · complex tasks' },
+  { id: 'auto', label: 'Auto', modelId: 'qwen2.5-1.5b', hint: 'dynamically picks the best tier for your query' },
+  { id: 'lite', label: 'Lite', modelId: 'qwen3-0.6b', hint: 'fast & lightweight · everyday tasks' },
+  { id: 'efficient', label: 'Efficient', modelId: 'qwen2.5-1.5b', alt: 'gemma-4-e2b', hint: 'balanced speed & quality · standard reasoning' },
+  { id: 'performance', label: 'Performance', modelId: 'smollm3-3b', alt: 'phi-4-mini', hint: 'advanced reasoning · high output quality' },
+  { id: 'ultra', label: 'Ultra', modelId: 'qwen3-4b', hint: 'frontier-class · expert deep reasoning & thinking' },
 ];
+
+/** Analyze a message and return the best tier id for it. */
+export function autoSelectTier(text) {
+  const t = (text || '').toLowerCase();
+  const len = text.length;
+  // Ultra signals: deep reasoning, complex analysis, multi-step
+  if (/\b(think|reason|analyze|compare|evaluate|prove|derive|explain in detail|step.by.step|chain.of.thought)\b/.test(t) && len > 80) return 'ultra';
+  // Performance signals: coding, writing, structured output
+  if (/\b(code|write|function|class|implement|debug|refactor|algorithm|design|architecture|essay|article|report)\b/.test(t) && len > 40) return 'performance';
+  // Lite signals: short, simple questions
+  if (len < 60 && /^\s*(what|who|when|where|how|is|are|do|does|can|will)\b/i.test(text.trim())) return 'lite';
+  // Default: efficient
+  return 'efficient';
+}
 
 export const getTier = () => storage.get('ai-tier', 'lite');
 export const setTier = id => storage.set('ai-tier', id);

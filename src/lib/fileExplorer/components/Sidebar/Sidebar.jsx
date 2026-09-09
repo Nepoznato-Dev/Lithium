@@ -2,10 +2,11 @@
  * Main sidebar — Quick Access, This PC, Network, cloud drives, storage bar.
  * Extracted from renderSidebar() in the monolith.
  */
-import Icon from '../../../../Components/Icon';
+import { memo } from 'react';
+import { PngIcon } from '../common/PngIcon.jsx';
 import {
-  view, nav, pins, thisPCOpen, networkOpen, draggingId,
-  cloudItems, cloudLoading, authIssue,
+  view, nav, pins, thisPCOpen, networkOpen,
+  cloudLoading, authIssue,
 } from '../../state/signals.jsx';
 import { childrenOf, getEntry, trashedItems, TRASH_ID, isTrashed } from '../../../fileSystem.js';
 import { PROVIDERS } from '../../../cloudDrives.js';
@@ -24,11 +25,11 @@ const QUICK_META = {
   Videos: { icon: 'Film', color: '#a78bfa' },
 };
 
-export default function Sidebar({ tree, configs, updateConfigs, openMenu, goDrive, togglePin, dropTarget, setStorageOpen, setConnectOpen }) {
+export default memo(function Sidebar({ tree, configs, updateConfigs, openMenu, goDrive, togglePin, dropTarget, setStorageOpen, setConnectOpen }) {
   const folderId = nav.value.stack[nav.value.stack.length - 1]?.id;
 
   return (
-    <aside className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-black/40 bg-[#1f1f23] p-1.5">
+    <aside className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-white/[0.08] bg-[#202125] p-2">
       <SideRow icon="Home" color="#f59e0b" label="Home" active={view.value === 'home'} onClick={() => { view.value = 'home'; }} />
       <SideRow icon="Image" color="#38bdf8" label="Gallery" active={view.value === 'gallery'} onClick={() => { view.value = 'gallery'; }} />
       <SideRow
@@ -43,7 +44,7 @@ export default function Sidebar({ tree, configs, updateConfigs, openMenu, goDriv
         <SideRow key={config.id} icon="Cloud" color={PROVIDERS.onedrive.color} label={config.label} active={view.value === 'files' && nav.value.driveId === config.id} onClick={() => goDrive(config.id)} />
       ))}
 
-      <div className="mx-2 my-2 h-px bg-white/[0.08]" />
+      <div className="mx-2 my-2 h-px bg-white/[0.1]" />
 
       {[...pins.value]
         .sort((a, b) => {
@@ -78,19 +79,19 @@ export default function Sidebar({ tree, configs, updateConfigs, openMenu, goDriv
                   title="Unpin from Quick access"
                   onClick={event => { event.stopPropagation(); pins.value = pins.value.filter(p => p !== id); }}
                 >
-                  <Icon name="Pin" size={12} className="rotate-45" />
+                  <PngIcon name="Pin" size={12} className="rotate-45" />
                 </button>
               }
             />
           );
         })}
 
-      <div className="mx-2 my-2 h-px bg-white/[0.08]" />
+      <div className="mx-2 my-2 h-px bg-white/[0.1]" />
 
       <SideRow icon="Monitor" color="#38bdf8" label="This PC" chevron={thisPCOpen.value} onChevron={() => thisPCOpen.value = !thisPCOpen.value} onClick={() => thisPCOpen.value = !thisPCOpen.value} />
       {thisPCOpen.value && (
         <>
-          <SideRow indent icon="HardDrive" color="#9ca3af" label="Local Disk (C:)" active={view.value === 'files' && nav.value.driveId === 'local' && nav.value.stack.length === 1} onClick={() => goDrive('local')} {...dropTarget('root')} dropActive={Boolean(draggingId.value)} />
+          <SideRow indent icon="HardDrive" color="#9ca3af" label="Local Disk (C:)" active={view.value === 'files' && nav.value.driveId === 'local' && nav.value.stack.length === 1} onClick={() => goDrive('local')} {...dropTarget('root')} />
           {configs.map(config => (
             <SideRow
               key={config.id}
@@ -119,7 +120,7 @@ export default function Sidebar({ tree, configs, updateConfigs, openMenu, goDriv
               onClick={() => goDrive(config.id)}
               right={
                 <button className="text-white/25 opacity-0 transition-opacity hover:text-red-300 group-hover:opacity-100" title="Disconnect" onClick={event => { event.stopPropagation(); updateConfigs(configs.filter(e => e.id !== config.id)); }}>
-                  <Icon name="X" size={12} />
+                  <PngIcon name="X" size={12} />
                 </button>
               }
             />
@@ -128,16 +129,16 @@ export default function Sidebar({ tree, configs, updateConfigs, openMenu, goDriv
         </>
       )}
 
-      <div className="mt-auto px-2 pb-1 pt-3">
+      <div className="mt-auto px-2 pb-1.5 pt-3">
         <button className="w-full text-left" onClick={() => setStorageOpen(true)} title="Open storage manager">
-          <div className="h-1 overflow-hidden rounded-full bg-white/10">
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
             <div className="h-full rounded-full bg-cyan-400" style={{ width: `${Math.min(100, 1)}%` }} />
           </div>
-          <div className="mt-1 text-[10px] text-white/35">
+          <div className="mt-1.5 text-[10px] font-medium text-white/40">
             Storage manager
           </div>
         </button>
       </div>
     </aside>
   );
-}
+});

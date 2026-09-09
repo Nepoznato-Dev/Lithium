@@ -1,0 +1,10 @@
+C:\Users\PC\Downloads\Lithium\Lithium\rust\target\debug\build\xxhash-rust/05dba7d3cfbf1d42\out\xxhash_rust-05dba7d3cfbf1d42.d: C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\lib.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\utils.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh32_common.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh64_common.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh3_common.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh3.rs
+
+C:\Users\PC\Downloads\Lithium\Lithium\rust\target\debug\build\xxhash-rust/05dba7d3cfbf1d42\out\libxxhash_rust-05dba7d3cfbf1d42.rmeta: C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\lib.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\utils.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh32_common.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh64_common.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh3_common.rs C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh3.rs
+
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\lib.rs:
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\utils.rs:
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh32_common.rs:
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh64_common.rs:
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh3_common.rs:
+C:\Users\PC\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\xxhash-rust-0.8.18\src\xxh3.rs:

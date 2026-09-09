@@ -8,26 +8,34 @@ import { activeTab, currentUrl, goBack, goForward, reloadTab, navigateTab } from
 import { isBookmarked, toggleBookmark } from './stores/bookmarksStore';
 import { addHistoryEntry } from './stores/historyStore';
 import { simulateBlocking } from './stores/shieldsStore';
+import { articleDetected } from './stores/browserStore';
+import { navigateInternal } from './stores/browserStore';
 import Omnibox from './Omnibox';
 import ShieldsButton from './ShieldsButton';
 import Icon from '../../Components/Icon';
-import * as core from '../../lib/core';
 
 function hostname(url) {
-  const result = core.browserHostnameSync(url);
-  if (result) return result;
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+  if (!url) return '';
+  let s = url;
+  const schemeIdx = s.indexOf('://');
+  if (schemeIdx >= 0) s = s.slice(schemeIdx + 3);
+  s = s.split(/[/?#]/)[0];
+  if (s.startsWith('www.')) s = s.slice(4);
+  s = s.split(':')[0];
+  return s;
 }
 
 export default function NavigationBar({ omniboxRef }) {
   const tab = activeTab.value;
   const url = currentUrl.value;
   const bookmarked = url ? isBookmarked(url) : false;
+  const hasArticle = articleDetected.value;
 
   const handleNavigate = (newUrl) => {
     navigateTab(tab.id, newUrl);
     addHistoryEntry(hostname(newUrl), newUrl);
     simulateBlocking();
+    articleDetected.value = false; // reset on navigation
   };
 
   const handleReload = () => reloadTab(tab.id);
@@ -36,6 +44,11 @@ export default function NavigationBar({ omniboxRef }) {
 
   const handleBookmarkToggle = () => {
     if (url) toggleBookmark(hostname(url), url);
+  };
+
+  const handleReaderMode = () => {
+    if (!url) return;
+    navigateInternal(`#/reader?url=${encodeURIComponent(url)}`);
   };
 
   return (
@@ -58,6 +71,17 @@ export default function NavigationBar({ omniboxRef }) {
       <Omnibox inputRef={omniboxRef} onNavigate={handleNavigate} />
 
       {/* Right-side actions */}
+      {/* Reader mode button — visible when article detected (C4) */}
+      {hasArticle && (
+        <button
+          className="browser-nav-btn text-cyan-300"
+          onClick={handleReaderMode}
+          aria-label="Open in Reader mode"
+          title="Open in Reader mode"
+        >
+          <Icon name="BookOpen" className="h-4 w-4" />
+        </button>
+      )}
       <button
         className={`browser-nav-btn ${bookmarked ? 'text-yellow-400' : ''}`}
         onClick={handleBookmarkToggle}

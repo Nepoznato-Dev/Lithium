@@ -6,7 +6,7 @@ import { getBackendUrl } from '../../../lib/searchProxy';
 import { rebuildPage } from '../../../lib/pageRebuilder';
 import { fullRender } from '../../../lib/fullRenderer';
 import { renderSearchResults } from '../../../lib/searchResultsRenderer';
-import * as core from '../../../lib/core';
+import { getUaForHost } from '../stores/shieldsStore';
 
 /** Check if the backend proxy is reachable.
  *  Any HTTP response (even 5xx) means the backend process is running.
@@ -88,17 +88,18 @@ export function buildProxyUrl(url, proxyOrigin, backendUp) {
   if (youtubeEmbed) {
     return youtubeEmbed; // Load YouTube embed directly (no proxy)
   }
+
+  // Build UA override query param if a per-site override exists (C6)
+  let uaParam = '';
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    const ua = getUaForHost(host);
+    if (ua) uaParam = `&ua=${encodeURIComponent(ua)}`;
+  } catch {}
   
-  // Try Rust first
-  const rustResult = core.browserToProxyUrlSync(
-    url,
-    proxyOrigin || '',
-    backendUp ? getBackendUrl() : ''
-  );
-  if (rustResult) return rustResult;
-  // JS fallback
-  if (proxyOrigin) return `${proxyOrigin}/api/web/proxy?url=${encodeURIComponent(url)}`;
-  if (backendUp) return `${getBackendUrl()}/api/web/proxy?url=${encodeURIComponent(url)}`;
+  // Build proxy URL
+  const base = proxyOrigin || (backendUp ? getBackendUrl() : '');
+  if (base) return `${base}/api/web/proxy?url=${encodeURIComponent(url)}${uaParam}`;
   return url;
 }
 

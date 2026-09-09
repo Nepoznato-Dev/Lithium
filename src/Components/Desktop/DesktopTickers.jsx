@@ -41,10 +41,12 @@ function useSharedClock() {
 }
 
 /* ---------- System metrics — powered by lithium-perfmon extension ----------
- * Three-tier data source (all subscribers share one poller):
- *   1. Direct fetch to perfmon.py at localhost:19757  (real metrics, fastest)
- *   2. Chrome extension bridge via window.postMessage  (real or simulated via extension)
- *   3. Built-in random-walk simulation                 (always works, no dependencies)
+ * Two-tier data source (all subscribers share one poller):
+ *   1. Chrome extension bridge via window.postMessage  (real or simulated via extension)
+ *   2. Built-in random-walk simulation                 (always works, no dependencies)
+ * A direct fetch to perfmon.py at localhost:19757 is available on demand
+ * (tryDirectPerfmon) but is NOT polled automatically — fetch() to a closed
+ * port produces an unsuppressable ERR_CONNECTION_REFUSED in the console.
  * All subscribers share a single poller (same pattern as the shared clock). */
 
 const PERFMON_URL = 'http://localhost:19757/metrics';
@@ -79,9 +81,12 @@ function _extensionBridge() {
   });
 }
 
-/* --- Direct fetch to perfmon.py --- */
+/* --- Direct fetch to perfmon.py (on-demand only — NOT auto-polled) --- */
 
-async function _directFetch() {
+/** Attempt a one-shot direct fetch to perfmon.py.  Call only from an explicit
+ *  user action (e.g. "Reconnect" button).  Not used by the auto-poll loop
+ *  because fetch() to a closed port logs an unsuppressable ERR_CONNECTION_REFUSED. */
+export async function tryDirectPerfmon() {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), 2000);
   try {
@@ -89,11 +94,17 @@ async function _directFetch() {
     clearTimeout(tid);
     if (!res.ok) return null;
     const d = await res.json();
-    return {
+    const data = {
       cpu: Math.round(d.cpu), gpu: d.gpu != null ? Math.round(d.gpu) : 0,
       ram: Math.round(d.ram), connected: true,
     };
-  } catch { clearTimeout(tid); return null; }
+    _perfData = data;
+    for (const fn of _perfSubscribers) fn(_perfData);
+    return data;
+  } catch {
+    clearTimeout(tid);
+    return null;
+  }
 }
 
 /* --- Simulation fallback --- */
@@ -107,16 +118,14 @@ function _simulate() {
   };
 }
 
-/* --- Unified poll: direct → extension → simulation --- */
+/* --- Unified poll: extension (silent) → simulation --- */
 
 async function _perfPoll() {
-  let data = await _directFetch();
-  if (!data) {
-    const ext = await _extensionBridge();
-    if (ext && ext.cpu != null) {
-      data = { cpu: Math.round(ext.cpu), gpu: ext.gpu != null ? Math.round(ext.gpu) : 0,
-               ram: Math.round(ext.ram ?? 0), connected: !!ext.connected };
-    }
+  const ext = await _extensionBridge();
+  let data = null;
+  if (ext && ext.cpu != null) {
+    data = { cpu: Math.round(ext.cpu), gpu: ext.gpu != null ? Math.round(ext.gpu) : 0,
+             ram: Math.round(ext.ram ?? 0), connected: !!ext.connected };
   }
   if (!data) data = _simulate();
   _perfData = data;

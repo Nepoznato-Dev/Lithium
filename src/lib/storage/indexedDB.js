@@ -3,7 +3,7 @@
  * ================================================================ */
 
 const DB_NAME = 'lithium-storage';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise = null;
 

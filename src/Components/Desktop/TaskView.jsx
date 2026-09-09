@@ -4,6 +4,7 @@ import Icon from '../Icon';
 /**
  * Task View: bird's-eye grid of every open window. Click a card to focus (or
  * restore) that window, hover to close it, Esc / backdrop click to dismiss.
+ * Enhanced with window preview thumbnails (G3).
  */
 export default function TaskView({ windows, onSelect, onCloseWindow, onCloseAll, onClose }) {
   return (
@@ -51,31 +52,22 @@ export default function TaskView({ windows, onSelect, onCloseWindow, onCloseAll,
           {windows.map(item => (
             <div key={item.id} style={{ position: 'relative' }}>
               <button
+                className={`nx-taskview-card ${item.minimized ? 'minimized' : ''}`}
                 onClick={() => onSelect(item.id)}
                 title={`${item.title}${item.minimized ? ' (minimized)' : ''}`}
-                style={{
-                  width: '100%',
-                  aspectRatio: '16 / 10',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 12,
-                  borderRadius: 12,
-                  border: '1px solid rgba(255,255,255,0.14)',
-                  background: item.minimized ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.09)',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  transition: 'transform 120ms ease, background 120ms ease, border-color 120ms ease',
-                }}
-                onMouseEnter={event => { event.currentTarget.style.background = 'rgba(34,211,238,0.14)'; event.currentTarget.style.borderColor = 'rgba(34,211,238,0.5)'; }}
-                onMouseLeave={event => { event.currentTarget.style.background = item.minimized ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.09)'; event.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)'; }}
               >
-                <span style={{ display: 'flex', fontSize: 30, opacity: item.minimized ? 0.5 : 1 }}>{item.icon}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, opacity: item.minimized ? 0.55 : 1 }}>{item.title}</span>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
-                  {item.minimized ? 'Minimized' : `${item.tabs.length} tab${item.tabs.length === 1 ? '' : 's'} open`}
-                </span>
+                {/* Large background icon as preview */}
+                <div className="nx-taskview-card-preview">
+                  {item.icon}
+                </div>
+                {/* Card content */}
+                <div className="nx-taskview-card-content">
+                  <span style={{ display: 'flex', fontSize: 30, opacity: item.minimized ? 0.5 : 1 }}>{item.icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, opacity: item.minimized ? 0.55 : 1 }}>{item.title}</span>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
+                    {item.minimized ? 'Minimized' : `${item.tabs.length} tab${item.tabs.length === 1 ? '' : 's'} open`}
+                  </span>
+                </div>
               </button>
               <button
                 title="Close window"
@@ -94,7 +86,12 @@ export default function TaskView({ windows, onSelect, onCloseWindow, onCloseAll,
                   background: 'rgba(0,0,0,0.45)',
                   color: 'rgba(255,255,255,0.7)',
                   cursor: 'pointer',
+                  opacity: 0,
+                  transition: 'opacity 120ms ease',
+                  zIndex: 2,
                 }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = '0'; }}
               >
                 <Icon name="X" size={13} />
               </button>

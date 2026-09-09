@@ -2,8 +2,9 @@
  * MenuButton — Brave-style 3-dot menu with dropdown.
  */
 import { useEffect, useRef } from 'preact/hooks';
-import { menuOpen, navigateInternal, setViewportMode, readerData, rebuildData, fullRenderData } from './stores/browserStore';
-import { activeTab, currentUrl, addTab } from './stores/tabStore';
+import { menuOpen, navigateInternal, rebuildData, fullRenderData } from './stores/browserStore';
+import { activeTab, currentUrl, addTab, navigateTab } from './stores/tabStore';
+import { clearAllModes } from './stores/browserStore';
 import { rebuildPageContent, fullRenderPage } from './io/network';
 import Icon from '../../Components/Icon';
 
@@ -27,19 +28,21 @@ export default function MenuButton() {
     menuOpen.value = false;
   };
 
-  const handleReader = async () => {
+  /** Navigate to a lithium:// protocol page. */
+  const navigateProtocol = (url) => {
+    const tab = activeTab.value;
+    clearAllModes();
+    navigateTab(tab.id, url);
+    menuOpen.value = false;
+  };
+
+  const handleReader = () => {
     menuOpen.value = false;
     const url = currentUrl.value;
-    if (!url) return;
-    if (readerData.value) { readerData.value = null; setViewportMode('normal'); return; }
-    readerData.value = { url, text: null, error: '', loading: true };
-    setViewportMode('reader');
-    try {
-      const response = await fetch(`https://r.jina.ai/${url}`);
-      const text = await response.text();
-      readerData.value = { url, text, error: '', loading: false };
-    } catch {
-      readerData.value = { url, text: null, error: 'Could not fetch a readable copy.', loading: false };
+    if (url) {
+      navigateInternal(`#/reader?url=${encodeURIComponent(url)}`);
+    } else {
+      navigateInternal('#/reader');
     }
   };
 
@@ -92,21 +95,24 @@ export default function MenuButton() {
       {open && (
         <div className="browser-dropdown absolute right-0 top-full z-50 mt-1 w-56 py-1">
           <MenuItem icon="Plus" label="New tab" shortcut="Ctrl+T" onClick={() => { addTab(); menuOpen.value = false; }} />
-          <MenuItem icon="Bookmark" label="Bookmarks" shortcut="Ctrl+B" onClick={() => navigate('#/bookmarks')} />
+          <MenuItem icon="Bookmark" label="Bookmarks" shortcut="Ctrl+B" onClick={() => navigateProtocol('lithium://bookmarks')} />
           <MenuItem icon="BookOpen" label="Reading List" onClick={() => navigate('#/reading-list')} />
-          <MenuItem icon="Clock" label="History" shortcut="Ctrl+H" onClick={() => navigate('#/history')} />
-          <MenuItem icon="Download" label="Downloads" shortcut="Ctrl+J" onClick={() => navigate('#/downloads')} />
+          <MenuItem icon="Clock" label="History" shortcut="Ctrl+H" onClick={() => navigateProtocol('lithium://history')} />
+          <MenuItem icon="Download" label="Downloads" shortcut="Ctrl+J" onClick={() => navigateProtocol('lithium://downloads')} />
           <div className="my-1 border-t border-white/[0.06]" />
-          <MenuItem icon="Shield" label="Extensions" onClick={() => navigate('#/extensions')} />
+          <MenuItem icon="Shield" label="Extensions" onClick={() => navigateProtocol('lithium://extensions')} />
+          <MenuItem icon="Braces" label="Internal APIs" onClick={() => navigateProtocol('lithium://api')} />
           <MenuItem icon="Wallet" label="Wallet" onClick={() => navigate('#/wallet')} />
           <div className="my-1 border-t border-white/[0.06]" />
           <MenuItem icon="BookOpen" label="Reader mode" onClick={handleReader} />
+          <MenuItem icon="Shield" label="Privacy Dashboard" onClick={() => navigate('#/privacy')} />
           <MenuItem icon="FileText" label="Rebuild page" onClick={handleRebuild} />
           <MenuItem icon="Maximize2" label="Full render" onClick={handleFullRender} />
           <MenuItem icon="ExternalLink" label="Open in external browser" onClick={handleOpenExternal} />
           <div className="my-1 border-t border-white/[0.06]" />
-          <MenuItem icon="Settings" label="Settings" shortcut="Ctrl+," onClick={() => navigate('#/settings')} />
-          <MenuItem icon="HelpCircle" label="About Lithium" onClick={() => navigate('#/help')} />
+          <MenuItem icon="Settings" label="Settings" shortcut="Ctrl+," onClick={() => navigateProtocol('lithium://settings')} />
+          <MenuItem icon="Search" label="Manage search engines" onClick={() => navigateProtocol('lithium://search-engines')} />
+          <MenuItem icon="HelpCircle" label="About Lithium" onClick={() => navigateProtocol('lithium://about')} />
         </div>
       )}
     </div>

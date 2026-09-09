@@ -2,20 +2,25 @@
  * ShieldsPanel — Brave-style shields dropdown.
  * Slide-down panel with master toggle, stats ring, and per-site controls.
  */
-import { useEffect, useRef } from 'preact/hooks';
-import { shieldsPanelOpen } from './stores/browserStore';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { shieldsPanelOpen, navigateInternal } from './stores/browserStore';
 import {
   globalStats, totalBlocked, shieldsEnabled as shieldsGlobal,
-  toggleShields, getSiteOverride, setSiteOverride
+  toggleShields, getSiteOverride, setSiteOverride,
+  getUaForHost, setUaOverride, UA_PRESETS
 } from './stores/shieldsStore';
 import { currentUrl } from './stores/tabStore';
-import * as core from '../../lib/core';
 import Icon from '../../Components/Icon';
 
 function hostname(url) {
-  const result = core.browserHostnameSync(url);
-  if (result) return result;
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+  if (!url) return '';
+  let s = url;
+  const schemeIdx = s.indexOf('://');
+  if (schemeIdx >= 0) s = s.slice(schemeIdx + 3);
+  s = s.split(/[/?#]/)[0];
+  if (s.startsWith('www.')) s = s.slice(4);
+  s = s.split(':')[0];
+  return s;
 }
 
 export default function ShieldsPanel() {
@@ -27,6 +32,12 @@ export default function ShieldsPanel() {
   const stats = globalStats.value;
   const total = totalBlocked.value;
   const enabled = shieldsGlobal.value;
+  const [uaPreset, setUaPreset] = useState(() => {
+    const current = site ? getUaForHost(site) : null;
+    if (!current) return '';
+    const entry = Object.entries(UA_PRESETS).find(([, v]) => v === current);
+    return entry ? entry[0] : '';
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -49,6 +60,13 @@ export default function ShieldsPanel() {
   const toggleSiteSetting = (key) => {
     if (!site || !override) return;
     setSiteOverride(site, { ...override, [key]: !override[key] });
+  };
+
+  const handleUaChange = (presetKey) => {
+    setUaPreset(presetKey);
+    if (site) {
+      setUaOverride(site, UA_PRESETS[presetKey] || '');
+    }
   };
 
   return (
@@ -128,12 +146,50 @@ export default function ShieldsPanel() {
             <ToggleRow label="Fingerprinting protection" checked={override.blockFingerprinting} onChange={() => toggleSiteSetting('blockFingerprinting')} />
             <ToggleRow label="HTTPS upgrade" checked={override.upgradeHttps} onChange={() => toggleSiteSetting('upgradeHttps')} />
             <ToggleRow label="Block scripts" checked={override.blockScripts} onChange={() => toggleSiteSetting('blockScripts')} />
+            {/* Cookie blocking mode (C7) */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-white/55">Cookie blocking</span>
+              <select
+                className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-white/70 outline-none"
+                value={override.blockCookies || 'third-party'}
+                onChange={(e) => { if (site) setSiteOverride(site, { ...override, blockCookies: e.target.value }); }}
+              >
+                <option value="none">Allow all</option>
+                <option value="third-party">Third-party only</option>
+                <option value="all">Block all</option>
+              </select>
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* Per-site UA override (C6) */}
+      {site && (
+        <div className="border-t border-white/[0.06] px-4 py-3">
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-white/25">
+            User-Agent for {site}
+          </p>
+          <select
+            className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-white/70 outline-none"
+            value={uaPreset}
+            onChange={(e) => handleUaChange(e.target.value)}
+          >
+            <option value="">Default</option>
+            <option value="chrome_win">Chrome (Windows)</option>
+            <option value="chrome_mac">Chrome (macOS)</option>
+            <option value="firefox_win">Firefox (Windows)</option>
+            <option value="safari_mac">Safari (macOS)</option>
+            <option value="mobile_ios">Mobile (iOS)</option>
+            <option value="mobile_android">Mobile (Android)</option>
+          </select>
         </div>
       )}
 
       {/* Footer */}
       <div className="border-t border-white/[0.06] px-4 py-2.5">
+        <button className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-white/40 hover:bg-white/5 hover:text-white/60" onClick={() => { shieldsPanelOpen.value = false; navigateInternal('#/privacy'); }}>
+          <Icon name="Shield" size={12} /> Open Privacy Dashboard
+        </button>
         <p className="text-[10px] text-white/20">
           {enabled ? 'Shields are protecting you on this site' : 'Shields are down — no protection active'}
         </p>

@@ -122,6 +122,7 @@ export const showTopSites = signal(true);
 export const showClock = signal(true);
 export const showStatsWidget = signal(true);
 export const showNewsWidget = signal(true);
+export const showAiWidget = signal(true);
 export const clock24Hour = signal(false);
 export const showBackgroundImages = signal(true);
 

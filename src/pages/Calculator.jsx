@@ -232,14 +232,14 @@ export default function Calculator({ windowed = false, closeSelf, minimizeSelf, 
   const modeLabel = mode === 'standard' ? 'Standard' : CONVERTERS[mode]?.label || 'Calculator';
 
   return (
-    <div className="relative flex h-full min-w-0 flex-col bg-[#202020] text-white">
+    <div className="relative flex h-full min-w-0 flex-col bg-[#1e1e1e] text-white">
       {/* Header */}
-      <div className="flex items-center gap-3 px-3 py-2">
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.05]">
         <button className="calc-flat" onClick={() => setMenuOpen(value => !value)} aria-label="Menu" title="Calculator modes">
           <Icon name="Menu" size={17} />
         </button>
-        <span className="flex items-center gap-2 text-sm font-semibold">
-          <Icon name="Calculator" size={15} className="text-white/50" /> {modeLabel}
+        <span className="flex items-center gap-2 text-sm font-semibold tracking-wide">
+          <Icon name="Calculator" size={15} className="text-white/40" /> {modeLabel}
         </span>
         <div className="ml-auto flex items-center gap-1">
           <button className={`calc-flat ${historyOpen ? 'text-cyan-300' : ''}`} onClick={() => setHistoryOpen(value => !value)} aria-label="History" title="History">
@@ -253,19 +253,19 @@ export default function Calculator({ windowed = false, closeSelf, minimizeSelf, 
         {/* Mode drawer */}
         {menuOpen && (
           <div className="absolute inset-0 z-20 flex">
-            <div className="w-56 overflow-y-auto border-r border-white/[0.06] bg-[#2b2b2b] py-2 shadow-2xl">
+            <div className="w-56 overflow-y-auto border-r border-white/[0.04] bg-[#262626] py-2 shadow-xl">
               <button className={`calc-mode ${mode === 'standard' ? 'active' : ''}`} onClick={() => openMode('standard')}>
                 <Icon name="Calculator" size={15} /> Standard
               </button>
-              <div className="mx-3 my-2 h-px bg-white/[0.08]" />
-              <div className="px-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/35">Converter</div>
+              <div className="mx-4 my-2.5 h-px bg-white/[0.06]" />
+              <div className="px-4 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-white/30">Converter</div>
               {Object.entries(CONVERTERS).map(([key, config]) => (
                 <button key={key} className={`calc-mode ${mode === key ? 'active' : ''}`} onClick={() => openMode(key)}>
                   <Icon name="ArrowLeftRight" size={15} /> {config.label}
                 </button>
               ))}
             </div>
-            <button className="flex-1 bg-black/40" onClick={() => setMenuOpen(false)} aria-label="Close menu" />
+            <button className="flex-1 bg-black/50" onClick={() => setMenuOpen(false)} aria-label="Close menu" />
           </div>
         )}
 
@@ -274,11 +274,11 @@ export default function Calculator({ windowed = false, closeSelf, minimizeSelf, 
           {mode === 'standard' ? (
             <>
               {/* Display */}
-              <div className="px-4 pb-2 pt-1 text-right">
-                <div className="min-h-5 truncate font-mono text-xs text-white/35" aria-live="polite">
+              <div className="px-5 pb-3 pt-3 text-right">
+                <div className="min-h-5 truncate font-mono text-xs text-white/30" aria-live="polite">
                   {expression.startsWith('=') ? `${history[0]?.expression || ''} =` : preview && preview !== display ? `= ${preview}` : '\u00A0'}
                 </div>
-                <div className="truncate font-mono text-4xl font-light tabular-nums" aria-live="polite">{display || '0'}</div>
+                <div className="truncate font-mono text-[42px] leading-tight font-light tabular-nums text-white" aria-live="polite">{display || '0'}</div>
               </div>
 
               {/* Memory row */}
@@ -290,7 +290,7 @@ export default function Calculator({ windowed = false, closeSelf, minimizeSelf, 
                 <button className="calc-mem" onClick={() => setMemory(currentNumber())} title="Memory store">MS</button>
                 <button className={`calc-mem ${memoryOpen ? 'text-cyan-300' : ''}`} disabled={memory === 0} onClick={() => setMemoryOpen(value => !value)} title="Memory list">M⌄</button>
                 {memoryOpen && memory !== 0 && (
-                  <div className="absolute right-2 top-8 z-10 w-40 rounded-lg border border-white/10 bg-[#2b2b2b] p-2 shadow-xl">
+                  <div className="absolute right-2 top-8 z-10 w-40 rounded-lg border border-white/[0.06] bg-[#2a2a2a] p-2 shadow-lg">
                     <button className="calc-mode active" onClick={() => { append(String(memory)); setMemoryOpen(false); }}>{memory}</button>
                     <button className="calc-mode" onClick={() => { setMemory(0); setMemoryOpen(false); }}>Clear</button>
                   </div>
@@ -298,7 +298,7 @@ export default function Calculator({ windowed = false, closeSelf, minimizeSelf, 
               </div>
 
               {/* Keypad */}
-              <div className="grid flex-1 grid-cols-4 gap-[3px] px-3 pb-3">
+              <div className="grid flex-1 grid-cols-4 gap-[5px] px-4 pb-4">
                 <button className="calc-key" onClick={() => applyUnary(value => value / 100)}>%</button>
                 <button className="calc-key" onClick={clearEntry}>CE</button>
                 <button className="calc-key" onClick={clearAll}>C</button>
@@ -352,9 +352,9 @@ export default function Calculator({ windowed = false, closeSelf, minimizeSelf, 
                   </select>
                 </div>
               </div>
-              <div className="rounded-xl border border-white/[0.06] bg-black/30 px-4 py-4 text-right">
+              <div className="rounded-xl border border-white/[0.05] bg-[#262626] px-5 py-5 text-right">
                 <div className="truncate font-mono text-3xl font-light tabular-nums text-cyan-300">{convResult}</div>
-                <div className="mt-1 text-[11px] text-white/40">{convValue || '0'} {convFrom} = {convResult} {convTo}</div>
+                <div className="mt-1.5 text-[11px] text-white/35">{convValue || '0'} {convFrom} = {convResult} {convTo}</div>
               </div>
             </div>
           )}
@@ -362,8 +362,8 @@ export default function Calculator({ windowed = false, closeSelf, minimizeSelf, 
 
         {/* History panel */}
         {historyOpen && (
-          <div className="flex w-52 shrink-0 flex-col border-l border-white/[0.06] bg-[#252525]">
-            <div className="flex items-center justify-between px-3 py-2 text-[11px] uppercase tracking-widest text-white/40">
+          <div className="flex w-52 shrink-0 flex-col border-l border-white/[0.04] bg-[#232323]">
+            <div className="flex items-center justify-between px-3 py-2.5 text-[11px] uppercase tracking-widest text-white/35">
               History
               {history.length > 0 && (
                 <button className="calc-flat" onClick={() => setHistory([])} aria-label="Clear history"><Icon name="Trash2" size={13} /></button>
@@ -371,11 +371,11 @@ export default function Calculator({ windowed = false, closeSelf, minimizeSelf, 
             </div>
             <div className="flex-1 overflow-y-auto pb-2">
               {history.length === 0 ? (
-                <p className="px-3 py-6 text-center text-xs text-white/30">No calculations yet.</p>
+                <p className="px-3 py-6 text-center text-xs text-white/25">No calculations yet.</p>
               ) : history.map((item, idx) => (
-                <button key={`${item.expression}-${idx}`} className="block w-full px-3 py-1.5 text-right hover:bg-white/[0.05]" onClick={() => { setMode('standard'); setExpression(item.result); }}>
-                  <span className="block truncate font-mono text-[10px] text-white/35">{item.expression} =</span>
-                  <span className="block truncate font-mono text-sm">{item.result}</span>
+                <button key={`${item.expression}-${idx}`} className="block w-full px-3 py-2 text-right rounded-md mx-1 hover:bg-white/[0.04] transition-colors" onClick={() => { setMode('standard'); setExpression(item.result); }}>
+                  <span className="block truncate font-mono text-[10px] text-white/30">{item.expression} =</span>
+                  <span className="block truncate font-mono text-sm text-white/90">{item.result}</span>
                 </button>
               ))}
             </div>

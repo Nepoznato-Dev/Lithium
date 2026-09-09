@@ -6,13 +6,18 @@
  */
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { tabs, activeTabId, setActiveTab, closeTab, addTab, duplicateTab, pinTab, closeOtherTabs, closeTabsToRight } from './stores/tabStore';
+import { getContainer } from './stores/containerStore';
 import Icon from '../../Components/Icon';
-import * as core from '../../lib/core';
 
 function hostname(url) {
-  const result = core.browserHostnameSync(url);
-  if (result) return result;
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+  if (!url) return '';
+  let s = url;
+  const schemeIdx = s.indexOf('://');
+  if (schemeIdx >= 0) s = s.slice(schemeIdx + 3);
+  s = s.split(/[/?#]/)[0];
+  if (s.startsWith('www.')) s = s.slice(4);
+  s = s.split(':')[0];
+  return s;
 }
 
 export default function TabBar() {
@@ -71,6 +76,11 @@ export default function TabBar() {
               <Icon name="Globe" className="h-3.5 w-3.5 shrink-0 opacity-50" />
             )}
             <span className="flex-1 truncate">{tab.title !== 'New tab' ? tab.title : title}</span>
+            {/* Container indicator dot (C1) */}
+            {tab.containerId && tab.containerId !== 'default' && (() => {
+              const c = getContainer(tab.containerId);
+              return c ? <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.color, flexShrink: 0, opacity: 0.7 }} /> : null;
+            })()}
             {tab.isPinned && <Icon name="Pin" className="h-3 w-3 shrink-0 opacity-30" />}
             <button
               className="browser-tab__close"
