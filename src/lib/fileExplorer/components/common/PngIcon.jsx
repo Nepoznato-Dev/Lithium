@@ -7,6 +7,7 @@
  * about decoded-bitmap memory growth).
  */
 import Icon from '../../../../Components/Icon';
+import { iconUrl } from '../../../../lib/iconUrl.js';
 
 /** Map Icon names → PNG filename (without extension) in public/icons/.
  *  Only entries with verified PNG files are listed; unmapped names fall
@@ -74,7 +75,7 @@ export function PngIcon({ name, size = 16, color, className, style, strokeWidth,
   if (pngName) {
     return (
       <img
-        src={`/icons/${pngName}.png`}
+        src={iconUrl(pngName)}
         alt=""
         width={size}
         height={size}
