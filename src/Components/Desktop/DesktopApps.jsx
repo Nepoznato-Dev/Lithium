@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
+import { iconUrl } from '../../lib/iconUrl.js';
 
 const iconCache = new Map();
 
 function loadIconSvg(name) {
   if (iconCache.has(name)) return iconCache.get(name);
-  const promise = fetch(`/icons/${name}.svg`).then(r => r.ok ? r.text() : null).catch(() => null);
+  const promise = fetch(iconUrl(name, 'svg')).then(r => r.ok ? r.text() : null).catch(() => null);
   iconCache.set(name, promise);
   return promise;
 }
@@ -48,14 +49,14 @@ export function PngIcon({ name, size }) {
     const img = new Image();
     img.onload = () => { pngAvailability.set(name, true); setOk(true); };
     img.onerror = () => { pngAvailability.set(name, false); setOk(false); };
-    img.src = `/icons/${name}.png`;
+    img.src = iconUrl(name);
   }, [name]);
 
   if (ok !== true) return null;
 
   return (
     <img
-      src={`/icons/${name}.png`}
+      src={iconUrl(name)}
       alt=""
       width={size}
       height={size}
@@ -102,13 +103,13 @@ function PngIconFallback({ name, size, iconName, color, appColor }) {
     const img = new Image();
     img.onload = () => { pngAvailability.set(name, true); setPngOk(true); };
     img.onerror = () => { pngAvailability.set(name, false); setPngOk(false); };
-    img.src = `/icons/${name}.png`;
+    img.src = iconUrl(name);
   }, [name]);
 
   if (pngOk === true) {
     return (
       <img
-        src={`/icons/${name}.png`}
+        src={iconUrl(name)}
         alt=""
         width={size}
         height={size}

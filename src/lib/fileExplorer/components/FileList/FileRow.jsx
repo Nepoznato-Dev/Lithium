@@ -4,7 +4,7 @@
  */
 import { memo } from 'react';
 import Icon from '../../../../Components/Icon';
-import { iconUrl } from '../../../../iconUrl.js';
+import { iconUrl } from '../../../iconUrl.js';
 import { selectedItems, draggingId } from '../../state/signals.jsx';
 
 /** Pick the best Icon name + colour for an entry. */

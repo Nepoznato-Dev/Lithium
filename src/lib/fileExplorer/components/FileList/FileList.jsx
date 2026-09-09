@@ -9,7 +9,7 @@ import { PROVIDERS } from '../../../cloudDrives.js';
 import FileGrid from './FileGrid.jsx';
 import FileTable from './FileTable.jsx';
 import { PngIcon } from '../common/PngIcon.jsx';
-import { iconUrl } from '../../../../iconUrl.js';
+import { iconUrl } from '../../../iconUrl.js';
 
 export default memo(function FileList({ treeRef, drive, items, openItem, onItemContext, onEmptyContext, dragProps, dropTarget }) {
   const folderId = nav.value.stack[nav.value.stack.length - 1]?.id;

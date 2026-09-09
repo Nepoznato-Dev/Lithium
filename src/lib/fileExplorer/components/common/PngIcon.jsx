@@ -7,7 +7,7 @@
  * about decoded-bitmap memory growth).
  */
 import Icon from '../../../../Components/Icon';
-import { iconUrl } from '../../../../lib/iconUrl.js';
+import { iconUrl } from '../../../iconUrl.js';
 
 /** Map Icon names → PNG filename (without extension) in public/icons/.
  *  Only entries with verified PNG files are listed; unmapped names fall

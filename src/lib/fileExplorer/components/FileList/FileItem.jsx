@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useRef, memo } from 'react';
 import Icon from '../../../../Components/Icon';
-import { iconUrl } from '../../../../iconUrl.js';
+import { iconUrl } from '../../../iconUrl.js';
 import { getThumbUrl, getCachedThumbUrl } from '../../thumbCache.js';
 import { selectedItems, draggingId } from '../../state/signals.jsx';
 
