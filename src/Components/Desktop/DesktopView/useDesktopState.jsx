@@ -30,8 +30,6 @@ const ApiManagerApp = React.lazy(() => import('../Apps/ApiManagerApp'));
 const DownloaderApp = React.lazy(() => import('../Apps/DownloaderApp'));
 const CodeStudioApp = React.lazy(() => import('../Apps/CodeStudioApp'));
 const TaskManagerApp = React.lazy(() => import('../Apps/TaskManagerApp'));
-const Games = React.lazy(() => import('../../../pages/Games'));
-const GamePlayer = React.lazy(() => import('../../../pages/Games').then(m => ({ default: m.GamePlayer })));
 const MusicPage = React.lazy(() => import('../../../pages/Music'));
 const Browser = React.lazy(() => import('../../../pages/Browser'));
 const CalculatorPage = React.lazy(() => import('../../../pages/Calculator'));
@@ -87,7 +85,6 @@ export default function useDesktopState() {
 
   /* --- App registry (built-in + .li) --- */
   const builtinApps = useMemo(() => [
-    { id: 'games', name: 'Hydrux', icon: 'Gamepad2', iconFile: 'hydrux', color: '#ec4899', width: 1100, height: 750, component: <Games />, desc: 'Game library and launcher', category: 'media' },
     { id: 'media-player', name: 'Media Player', icon: 'Music', iconFile: 'media-player', color: '#22d3ee', width: 1150, height: 720, component: <MusicPage />, desc: 'Music, radio & media player', category: 'media' },
     { id: 'browser', name: 'Browser', icon: 'Globe', iconFile: 'browser', color: '#06b6d4', width: 1000, height: 700, component: <Browser />, desc: 'Browse the web', category: 'tools' },
     { id: 'calculator', name: 'Calculator', icon: 'Calculator', iconFile: 'calculator', color: '#3b82f6', width: 420, height: 640, component: <CalculatorPage />, desc: 'Quick calculations', category: 'tools' },
@@ -331,7 +328,7 @@ export default function useDesktopState() {
   useEffect(() => { emitEvent('volume.changed', { level: soundLevel }); }, [soundLevel]);
   useEffect(() => { if (weather?.data) emitEvent('weather.updated', { fetchedAt: weather.fetchedAt }); }, [weather]);
 
-  /* --- Browser / game / start deep-link listeners --- */
+  /* --- Browser / start deep-link listeners --- */
   useEffect(() => {
     const onOpenBrowser = event => {
       const url = event.detail;
@@ -348,21 +345,6 @@ export default function useDesktopState() {
     window.addEventListener('lithium:open-start', onOpenStart);
     return () => window.removeEventListener('lithium:open-start', onOpenStart);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const onOpenGame = event => {
-      const game = event.detail;
-      const id = `game-${game.id}`;
-      openWindow({
-        id, title: game.title, icon: <AppIcon icon="Gamepad2" iconFile="hydrux" color="#ec4899" size={16} />,
-        component: <GamePlayer embedded game={game} onClose={() => closeWindow(id)} />,
-        newWindow: true, x: Math.max(20, window.innerWidth - 1060), y: 60,
-        width: 1000, height: 700,
-      });
-    };
-    window.addEventListener('lithium:open-game', onOpenGame);
-    return () => window.removeEventListener('lithium:open-game', onOpenGame);
-  }, [openWindow, closeWindow]);
 
   /* --- Derived UI data --- */
   const startApps = apps.filter(app => app.showInStart !== false);

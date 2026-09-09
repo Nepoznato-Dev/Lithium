@@ -390,7 +390,7 @@ export default function DesktopView() {
           <button
             className="nx-menu-item"
             style={{ padding: '7px 10px', borderRadius: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}
-            onClick={() => setPinnedTaskbar(['games', 'media-player', 'browser', 'calculator'])}
+            onClick={() => setPinnedTaskbar(['media-player', 'browser', 'calculator'])}
           >
             Restore default pins
           </button>
@@ -669,7 +669,7 @@ export default function DesktopView() {
                 <div style={{ padding: '12px 24px 0' }}>
                   <div className="nx-start-heading" style={{ fontSize: 10, marginBottom: 10 }}>What&apos;s new</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {[{ id: 'code-studio', note: 'Code Studio now supports multi-file projects' }, { id: 'notepad', note: 'Notes got Obsidian-style wiki links' }, { id: 'games', note: 'Hydrux has 4 new HTML games' }].map(item => {
+                    {[{ id: 'code-studio', note: 'Code Studio now supports multi-file projects' }, { id: 'notepad', note: 'Notes got Obsidian-style wiki links' }].map(item => {
                       const app = getApp(item.id);
                       if (!app) return null;
                       return (

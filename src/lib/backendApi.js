@@ -110,6 +110,9 @@ export const backendLlmImport = id => request(`/api/llm/models/${encodeURICompon
 
 /** Upload a GGUF file from the browser into the backend store (XHR → progress). */
 export function backendLlmUpload(file, onProgress, signal) {
+  if (!backendFeatureEnabled()) {
+    return Promise.reject(new Error(BACKEND_INACTIVE_MESSAGE));
+  }
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${backendUrl()}/api/llm/models/upload`);
