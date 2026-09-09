@@ -6,7 +6,6 @@ import { useSettings } from '../SettingsContext';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: 'Home', end: true },
-  { to: '/games', label: 'Games', icon: 'Gamepad2' },
   { to: '/music', label: 'Music', icon: 'Music' },
   { to: '/browser', label: 'Browser', icon: 'Globe' },
   { to: '/calculator', label: 'Calculator', icon: 'Calculator' },

@@ -1,6 +1,6 @@
 import { storage } from '../storage/localStorage';
 import { deleteBlob, getBlob, putBlob } from '../storage/manager';
-import { backendUrl } from '../backendApi';
+import { backendFeatureEnabled, backendUrl } from '../backendApi';
 import { opfsAvailable, opfsDelete, opfsGetFile, opfsWriteStream } from '../storage/indexedDB';
 
 /**
@@ -203,6 +203,7 @@ async function fetchMaybeProxied(url, options = {}) {
     return await fetch(url, options);
   } catch (err) {
     if (err.name === 'AbortError') throw err;
+    if (!backendFeatureEnabled()) throw err;
     let proxied;
     try {
       proxied = await fetch(`${backendUrl()}/api/llm/proxy?url=${encodeURIComponent(url)}`, options);
@@ -251,7 +252,7 @@ export const hfResolveUrl = (repoId, file) =>
 export async function listHfDir(repoId, path = '') {
   const target = `https://huggingface.co/api/models/${repoId}/tree/main${path ? `/${path}` : ''}`;
   let lastError = null;
-  for (const attempt of ['proxy', 'direct']) {
+  for (const attempt of (backendFeatureEnabled() ? ['proxy', 'direct'] : ['direct'])) {
     try {
       const url = attempt === 'direct' ? target : `${backendUrl()}/api/llm/proxy?url=${encodeURIComponent(target)}`;
       const response = await fetch(url);
