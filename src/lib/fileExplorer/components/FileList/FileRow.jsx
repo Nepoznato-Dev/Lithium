@@ -4,6 +4,7 @@
  */
 import { memo } from 'react';
 import Icon from '../../../../Components/Icon';
+import { iconUrl } from '../../../iconUrl.js';
 import { selectedItems, draggingId } from '../../state/signals.jsx';
 
 /** Pick the best Icon name + colour for an entry. */
@@ -58,7 +59,7 @@ function EntryGlyph({ entry, size = 16 }) {
   const { name, color } = glyphFor(entry);
   const pngName = ICON_PNG_MAP[name];
   if (pngName) {
-    return <img src={`/icons/${pngName}.png`} alt="" style={{ width: size, height: size }} className="object-contain" />;
+    return <img src={iconUrl(pngName)} alt="" style={{ width: size, height: size }} className="object-contain" />;
   }
   return <Icon name={name} size={size} color={color} strokeWidth={1.4} />;
 }
