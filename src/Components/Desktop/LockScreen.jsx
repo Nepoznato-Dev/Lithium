@@ -1,17 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 import { verifyPin } from '../../lib/desktop/ui';
+import { storage } from '../../lib/storage';
 import { useSettings } from '../SettingsContext';
 import Icon from '../Icon';
 
 /** Full-screen lock overlay. Mounts on top of everything until the correct
  *  PIN (or a no-PIN unlock, if the user hasn't set one) is entered. */
 export default function LockScreen({ onUnlock }) {
-  const { settings } = useSettings();
+  const { settings, updateSetting } = useSettings();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [now, setNow] = useState(() => new Date());
   const [busy, setBusy] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState(() => {
+    const activeId = settings?.profiles?.activeId || 'default';
+    return settings?.profiles?.list?.find(p => p.id === activeId) || settings?.profiles?.list?.[0] || null;
+  });
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -67,8 +72,9 @@ export default function LockScreen({ onUnlock }) {
     return () => window.removeEventListener('keydown', onKey);
   }); // re-bind so closures stay fresh
 
-  const avatar = settings?.profile?.avatar;
+  const profiles = settings?.profiles?.list || [];
   const accent = settings?.accent || '#22d3ee';
+  const activeProfile = selectedProfile || profiles[0];
 
   return (
     <div
@@ -90,13 +96,36 @@ export default function LockScreen({ onUnlock }) {
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, marginTop: '2vh' }}>
+        {/* Profile selection row */}
+        {profiles.length > 1 && (
+          <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
+            {profiles.map(profile => {
+              const isActive = activeProfile?.id === profile.id;
+              return (
+                <button key={profile.id} onClick={() => { setSelectedProfile(profile); setError(''); setPin(''); }} style={{
+                  width: 56, height: 56, borderRadius: '50%', border: isActive ? `2px solid ${accent}` : '2px solid rgba(255,255,255,0.15)',
+                  background: profile.avatar ? `url(${profile.avatar}) center/cover` : `linear-gradient(135deg, ${accent} 0%, #6366f1 100%)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: profile.avatar ? 'transparent' : '#000', fontWeight: 600, fontSize: 18,
+                  cursor: 'pointer', transition: 'border-color 0.2s, transform 0.15s',
+                  transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                  boxShadow: isActive ? `0 4px 20px ${accent}40` : 'none', padding: 0,
+                }} title={profile.name}>
+                  {profile.avatar || profile.name.charAt(0).toUpperCase()}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Active profile avatar (large) */}
         <div
           aria-hidden
           style={{
             width: 80,
             height: 80,
             borderRadius: '50%',
-            background: avatar ? `url(${avatar}) center/cover` : `linear-gradient(135deg, ${accent} 0%, #6366f1 100%)`,
+            background: activeProfile?.avatar ? `url(${activeProfile.avatar}) center/cover` : `linear-gradient(135deg, ${accent} 0%, #6366f1 100%)`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -106,9 +135,10 @@ export default function LockScreen({ onUnlock }) {
             boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
           }}
         >
-          {!avatar && <Icon name="Lock" size={32} color="#000" strokeWidth={2.5} />}
+          {!activeProfile?.avatar && <Icon name="Lock" size={32} color="#000" strokeWidth={2.5} />}
         </div>
         <div style={{ textAlign: 'center' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 500, margin: '0 0 4px', color: 'rgba(255,255,255,0.85)' }}>{activeProfile?.name || 'User'}</h2>
           <h1 style={{ fontSize: 56, fontWeight: 200, letterSpacing: -1, lineHeight: 1, margin: 0 }}>{time}</h1>
           <p style={{ marginTop: 8, fontSize: 14, color: 'rgba(255,255,255,0.55)' }}>{date}</p>
         </div>

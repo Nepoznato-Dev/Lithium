@@ -1,128 +1,136 @@
 /**
- * Context menu builder — constructs menu items from extension registry + built-in actions.
- * Replaces the inline entryMenu() / emptyMenu() from the monolith.
+ * Context menu builder — constructs menu items from the ActionRegistry.
+ *
+ * Built-in actions are registered by the files in ./actions/ and exposed
+ * through ActionRegistry.buildMenu().  This hook is the thin bridge
+ * between the File Explorer's signals/state and the registry.
  */
+import { useCallback, useRef } from 'react';
 import { useContextMenu } from '../../../../Components/Desktop/ContextMenu';
 import {
   nav, view, selectedItems, clipboard, viewMode, pins, dialog,
+  archiveDialog,
 } from '../../state/signals.jsx';
 import {
-  childrenOf, getEntry, isTrashed, moveEntry, duplicateSubtreeDeep,
-  subtreeFolderIds, TRASH_ID,
+  getEntry, isTrashed, childrenOf, subtreeFolderIds, TRASH_ID,
 } from '../../../fileSystem.js';
+import { ActionRegistry } from '../../contextMenu/ActionRegistry';
+import { notify } from '../../../desktop/notify.js';
+
+// Side-effect: register all built-in actions.
+import '../../contextMenu/actions/openActions';
+import '../../contextMenu/actions/fileActions';
+import '../../contextMenu/actions/archiveActions';
+import '../../contextMenu/actions/viewActions';
+import '../../contextMenu/actions/toolActions';
 
 export function useExplorerContextMenu({
   tree, commit, drive, openItem, handleDelete, handleRestore,
-  handleCompressZip, handleCompressTar, handleDownload, handleImportArchive,
+  handleCompressZip, handleCompressTar, handleCompressArchive,
+  handleExtractArchive, handleDownload, handleImportArchive,
   refreshCloud, goDrive, updateConfigs, openReconnect,
 }) {
   const [menu, openMenu, closeMenu] = useContextMenu();
 
-  const folderId = nav.value.stack[nav.value.stack.length - 1]?.id;
+  // Store latest values in refs so the stable callbacks below always
+  // see current state without needing it in their dependency arrays.
+  const depsRef = useRef({});
+  depsRef.current = {
+    tree, commit, drive, openItem, handleDelete, handleRestore,
+    handleCompressZip, handleCompressTar, handleCompressArchive,
+    handleExtractArchive, handleDownload, handleImportArchive,
+    refreshCloud, goDrive, updateConfigs, openReconnect,
+  };
 
-  const clipboardEntry = clipboard.value && !drive ? getEntry(tree, clipboard.value.id) : null;
-  const canPaste = Boolean(clipboardEntry)
-    && !(clipboard.value?.op === 'cut' && subtreeFolderIds(tree, clipboard.value.id).includes(folderId))
-    && (clipboard.value?.op === 'copy' || clipboardEntry?.parentId !== folderId);
+  const folderId = nav.value.stack[nav.value.stack.length - 1]?.id;
 
   const togglePin = (id) => {
     pins.value = pins.value.includes(id) ? pins.value.filter(p => p !== id) : [...pins.value, id];
   };
 
-  const handlePaste = () => {
-    if (!canPaste) return;
-    (async () => {
-      if (clipboard.value.op === 'copy') {
-        commit(await duplicateSubtreeDeep(tree, clipboard.value.id, folderId));
-      } else {
-        commit(moveEntry(tree, clipboard.value.id, folderId));
-        clipboard.value = null;
-      }
-    })();
+  /** Build the ActionContext that every registered action receives. */
+  const buildCtx = () => {
+    const d = depsRef.current;
+    return {
+      tree: d.tree,
+      commit: d.commit,
+      drive: d.drive,
+      folderId,
+      clipboard,
+      pins: pins.value,
+      togglePin,
+      openItem: d.openItem,
+      notify,
+      dialog,
+      viewMode,
+      archiveDialog,
+      handleDownload: d.handleDownload,
+      handleImportArchive: d.handleImportArchive,
+      handleCompressZip: d.handleCompressZip,
+      handleCompressTar: d.handleCompressTar,
+      handleCompressArchive: d.handleCompressArchive,
+      handleExtractArchive: d.handleExtractArchive,
+      refreshCloud: d.refreshCloud,
+      goDrive: d.goDrive,
+      updateConfigs: d.updateConfigs,
+      openReconnect: d.openReconnect,
+      selectedItems,
+      meta: {},
+    };
   };
 
-  const entryMenu = (entry) => {
-    if (isTrashed(entry)) {
-      return [
-        { id: 'open', label: 'Open', icon: entry.type === 'folder' ? 'Folder' : 'FileText', action: () => openItem(entry) },
-        { id: 'sep-1', type: 'separator' },
-        { id: 'restore', label: 'Restore', icon: 'Undo2', action: () => handleRestore(entry) },
-        { id: 'sep-2', type: 'separator' },
-        { id: 'delete', label: 'Delete permanently', icon: 'Trash2', shortcut: 'Del', danger: true, action: () => handleDelete(entry) },
-      ];
-    }
+  const trashedMenu = (entry) => {
+    const d = depsRef.current;
     return [
-      { id: 'open', label: entry.type === 'folder' ? 'Open' : 'Open', icon: entry.type === 'folder' ? 'Folder' : 'FileText', shortcut: 'Enter', action: () => openItem(entry) },
-      ...(entry.type === 'image' && !drive ? [{ id: 'view', label: 'View', icon: 'Eye', action: () => openItem(entry) }] : []),
+      { id: 'open', label: 'Open', icon: entry.type === 'folder' ? 'Folder' : 'FileText', action: () => d.openItem(entry) },
       { id: 'sep-1', type: 'separator' },
-      ...(!drive ? [
-        { id: 'copy', label: 'Copy', icon: 'Copy', shortcut: 'Ctrl+C', action: () => { clipboard.value = { op: 'copy', id: entry.id }; } },
-        { id: 'cut', label: 'Cut', icon: 'Scissors', shortcut: 'Ctrl+X', action: () => { clipboard.value = { op: 'cut', id: entry.id }; } },
-        {
-          id: 'move', label: 'Move to', icon: 'Folder',
-          items: childrenOf(tree, 'root').filter(f => f.type === 'folder' && f.id !== entry.parentId).map(folder => ({
-            id: `mv-${folder.id}`, label: folder.name, icon: 'Folder',
-            action: () => commit(moveEntry(tree, entry.id, folder.id)),
-          })),
-        },
-        { id: 'sep-2', type: 'separator' },
-      ] : []),
-      ...(entry.type === 'folder' && !drive ? [
-        {
-          id: 'pin', label: pins.value.includes(entry.id) ? 'Remove from Quick access' : 'Add to Quick access', icon: 'Pin',
-          action: () => togglePin(entry.id),
-        },
-      ] : []),
-      { id: 'rename', label: 'Rename', icon: 'Pencil', action: () => { dialog.value = { mode: 'rename', entry }; } },
-      ...(!drive ? [{ id: 'duplicate', label: 'Duplicate', icon: 'Copy', action: () => commit(duplicateSubtreeDeep(tree, entry.id, entry.parentId)) }] : []),
-      ...(!drive && entry.type === 'folder' ? [
-        { id: 'sep-zip', type: 'separator' },
-        { id: 'compress-zip', label: 'Compress as ZIP', icon: 'PackageOpen', action: () => handleCompressZip(entry) },
-        { id: 'compress-tar', label: 'Compress as TAR', icon: 'PackageOpen', action: () => handleCompressTar(entry) },
-        { id: 'import-archive', label: 'Import archive here', icon: 'FolderPlus', action: () => handleImportArchive() },
-      ] : []),
-      ...(!drive && entry.idb && /\.(zip|tar\.gz|tgz)$/i.test(entry.name) ? [
-        { id: 'sep-dl', type: 'separator' },
-        { id: 'download', label: 'Download', icon: 'Download', action: () => handleDownload(entry) },
-      ] : []),
-      { id: 'sep-3', type: 'separator' },
-      { id: 'delete', label: 'Delete', icon: 'Trash2', shortcut: 'Del', danger: true, action: () => handleDelete(entry) },
+      { id: 'restore', label: 'Restore', icon: 'Undo2', action: () => d.handleRestore(entry) },
+      { id: 'sep-2', type: 'separator' },
+      { id: 'delete', label: 'Delete permanently', icon: 'Trash2', shortcut: 'Del', danger: true, action: () => d.handleDelete(entry) },
     ];
   };
 
-  const emptyMenu = () => [
-    { id: 'new-folder', label: 'New folder', icon: 'FolderPlus', action: () => { dialog.value = { mode: 'folder' }; } },
-    ...(!drive ? [{ id: 'new-file', label: 'New text file', icon: 'Plus', action: () => { dialog.value = { mode: 'file' }; } }] : []),
-    ...(!drive ? [
-      { id: 'sep-1', type: 'separator' },
-      { id: 'paste', label: 'Paste', icon: 'ClipboardPaste', shortcut: 'Ctrl+V', disabled: !canPaste, action: handlePaste },
-    ] : []),
-    { id: 'sep-2', type: 'separator' },
-    { id: 'upload', label: 'Upload file\u2026', icon: 'Upload', action: () => { /* upload ref click — handled by ExplorerShell */ } },
-    ...(!drive ? [
-      { id: 'import-archive', label: 'Import archive\u2026', icon: 'FolderPlus', action: () => handleImportArchive() },
-    ] : []),
-    ...(drive ? [{ id: 'refresh', label: 'Refresh', icon: 'RefreshCw', action: () => refreshCloud(drive, folderId) }] : []),
-    { id: 'sep-3', type: 'separator' },
-    {
-      id: 'view', label: 'View', icon: 'LayoutGrid',
-      items: [
-        { id: 'grid', label: 'Large icons', icon: 'LayoutGrid', checked: viewMode.value === 'grid', action: () => { viewMode.value = 'grid'; } },
-        { id: 'list', label: 'Details', icon: 'List', checked: viewMode.value === 'list', action: () => { viewMode.value = 'list'; } },
-      ],
-    },
-  ];
-
-  const onItemContext = (event, entry) => {
-    selectedItems.value = new Set([entry.id]);
-    openMenu(event, entryMenu(entry));
+  const entryMenu = (entry) => {
+    if (isTrashed(entry)) return trashedMenu(entry);
+    const d = depsRef.current;
+    const multiSelect = selectedItems.value.size > 1;
+    const selectedEntries = multiSelect
+      ? [...selectedItems.value].map(id => getEntry(d.tree, id)).filter(Boolean)
+      : [entry];
+    const scope = multiSelect ? 'multi' : 'entry';
+    const ctx = buildCtx();
+    return ActionRegistry.buildMenu(selectedEntries, ctx, scope);
   };
 
-  const onEmptyContext = (event) => {
+  const emptyMenu = () => {
+    const ctx = buildCtx();
+    return ActionRegistry.buildMenu([], ctx, 'empty');
+  };
+
+  // Stable callbacks — read latest state from refs at event time.
+  // This prevents cascade re-renders through FileList → FileGrid → FileItem.
+  const onItemContext = useCallback((event, entry) => {
+    const d = depsRef.current;
+    if (!selectedItems.value.has(entry.id)) {
+      selectedItems.value = new Set([entry.id]);
+    }
+    const items = entryMenu(entry);
+    const ctx = buildCtx();
+    const multiSelect = selectedItems.value.size > 1;
+    ctx.selectedEntries = multiSelect
+      ? [...selectedItems.value].map(id => getEntry(d.tree, id)).filter(Boolean)
+      : [entry];
+    openMenu(event, items, ctx);
+  }, [openMenu]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onEmptyContext = useCallback((event) => {
     if (event.target !== event.currentTarget) return;
     selectedItems.value = new Set();
-    openMenu(event, emptyMenu());
-  };
+    const items = emptyMenu();
+    const ctx = buildCtx();
+    ctx.selectedEntries = [];
+    openMenu(event, items, ctx);
+  }, [openMenu]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { menu, openMenu, closeMenu, onItemContext, onEmptyContext };
 }

@@ -1,6 +1,5 @@
 import { idbAll, idbDelete, idbKeys, idbPut } from './indexedDB';
 import { storage } from './localStorage';
-import * as core from '../core';
 
 /**
  * Unified local tier — localStorage and Cache Storage working as one pool.
@@ -90,8 +89,7 @@ export function kvSet(key, value) {
     return;
   }
   const json = JSON.stringify(value);
-  const wasmDecision = core.kvShouldOverflowSync(json.length);
-  const shouldOverflow = wasmDecision?.overflow ?? json.length >= OVERFLOW_THRESHOLD;
+  const shouldOverflow = json.length >= OVERFLOW_THRESHOLD;
   
   if (shouldOverflow) {
     overflow.set(key, json);
@@ -107,8 +105,7 @@ export function kvSet(key, value) {
 
 /** Approximate bytes held in the overflow tier (for the Storage Manager). */
 export function kvOverflowBytes() {
-  const entries = [];
-  overflow.forEach((json, key) => entries.push({ key, jsonLen: json.length }));
-  const wasmResult = core.kvOverflowBytesSync(entries);
-  return wasmResult?.bytes ?? 0;
+  let total = 0;
+  overflow.forEach((json) => { total += json.length * 2; });
+  return total;
 }

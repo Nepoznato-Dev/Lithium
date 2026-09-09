@@ -1,0 +1,11 @@
+[package]
+name = "browser"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium browser WASM: URL, bookmarks, history, shields, omnibox"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }

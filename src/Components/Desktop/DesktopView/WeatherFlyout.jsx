@@ -1,5 +1,6 @@
 import React from 'react';
 import Icon from '../../Icon';
+import { AppIcon } from '../DesktopApps';
 import {
   buildMsnWeatherUrl,
   unitSymbol,
@@ -25,7 +26,7 @@ export default function WeatherFlyout({ weather, locationInfo, aiOutlook, newsIt
         setWeatherOpen(false);
         const browser = getApp('browser');
         const msnUrl = locationInfo ? buildMsnWeatherUrl(locationInfo.city) : '';
-        if (browser && msnUrl) openWindow({ id: browser.id, title: browser.name, icon: <Icon name={browser.icon} size={16} />, component: <BrowserStub initialUrl={msnUrl} />, replaceTab: true, newWindow: false, x: 120, y: 60, width: 1000, height: 700 });
+        if (browser && msnUrl) openWindow({ id: browser.id, title: browser.name, icon: <AppIcon icon={browser.icon} iconFile={browser.iconFile} color={browser.color} size={16} />, component: <BrowserStub initialUrl={msnUrl} />, replaceTab: true, newWindow: false, x: 120, y: 60, width: 1000, height: 700 });
       }},
       { id: 'ai-report', label: 'AI weather report', icon: 'BrainCircuit', action: () => {
         setWeatherOpen(false);
@@ -81,7 +82,7 @@ export default function WeatherFlyout({ weather, locationInfo, aiOutlook, newsIt
                   onClick={() => {
                     setWeatherOpen(false);
                     const browser = getApp('browser');
-                    if (browser) openWindow({ id: browser.id, title: browser.name, icon: <Icon name={browser.icon} size={16} />, component: <BrowserStub initialUrl={msnUrl} />, replaceTab: true, newWindow: false, x: 120, y: 60, width: 1000, height: 700 });
+                    if (browser) openWindow({ id: browser.id, title: browser.name, icon: <AppIcon icon={browser.icon} iconFile={browser.iconFile} color={browser.color} size={16} />, component: <BrowserStub initialUrl={msnUrl} />, replaceTab: true, newWindow: false, x: 120, y: 60, width: 1000, height: 700 });
                   }}
                 >
                   <Icon name="Cloud" size={12} style={{ marginRight: 4 }} /> Detailed forecast

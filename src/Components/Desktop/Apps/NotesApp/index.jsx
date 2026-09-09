@@ -50,7 +50,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
     <div className="flex h-full min-w-0 flex-col bg-[#1e1f24] text-white" onContextMenu={e => openMenu(e, contextItems())}>
       <div className="relative flex min-h-0 flex-1">
       {/* Ribbon */}
-      <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-black/40 bg-[#191a1f] py-2">
+      <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-white/[0.08] bg-[#191a1f] py-2">
         <button className={`notes-rail ${sidebarOpen ? 'active' : ''}`} title="Vault" onClick={() => setSidebarOpen(v => !v)}><Icon name="Folder" size={16} /></button>
         <button className="notes-rail" title="Go to file (Ctrl+O)" onClick={() => setSwitcherOpen(true)}><Icon name="Search" size={16} /></button>
         <button className={`notes-rail ${graphOpen ? 'active' : ''}`} title="Graph view (Ctrl+G)" onClick={() => setGraphOpen(v => !v)}><Icon name="Network" size={16} /></button>
@@ -66,7 +66,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
 
       {/* Sidebar */}
       {sidebarOpen && (
-        <div className="flex w-52 shrink-0 flex-col border-r border-black/40 bg-[#232429]">
+        <div className="flex w-52 shrink-0 flex-col border-r border-white/[0.08] bg-[#232429]">
           <div className="flex items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/40">
             Vault
             <span className="flex gap-1">
@@ -105,7 +105,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
               </div>
             )}
           </div>
-          <button className="flex w-full items-center gap-1.5 border-t border-black/40 px-3 py-2 text-[11px] text-white/60 hover:bg-white/[0.04]" title="Switch note" onClick={() => setSwitcherOpen(true)}>
+          <button className="flex w-full items-center gap-1.5 border-t border-white/[0.08] px-3 py-2 text-[11px] text-white/60 hover:bg-white/[0.04]" title="Switch note" onClick={() => setSwitcherOpen(true)}>
             <Icon name="BookOpen" size={12} className="acc-text" />
             <span className="min-w-0 flex-1 truncate text-left">{active ? noteName(active) : `${vaultNotes.length} notes`}</span>
             <Icon name="ChevronDown" size={12} />
@@ -116,13 +116,13 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
       {/* Main */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Tabs */}
-        <div className="flex min-w-0 items-center overflow-hidden border-b border-black/40 bg-[#191a1f]">
+        <div className="flex min-w-0 items-center overflow-hidden border-b border-white/[0.08] bg-[#191a1f]">
           <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
             {tabs.map(id => {
               const entry = getEntry(tree, id);
               if (!entry) return null;
               return (
-                <div key={id} className={`group flex items-center gap-2 border-r border-black/40 px-3 py-2 text-xs ${activeId === id ? 'bg-[#1e1f24] text-white' : 'text-white/50 hover:bg-white/[0.04]'}`} onClick={() => setActiveId(id)}>
+                <div key={id} className={`group flex items-center gap-2 border-r border-white/[0.08] px-3 py-2 text-xs ${activeId === id ? 'bg-[#1e1f24] text-white' : 'text-white/50 hover:bg-white/[0.04]'}`} onClick={() => setActiveId(id)}>
                   <Icon name="FileText" size={12} className="acc-text" />
                   <span className="max-w-[120px] truncate">{noteName(entry)}</span>
                   {starred.includes(id) && <Icon name="Star" size={9} className="text-yellow-400" />}
@@ -137,7 +137,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
 
         {/* Toolbar */}
         {active && (
-          <div className="flex items-center gap-1 border-b border-black/40 px-3 py-1.5 text-xs text-white/50">
+          <div className="flex items-center gap-1 border-b border-white/[0.08] px-3 py-1.5 text-xs text-white/50">
             <button className={`notes-tool ${mode === 'edit' ? 'active' : ''}`} title="Edit" onClick={() => { setMode('edit'); setInlineEdit(null); }}><Icon name="Pencil" size={13} /></button>
             <button className={`notes-tool ${mode === 'preview' ? 'active' : ''}`} title="Reading mode (Ctrl+E)" onClick={() => { setMode('preview'); setInlineEdit(null); }}><Icon name="Eye" size={13} /></button>
             <button className={`notes-tool ${mode === 'split' ? 'active' : ''}`} title="Split view (Ctrl+E)" onClick={() => { setMode('split'); setInlineEdit(null); }}><Icon name="Layout" size={13} /></button>
@@ -158,7 +158,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
 
         {/* Frontmatter bar */}
         {active && Object.keys(frontmatter).length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-black/40 bg-[#1a1b20] px-3 py-1.5 text-[10px] text-white/40">
+          <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.08] bg-[#1a1b20] px-3 py-1.5 text-[10px] text-white/40">
             {Object.entries(frontmatter).map(([key, val]) => (
               <span key={key} className="flex items-center gap-1">
                 <span className="font-semibold text-white/50">{key}:</span>
@@ -180,7 +180,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
         ) : mode === 'edit' ? (
           <div className="flex min-h-0 flex-1">
             {notesSettings.lineNumbers && (
-              <div ref={gutterRef} className="w-10 shrink-0 select-none overflow-hidden border-r border-black/40 bg-[#191a1f] py-4 pr-2 text-right font-mono text-[13px] text-white/30" style={{ lineHeight: 1.7 }} aria-hidden>
+              <div ref={gutterRef} className="w-10 shrink-0 select-none overflow-hidden border-r border-white/[0.08] bg-[#191a1f] py-4 pr-2 text-right font-mono text-[13px] text-white/30" style={{ lineHeight: 1.7 }} aria-hidden>
                 {Array.from({ length: lineCount }, (_, i) => <div key={i}>{i + 1}</div>)}
               </div>
             )}
@@ -191,9 +191,9 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
         ) : mode === 'split' ? (
           /* Split mode */
           <div className="flex min-h-0 flex-1">
-            <div className="flex min-h-0 flex-1 border-r border-black/40">
+            <div className="flex min-h-0 flex-1 border-r border-white/[0.08]">
               {notesSettings.lineNumbers && (
-                <div ref={gutterRef} className="w-10 shrink-0 select-none overflow-hidden border-r border-black/40 bg-[#191a1f] py-4 pr-2 text-right font-mono text-[13px] text-white/30" style={{ lineHeight: 1.7 }} aria-hidden>
+                <div ref={gutterRef} className="w-10 shrink-0 select-none overflow-hidden border-r border-white/[0.08] bg-[#191a1f] py-4 pr-2 text-right font-mono text-[13px] text-white/30" style={{ lineHeight: 1.7 }} aria-hidden>
                   {Array.from({ length: lineCount }, (_, i) => <div key={i}>{i + 1}</div>)}
                 </div>
               )}
@@ -239,7 +239,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
             {/* Inline edit overlay */}
             {inlineEdit && (
               <div
-                className="absolute left-4 right-4 z-20 overflow-hidden rounded-xl border border-purple-500/30 bg-[#1a1b22] shadow-2xl"
+                className="absolute left-4 right-4 z-20 overflow-hidden rounded-xl border border-white/[0.12] bg-[#1c1e26] shadow-2xl"
                 style={{ top: Math.max(8, inlineEdit.top - 4), maxHeight: '60%' }}
               >
                 <div className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-1.5 text-[10px] text-white/40">
@@ -269,7 +269,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
 
         {/* Status bar */}
         {active && (
-          <div className="flex items-center gap-3 border-t border-black/40 bg-[#191a1f] px-3 py-1 text-[10px] text-white/30">
+          <div className="flex items-center gap-3 border-t border-white/[0.08] bg-[#191a1f] px-3 py-1 text-[10px] text-white/30">
             <span>{noteName(active)}</span>
             {frontmatter.tags && Array.isArray(frontmatter.tags) && frontmatter.tags.length > 0 && (
               <span className="flex items-center gap-1">{frontmatter.tags.map(t => <span key={t} className="text-purple-400/60">#{t}</span>)}</span>
@@ -282,8 +282,8 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
 
       {/* Outline panel */}
       {outlineOpen && (
-        <div className="flex w-48 shrink-0 flex-col border-l border-black/40 bg-[#232429]">
-          <div className="flex items-center gap-2 border-b border-black/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
+        <div className="flex w-48 shrink-0 flex-col border-l border-white/[0.08] bg-[#232429]">
+          <div className="flex items-center gap-2 border-b border-white/[0.08] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
             <Icon name="List" size={11} className="acc-text" /> Outline
             <button className="ml-auto text-white/40 hover:text-white" onClick={() => setOutlineOpen(false)}><Icon name="X" size={12} /></button>
           </div>
@@ -309,8 +309,8 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
 
       {/* Backlinks panel */}
       {backlinksOpen && (
-        <div className="flex w-56 shrink-0 flex-col border-l border-black/40 bg-[#232429]">
-          <div className="flex items-center gap-2 border-b border-black/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
+        <div className="flex w-56 shrink-0 flex-col border-l border-white/[0.08] bg-[#232429]">
+          <div className="flex items-center gap-2 border-b border-white/[0.08] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
             <Icon name="Link2" size={11} className="acc-text" /> Backlinks ({backlinks.length})
             <button className="ml-auto text-white/40 hover:text-white" onClick={() => setBacklinksOpen(false)}><Icon name="X" size={12} /></button>
           </div>
@@ -324,7 +324,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
                   <span className="truncate font-medium">{noteName(entry)}</span>
                 </button>
                 {contexts.map((ctx, ci) => (
-                  <div key={ci} className="mx-2 mb-1 rounded bg-white/[0.03] px-2 py-1 text-[10px] text-white/50 leading-relaxed">
+                  <div key={ci} className="mx-2 mb-1 rounded bg-[#1a1c24] px-2 py-1 text-[10px] text-white/50 leading-relaxed">
                     {ctx.text.replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')}
                   </div>
                 ))}
@@ -336,8 +336,8 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
 
       {/* Tags panel */}
       {tagsOpen && (
-        <div className="flex w-48 shrink-0 flex-col border-l border-black/40 bg-[#232429]">
-          <div className="flex items-center gap-2 border-b border-black/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
+        <div className="flex w-48 shrink-0 flex-col border-l border-white/[0.08] bg-[#232429]">
+          <div className="flex items-center gap-2 border-b border-white/[0.08] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
             <Icon name="Tag" size={11} className="acc-text" /> Tags ({allTags.size})
             <button className="ml-auto text-white/40 hover:text-white" onClick={() => setTagsOpen(false)}><Icon name="X" size={12} /></button>
           </div>
@@ -466,8 +466,8 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
 
       {/* Settings */}
       {settingsOpen && (
-        <div className="absolute inset-y-0 right-0 z-30 flex w-64 flex-col border-l border-black/40 bg-[#232429] shadow-2xl">
-          <div className="flex items-center gap-2 border-b border-black/40 px-4 py-3 text-xs font-semibold text-white/80">
+        <div className="absolute inset-y-0 right-0 z-30 flex w-64 flex-col border-l border-white/[0.08] bg-[#232429] shadow-2xl">
+          <div className="flex items-center gap-2 border-b border-white/[0.08] px-4 py-3 text-xs font-semibold text-white/80">
             <Icon name="SlidersHorizontal" size={13} className="acc-text" /> Notes settings
             <button className="ml-auto text-white/40 hover:text-white" onClick={() => setSettingsOpen(false)}><Icon name="X" size={14} /></button>
           </div>

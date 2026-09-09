@@ -7,7 +7,6 @@
  * CORS proxies → direct) so it works with or without the backend.
  */
 
-import { Readability, isProbablyReaderable } from '@mozilla/readability';
 import { fetchSearchHtml } from './searchProxy';
 
 /**
@@ -18,6 +17,7 @@ import { fetchSearchHtml } from './searchProxy';
  * @returns {Promise<{ html: string, title: string, source: string, readerable: boolean }>}
  */
 export async function rebuildPage(url) {
+  const { Readability, isProbablyReaderable } = await import('@mozilla/readability');
   const { html: rawHtml, source } = await fetchSearchHtml(url);
 
   // Parse into a DOM document for Readability.

@@ -1,0 +1,8 @@
+[package]
+name = "lithium-abi"
+version = "0.1.0"
+edition = "2021"
+description = "Shared ABI + JSON infrastructure for Lithium WASM modules"
+
+[lib]
+crate-type = ["lib"]

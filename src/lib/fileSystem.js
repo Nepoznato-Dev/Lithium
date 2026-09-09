@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { deleteBlob, getBlob, putBlob } from './storage/manager';
 import { getTree, hydrate, registerSeeder, setTree } from './storage/unifiedStore';
 import { fsOpSync } from './core';
+import { ensureSystemDirs } from './fileSystem/systemDirs';
 
 /**
  * Virtual file system. The tree lives in the unified store (memory-first,
@@ -61,8 +62,9 @@ export function saveTree(tree) {
 
 // Seed first-run defaults and reconcile migrations inside the unified store.
 registerSeeder((current, hadData) => {
-  if (!hadData && (!current || current.length === 0)) return defaultTree();
-  if (!Array.isArray(current) || current.length === 0) return null;
+  // No data, unreadable data, or empty tree — always seed defaults.
+  if (!current || current.length === 0) return defaultTree();
+  if (!Array.isArray(current)) return null;
   const now = Date.now();
   let changed = false;
   const next = [...current];
@@ -82,6 +84,9 @@ registerSeeder((current, hadData) => {
     next.push({ id: TRASH_ID, name: 'Recycle Bin', type: 'folder', parentId: 'root', createdAt: now, updatedAt: now, system: true });
     changed = true;
   }
+  // Migrate: ensure OS system directories exist.
+  const sysPatch = ensureSystemDirs(next);
+  if (sysPatch) return sysPatch;
   return changed ? next : null;
 });
 
@@ -108,7 +113,18 @@ export function getEntry(tree, id) {
 }
 
 export function childrenOf(tree, folderId) {
-  return fsOpSync({ op: 'children', tree, id: folderId }) || [];
+  // Pure JS — avoids serialising the entire tree to WASM for a simple filter+sort.
+  const kids = [];
+  for (let i = 0; i < tree.length; i++) {
+    if (tree[i].parentId === folderId) kids.push(tree[i]);
+  }
+  kids.sort((a, b) => {
+    const aF = a.type === 'folder' ? 1 : 0;
+    const bF = b.type === 'folder' ? 1 : 0;
+    if (aF !== bF) return bF - aF;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  return kids;
 }
 
 export function pathOf(tree, id) {

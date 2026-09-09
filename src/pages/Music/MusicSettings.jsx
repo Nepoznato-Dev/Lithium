@@ -7,7 +7,7 @@ export default function MusicSettings({ apis, prefs, solo, spotifyTest,
   return (
     <div className="absolute inset-0 z-30 flex items-start justify-end bg-black/50 p-4" onClick={() => setSettingsOpen(false)}>
       <div className="mt-2 flex max-h-full w-80 flex-col gap-3 overflow-y-auto rounded-xl border border-white/10 bg-[#1b1b21] p-4 shadow-2xl" onClick={event => event.stopPropagation()}>
-        <div className="flex items-center gap-2 text-sm font-bold"><Icon name="Settings2" size={15} className="acc-text" /> Player settings</div>
+        <div className="flex items-center gap-2 text-sm font-bold"><Icon name="Settings2" size={15} className="text-cyan-300" /> Player settings</div>
         {[
           { key: 'leftOpen', label: 'Library sidebar open by default' },
           { key: 'rightOpen', label: 'Now-playing sidebar open by default' },

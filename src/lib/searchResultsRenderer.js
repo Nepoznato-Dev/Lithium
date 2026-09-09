@@ -7,7 +7,7 @@
  * The search engine's own CSS renders the results natively.
  */
 
-import { fetchSearchHtml, getBackendUrl, SCRAPE_PROVIDERS } from './searchProxy';
+import { fetchSearchHtml, getBackendUrl, SCRAPE_PROVIDERS, detectCaptcha, BraveCaptchaError } from './searchProxy';
 
 /**
  * Fetch search results as raw HTML, sanitize, and inject a top bar.
@@ -20,6 +20,11 @@ export async function renderSearchResults(query, providerKey = 'brave') {
   const provider = SCRAPE_PROVIDERS[providerKey] || SCRAPE_PROVIDERS.duckduckgo;
   const searchUrl = provider.buildUrl(query);
   const { html: rawHtml, source } = await fetchSearchHtml(searchUrl);
+
+  // Detect CAPTCHA challenge pages before sanitisation strips the markers.
+  if (detectCaptcha(rawHtml)) {
+    throw new BraveCaptchaError();
+  }
 
   // Parse into a DOM document for sanitization and URL rewriting.
   const doc = new DOMParser().parseFromString(rawHtml, 'text/html');

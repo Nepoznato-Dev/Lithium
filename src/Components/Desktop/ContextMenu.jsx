@@ -1,16 +1,39 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from '../Icon';
+import { PngIcon } from './DesktopApps';
+import { ActionRegistry } from '../../lib/fileExplorer/contextMenu/ActionRegistry';
 
 /**
  * Dynamic context menu — rendered where the user right-clicked, with
  * flyout submenus, separators, icons, shortcuts, disabled states,
  * keyboard navigation (arrows + Enter + Escape), and type-ahead jump.
  *
+ * Supports ARIA roles for screen readers, lazy submenu resolution via
+ * ActionRegistry, and loading states for async actions.
+ *
  * Item shape: { id, label, icon?: string, shortcut?: string, checked?: bool,
- *               disabled?: bool, danger?: bool, type?: 'separator'|'heading',
- *               items?: [...], action?: fn }
+ *               disabled?: bool, danger?: bool, loading?: bool,
+ *               type?: 'separator'|'heading',
+ *               items?: [...], _actionId?: string, action?: fn }
  */
+
+/** Live-region announcer for screen readers. */
+function announce(message) {
+  let region = document.getElementById('nx-ctx-live');
+  if (!region) {
+    region = document.createElement('div');
+    region.id = 'nx-ctx-live';
+    region.setAttribute('aria-live', 'polite');
+    region.setAttribute('aria-atomic', 'true');
+    region.className = 'sr-only';
+    region.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
+    document.body.appendChild(region);
+  }
+  region.textContent = '';
+  // Force re-announcement by clearing then setting in next frame.
+  requestAnimationFrame(() => { region.textContent = message; });
+}
 
 function clampPosition(x, y, width, height) {
   return {
@@ -40,7 +63,7 @@ function actionableIndices(items) {
   return indices;
 }
 
-function SubFlyout({ items, anchorRect, onAction }) {
+function SubFlyout({ items, anchorRect, onAction, ctx }) {
   const ref = React.useRef(null);
   const [pos, setPos] = useState(() => {
     const width = 224;
@@ -58,15 +81,16 @@ function SubFlyout({ items, anchorRect, onAction }) {
   // Portal to body: a parent with backdrop-filter/transform would otherwise
   // become the containing block and offset position:fixed.
   return createPortal(
-    <div ref={ref} className="nx-ctx-menu" style={{ position: 'fixed', left: pos.x, top: pos.y, animation: 'none' }}>
-      <MenuList items={items} onAction={onAction} />
+    <div ref={ref} className="nx-ctx-menu" role="menu" aria-label="Submenu" style={{ position: 'fixed', left: pos.x, top: pos.y, animation: 'none' }}>
+      <MenuList items={items} onAction={onAction} ctx={ctx} />
     </div>,
     document.body
   );
 }
 
-function MenuList({ items, onAction, focusIndex = 0, onFocusIndex, typeAhead }) {
+function MenuList({ items, onAction, focusIndex = 0, onFocusIndex, typeAhead, ctx }) {
   const [openSub, setOpenSub] = useState(null); // { id, rect }
+  const [lazyItems, setLazyItems] = useState(null); // resolved lazy submenu items
   const listRef = useRef(null);
 
   // Scroll the focused item into view when focusIndex changes.
@@ -77,35 +101,63 @@ function MenuList({ items, onAction, focusIndex = 0, onFocusIndex, typeAhead }) 
     if (target) target.scrollIntoView({ block: 'nearest' });
   }, [focusIndex, onFocusIndex]);
 
+  /** Resolve a lazy submenu (items === null + _actionId present). */
+  const resolveLazySubmenu = useCallback((item) => {
+    if (!item._actionId) return;
+    // Use ActionRegistry to resolve children lazily.
+    const resolved = ActionRegistry.resolveChildren(item._actionId, ctx?.selectedEntries || [], ctx || {});
+    setLazyItems(resolved);
+    // Patch the item's items array in-place for this render cycle.
+    item.items = resolved;
+  }, [ctx]);
+
   return (
-    <div ref={listRef} className="nx-ctx-list" onMouseLeave={() => { setOpenSub(null); if (onFocusIndex) onFocusIndex(-1); }}>
+    <div ref={listRef} className="nx-ctx-list" role="menu" onMouseLeave={() => { setOpenSub(null); setLazyItems(null); if (onFocusIndex) onFocusIndex(-1); }}>
       {items.map((item, index) => {
-        if (item.type === 'separator') return <div key={item.id || `sep-${index}`} className="nx-menu-sep" />;
+        if (item.type === 'separator') return <div key={item.id || `sep-${index}`} className="nx-menu-sep" role="separator" />;
         if (item.type === 'heading') {
-          return <div key={item.id || `head-${index}`} className="nx-ctx-heading">{item.label}</div>;
+          return <div key={item.id || `head-${index}`} className="nx-ctx-heading" role="presentation">{item.label}</div>;
         }
-        const iconName = item.icon;
-        const hasSub = Array.isArray(item.items) && item.items.length > 0;
+        const iconName = item.loading ? 'Loader' : item.icon;
+        const hasSub = (Array.isArray(item.items) && item.items.length > 0) || (item.items === null && item._actionId);
         const isFocused = focusIndex === index;
         return (
           <button
             key={item.id || item.label}
-            className={`nx-ctx-item ${item.danger ? 'danger' : ''} ${item.disabled ? 'disabled' : ''} ${isFocused ? 'focused' : ''}`}
-            disabled={item.disabled}
+            className={`nx-ctx-item ${item.danger ? 'danger' : ''} ${item.disabled || item.loading ? 'disabled' : ''} ${isFocused ? 'focused' : ''} ${item.loading ? 'loading' : ''}`}
+            disabled={item.disabled || item.loading}
+            role="menuitem"
+            aria-disabled={item.disabled || item.loading || undefined}
+            aria-haspopup={hasSub ? 'true' : undefined}
+            aria-expanded={hasSub && openSub?.id === item.id ? 'true' : undefined}
+            aria-checked={item.checked !== undefined ? (item.checked ? 'true' : 'false') : undefined}
             data-menu-index={index}
             onMouseEnter={event => {
-              setOpenSub(hasSub ? { id: item.id, rect: event.currentTarget.getBoundingClientRect() } : null);
+              if (hasSub) {
+                // Resolve lazy submenus on hover.
+                if (item.items === null && item._actionId) {
+                  resolveLazySubmenu(item);
+                }
+                setOpenSub({ id: item.id, rect: event.currentTarget.getBoundingClientRect() });
+              } else {
+                setOpenSub(null);
+              }
               if (onFocusIndex) onFocusIndex(index);
+              // Announce for screen readers.
+              announce(item.label);
             }}
             onClick={event => {
               event.stopPropagation();
-              if (item.disabled) return;
+              if (item.disabled || item.loading) return;
               if (!hasSub && item.action) item.action();
               if (!hasSub) onAction();
             }}
           >
             <span className="nx-ctx-item-left">
-              {iconName ? <Icon name={iconName} size={14} className="nx-ctx-icon" /> : <span className="nx-ctx-icon" />}
+              {item.iconFile
+                ? <span className={`nx-ctx-icon ${item.loading ? 'nx-ctx-spin' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PngIcon name={item.iconFile} size={14} /></span>
+                : iconName ? <Icon name={iconName} size={14} className={`nx-ctx-icon ${item.loading ? 'nx-ctx-spin' : ''}`} /> : <span className="nx-ctx-icon" />
+              }
               <span className="truncate">{item.label}</span>
               {item.checked && <span className="nx-ctx-check">✓</span>}
             </span>
@@ -119,8 +171,11 @@ function MenuList({ items, onAction, focusIndex = 0, onFocusIndex, typeAhead }) 
       {/* Flyout rendered by the parent so it escapes overflow clipping */}
       {openSub && (() => {
         const item = items.find(entry => entry.id === openSub.id);
-        if (!item?.items) return null;
-        return <SubFlyout key={openSub.id} items={item.items} anchorRect={openSub.rect} onAction={onAction} />;
+        if (!item) return null;
+        // For lazy items, use the resolved array.
+        const subItems = item.items || lazyItems;
+        if (!subItems || subItems.length === 0) return null;
+        return <SubFlyout key={openSub.id} items={subItems} anchorRect={openSub.rect} onAction={onAction} ctx={ctx} />;
       })()}
     </div>
   );
@@ -220,11 +275,17 @@ export default function ContextMenu({ menu, onClose }) {
     onClose('action');
   }, [onClose]);
 
+  // Announce menu open for screen readers.
+  useEffect(() => {
+    announce('Context menu opened');
+    return () => announce('Context menu closed');
+  }, []);
+
   return createPortal(
     <>
       <div className="fixed inset-0 z-[10015]" onClick={handleBackdropClick} onContextMenu={event => { event.preventDefault(); handleBackdropClick(); }} />
-      <div ref={ref} className="nx-ctx-menu" style={{ left: pos.x, top: pos.y }} onMouseDown={event => event.stopPropagation()} onContextMenu={event => event.stopPropagation()}>
-        <MenuList items={menu.items} onAction={handleAction} focusIndex={focusIndex} onFocusIndex={setFocusIndex} />
+      <div ref={ref} className="nx-ctx-menu" role="menu" aria-label="Context menu" style={{ left: pos.x, top: pos.y }} onMouseDown={event => event.stopPropagation()} onContextMenu={event => event.stopPropagation()}>
+        <MenuList items={menu.items} onAction={handleAction} focusIndex={focusIndex} onFocusIndex={setFocusIndex} ctx={menu._ctx} />
       </div>
     </>,
     document.body
@@ -236,7 +297,7 @@ export default function ContextMenu({ menu, onClose }) {
  *  and `target` (the DOM element the user right-clicked on). */
 export function useContextMenu() {
   const [menu, setMenu] = useState(null);
-  const open = (event, items) => {
+  const open = (event, items, ctx) => {
     event.preventDefault();
     event.stopPropagation();
     const target = event.currentTarget || event.target;
@@ -247,6 +308,7 @@ export function useContextMenu() {
       y: event.clientY,
       items,
       source: { appId, target },
+      _ctx: ctx || null, // pass ActionContext through for lazy submenu resolution
     });
   };
   const close = useCallback(() => setMenu(null), []);

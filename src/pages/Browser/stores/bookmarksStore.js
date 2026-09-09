@@ -3,32 +3,39 @@
  * Persisted to localStorage by the I/O layer.
  */
 import { signal, computed } from '@preact/signals';
-import * as core from '../../../lib/core';
-
 /** Flat bookmark array: [{ title, url, folder? }]. */
 export const bookmarks = signal([]);
 
 /** Search query for bookmarks page. */
 export const bookmarkQuery = signal('');
 
-/** Computed: bookmark tree built via Rust (or JS fallback). */
+/** Computed: bookmark tree built from flat array. */
 export const bookmarkTree = computed(() => {
-  const result = core.browserBookmarkTreeSync(bookmarks.value);
-  if (result) return result;
-  // JS fallback: single "Bookmarks Bar" folder with all items
-  return [{ name: 'Bookmarks Bar', children: [], items: bookmarks.value }];
+  const bookmarksArr = bookmarks.value;
+  if (!Array.isArray(bookmarksArr)) return [{ name: 'Bookmarks Bar', children: [], items: [] }];
+  const folders = new Map();
+  const unfiled = [];
+  for (const b of bookmarksArr) {
+    if (!b.folder) unfiled.push(b);
+    else {
+      if (!folders.has(b.folder)) folders.set(b.folder, []);
+      folders.get(b.folder).push(b);
+    }
+  }
+  const result = [{ name: 'Bookmarks Bar', children: [], items: unfiled.map(b => ({ title: b.title || '', url: b.url || '' })) }];
+  for (const [name, items] of folders) {
+    result.push({ name, children: [], items: items.map(b => ({ title: b.title || '', url: b.url || '' })) });
+  }
+  return result;
 });
 
 /** Computed: filtered bookmarks matching query. */
 export const filteredBookmarks = computed(() => {
   const q = bookmarkQuery.value.toLowerCase();
   if (!q) return bookmarks.value;
-  const result = core.browserBookmarkSearchSync(bookmarks.value, q);
-  if (result) return result;
-  // JS fallback
   return bookmarks.value.filter(b =>
-    b.title.toLowerCase().includes(q) || b.url.toLowerCase().includes(q)
-  );
+    (b.title || '').toLowerCase().includes(q) || (b.url || '').toLowerCase().includes(q)
+  ).map(b => ({ title: b.title || '', url: b.url || '' }));
 });
 
 /** Check if a URL is bookmarked. */

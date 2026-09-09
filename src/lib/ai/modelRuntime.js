@@ -1,8 +1,70 @@
 import { getModel, getModelBlob, loadModelMeta, downloadedModelFor, tierModel, TIERS } from './models';
 import { storage } from '../storage/localStorage';
-import { runtimePrepareMessagesSync, runtimeResolveModelSync, runtimeEstimateMessagesTokensSync, runtimeTrimMessagesToContextSync } from '../core';
-// Vite resolves this to the WASM asset's served URL at build time.
-import wllamaWasmUrl from '@wllama/wllama/esm/wasm/wllama.wasm?url';
+
+function _estimateTokens(text) { return text ? Math.ceil(text.length / 4) : 0; }
+
+function _resolveModel(tierOrModelId, tiers, downloaded) {
+  if (!tierOrModelId || !Array.isArray(tiers) || !downloaded) return null;
+  if (downloaded[tierOrModelId]) return { modelId: tierOrModelId };
+  for (const tier of tiers) {
+    if (tier.id === tierOrModelId) {
+      if (tier.modelId && downloaded[tier.modelId]) return { modelId: tier.modelId };
+      if (tier.alt && downloaded[tier.alt]) return { modelId: tier.alt };
+      return null;
+    }
+  }
+  return null;
+}
+
+function _prepareMessages(messages, modelId, noThink, thinking) {
+  if (!Array.isArray(messages)) return [];
+  const isQwen3 = (modelId || '').startsWith('qwen3');
+  const inject = noThink && isQwen3 && !thinking;
+  let lastUserIdx = -1;
+  if (inject) {
+    for (let j = messages.length - 1; j >= 0; j--) {
+      if (messages[j]?.role === 'user') { lastUserIdx = j; break; }
+    }
+  }
+  return messages.map((msg, i) => {
+    const content = msg.content || '';
+    if (inject && i === lastUserIdx) return { role: msg.role, content: content + '\n/no_think' };
+    return { role: msg.role, content };
+  });
+}
+
+function _trimMessages(messages, maxTokens = 8192) {
+  if (!Array.isArray(messages) || messages.length === 0) return { messages: [] };
+  const msgTokens = messages.map((m, i) => ({ i, tokens: _estimateTokens(m.content) + 4 }));
+  const systemIdx = msgTokens.find(mt => messages[mt.i]?.role === 'system')?.i;
+  const systemTokens = systemIdx != null ? msgTokens[systemIdx].tokens : 0;
+  const budget = Math.max(0, maxTokens - systemTokens);
+  const selected = [];
+  let used = 0;
+  for (let j = msgTokens.length - 1; j >= 0; j--) {
+    if (msgTokens[j].i === systemIdx) continue;
+    if (used + msgTokens[j].tokens <= budget) { selected.push(msgTokens[j].i); used += msgTokens[j].tokens; }
+    else break;
+  }
+  selected.sort((a, b) => a - b);
+  const result = [];
+  if (systemIdx != null) result.push(messages[systemIdx]);
+  for (const idx of selected) result.push(messages[idx]);
+  return { messages: result };
+}
+
+function _estimateMessagesTokens(messages) {
+  if (!Array.isArray(messages)) return { tokens: 0 };
+  let total = 0;
+  for (const msg of messages) {
+    if (msg.content) total += _estimateTokens(msg.content);
+    total += 4;
+  }
+  return { tokens: total };
+}
+
+// wllama WASM loaded from CDN (not bundled)
+const WLLAMA_WASM_URL = 'https://cdn.jsdelivr.net/npm/@wllama/wllama@2.2.2/esm/wasm/wllama.wasm';
 
 /**
  * On-device inference via wllama (llama.cpp compiled to wasm, WebGPU
@@ -21,8 +83,8 @@ let workerModelId = null;
 let nextId = 1;
 const pending = new Map(); // id → { resolve, reject, onToken }
 
-/* wllamaWasmUrl is resolved by Vite's ?url import at build time. */
-const wasmUrl = wllamaWasmUrl;
+/* wllama WASM loaded from CDN (not bundled). */
+const wasmUrl = WLLAMA_WASM_URL;
 
 function ensureWorker() {
   if (worker) return worker;
@@ -74,7 +136,7 @@ export async function ensureRuntime(tierOrModelId) {
   }
 
   // Try Rust-based resolution first, fall back to JS
-  let resolved = runtimeResolveModelSync(tierOrModelId, TIERS, downloaded);
+  let resolved = _resolveModel(tierOrModelId, TIERS, downloaded);
   let modelId = resolved?.modelId;
 
   // Fallback: direct model lookup
@@ -120,7 +182,7 @@ export async function localChat(messages, { onToken, thinking = false, signal, m
   // /no_think is a Qwen3-specific chat convention that some GGUFs/templates reject
   // outright (they echo "Unknown command"). Only inject it when the user opts in.
   const noThink = storage.get('ai-qwen-nothink', false);
-  let prepared = runtimePrepareMessagesSync(messages, workerModelId, noThink, thinking) || messages;
+  let prepared = _prepareMessages(messages, workerModelId, noThink, thinking) || messages;
 
   // Use Rust core for context window trimming
   const nCtx = storage.get('ai-ctx', 8192);
@@ -128,9 +190,9 @@ export async function localChat(messages, { onToken, thinking = false, signal, m
   const budget = nCtx - reserveForResponse;
 
   // Estimate tokens and trim if needed (Rust does the heavy lifting)
-  const estimate = runtimeEstimateMessagesTokensSync(prepared);
+  const estimate = _estimateMessagesTokens(prepared);
   if (estimate && estimate.tokens > budget) {
-    const trimmed = runtimeTrimMessagesToContextSync(prepared, budget);
+    const trimmed = _trimMessages(prepared, budget);
     if (trimmed?.messages) prepared = trimmed.messages;
   }
 

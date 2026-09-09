@@ -1,6 +1,5 @@
 import { strToU8, strFromU8 } from 'fflate';
 import { getBlob, putBlob } from './manager';
-import { tarBuildSync, tarParseSync } from '../core.js';
 
 /**
  * TAR + GZip archive engine — folder export & import using native CompressionStream.
@@ -94,31 +93,23 @@ export async function exportFolderTar(tree, folderId, { onProgress } = {}) {
     onProgress?.({ phase: 'collect', done, total: fileChildren.length });
   }
 
-  // Build TAR stream via Rust (JS fallback if wasm not loaded)
+  // Build TAR stream
   onProgress?.({ phase: 'tar' });
-  let tarStream;
-  const rustTar = tarBuildSync(parts);
-  if (rustTar) {
-    tarStream = rustTar;
-  } else {
-    // JS fallback: manual TAR construction
-    const tarParts = [];
-    let totalSize = 0;
-    for (const part of parts) {
-      const header = tarHeader(part.name, part.data.length);
-      const padding = new Uint8Array(padBlock(part.data.length));
-      tarParts.push(header, part.data, padding);
-      totalSize += BLOCK + part.data.length + padding.length;
-    }
-    tarParts.push(new Uint8Array(BLOCK * 2));
-    totalSize += BLOCK * 2;
-
-    tarStream = new Uint8Array(totalSize);
-    let offset = 0;
-    for (const part of tarParts) {
-      tarStream.set(part, offset);
-      offset += part.length;
-    }
+  const tarParts = [];
+  let totalSize = 0;
+  for (const part of parts) {
+    const header = tarHeader(part.name, part.data.length);
+    const padding = new Uint8Array(padBlock(part.data.length));
+    tarParts.push(header, part.data, padding);
+    totalSize += BLOCK + part.data.length + padding.length;
+  }
+  tarParts.push(new Uint8Array(BLOCK * 2));
+  totalSize += BLOCK * 2;
+  const tarStream = new Uint8Array(totalSize);
+  let offset = 0;
+  for (const part of tarParts) {
+    tarStream.set(part, offset);
+    offset += part.length;
   }
 
   // GZip compress via native API
@@ -175,31 +166,22 @@ export async function importTarToFolder(tree, parentId, tarGzBlob, { onProgress,
   let off = 0;
   for (const c of chunks) { tarData.set(c, off); off += c.length; }
 
-  // Parse TAR entries via Rust (JS fallback if wasm not loaded)
+  // Parse TAR entries
   onProgress?.({ phase: 'parse' });
-  let files;
-  const rustResult = tarParseSync(tarData);
-  if (rustResult) {
-    files = rustResult.files;
-  } else {
-    // JS fallback: manual TAR parsing
-    files = [];
-    let pos = 0;
-    while (pos + BLOCK <= totalLen) {
-      const header = tarData.subarray(pos, pos + BLOCK);
-      if (header.every(b => b === 0)) break;
-
-      const name = readCString(header, 0, 100);
-      const sizeStr = readCString(header, 124, 136);
-      const size = parseInt(sizeStr, 8) || 0;
-      const type = String.fromCharCode(header[156]);
-
-      pos += BLOCK;
-      if ((type === '0' || type === '\0') && size > 0 && pos + size <= totalLen) {
-        files.push({ name, data: tarData.slice(pos, pos + size) });
-      }
-      pos += size + padBlock(size);
+  const files = [];
+  let pos = 0;
+  while (pos + BLOCK <= totalLen) {
+    const header = tarData.subarray(pos, pos + BLOCK);
+    if (header.every(b => b === 0)) break;
+    const name = readCString(header, 0, 100);
+    const sizeStr = readCString(header, 124, 136);
+    const size = parseInt(sizeStr, 8) || 0;
+    const type = String.fromCharCode(header[156]);
+    pos += BLOCK;
+    if ((type === '0' || type === '\0') && size > 0 && pos + size <= totalLen) {
+      files.push({ name, data: tarData.slice(pos, pos + size) });
     }
+    pos += size + padBlock(size);
   }
 
   // Build tree entries
@@ -236,10 +218,7 @@ export async function importTarToFolder(tree, parentId, tarGzBlob, { onProgress,
     if (!name) continue;
     const parentDirId = segs.length > 1 ? ensureDir(segs.slice(0, -1).join('/')) : root.id;
 
-    // Get file data: Rust returns base64, JS fallback returns Uint8Array
-    const fileData = file.data_b64
-      ? Uint8Array.from(atob(file.data_b64), c => c.charCodeAt(0))
-      : file.data;
+    const fileData = file.data;
 
     const ext = (name.split('.').pop() || '').toLowerCase();
     if (TEXT_EXT.has(ext) || fileData.length < 64 * 1024) {

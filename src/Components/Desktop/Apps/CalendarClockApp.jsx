@@ -50,26 +50,26 @@ function ClockTab({ now }) {
   const hours = now.getHours() % 12;
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto p-6">
-      <div className="relative h-44 w-44 rounded-full border-2 border-white/15 bg-white/[0.03]">
+    <div className="flex flex-1 flex-col items-center justify-center gap-8 overflow-y-auto p-8">
+      <div className="relative h-48 w-48 rounded-full border-2 border-white/[0.08] bg-[#1a2236]">
         {Array.from({ length: 12 }).map((_, index) => (
-          <span key={index} className="absolute left-1/2 top-1/2 h-[84px] w-0.5 origin-top" style={{ transform: `rotate(${index * 30}deg)` }}>
-            <span className="mx-auto block h-2 w-0.5 rounded bg-white/40" />
+          <span key={index} className="absolute left-1/2 top-1/2 h-[88px] w-0.5 origin-top" style={{ transform: `rotate(${index * 30}deg)` }}>
+            <span className="mx-auto block h-2.5 w-0.5 rounded-sm bg-white/35" />
           </span>
         ))}
-        <span className="absolute left-1/2 top-1/2 h-11 w-1 origin-top rounded bg-white" style={{ transform: `rotate(${hours * 30 + minutes / 2}deg)` }} />
-        <span className="absolute left-1/2 top-1/2 h-[60px] w-0.5 origin-top rounded bg-white/80" style={{ transform: `rotate(${minutes * 6}deg)` }} />
-        <span className="absolute left-1/2 top-1/2 h-[68px] w-px origin-top acc-bg" style={{ transform: `rotate(${seconds * 6}deg)` }} />
-        <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full acc-bg" />
+        <span className="absolute left-1/2 top-1/2 h-12 w-1 origin-top rounded-sm bg-white/90" style={{ transform: `rotate(${hours * 30 + minutes / 2}deg)` }} />
+        <span className="absolute left-1/2 top-1/2 h-[64px] w-0.5 origin-top rounded-sm bg-white/70" style={{ transform: `rotate(${minutes * 6}deg)` }} />
+        <span className="absolute left-1/2 top-1/2 h-[72px] w-px origin-top acc-bg" style={{ transform: `rotate(${seconds * 6}deg)` }} />
+        <span className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full acc-bg" />
       </div>
 
       <div className="text-center">
-        <div className="font-mono text-4xl font-light tabular-nums">{timeString}</div>
-        <div className="mt-2 text-sm text-white/50">{dateString}</div>
-        <div className="mt-1 text-xs text-white/30">{zone}</div>
+        <div className="font-mono text-5xl font-light tabular-nums tracking-wide">{timeString}</div>
+        <div className="mt-3 text-sm text-white/45">{dateString}</div>
+        <div className="mt-1 text-xs text-white/25">{zone}</div>
       </div>
 
-      <select className="text-input w-56 py-2 text-xs" value={timeZone} onChange={event => setTimeZone(event.target.value)} aria-label="Timezone">
+      <select className="text-input w-56 py-2.5 text-xs" value={timeZone} onChange={event => setTimeZone(event.target.value)} aria-label="Timezone">
         {TIMEZONES.map(zoneOption => (
           <option key={zoneOption.id} value={zoneOption.id} className="bg-[#14141d]">{zoneOption.label}</option>
         ))}
@@ -101,7 +101,7 @@ function ItemForm({ date, onAdd }) {
   };
 
   return (
-    <div className="space-y-2 rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">
+    <div className="space-y-2.5 rounded-xl border border-white/[0.05] bg-[#1a2236] p-3.5">
       <div className="flex gap-2">
         <input
           className="text-input flex-1 py-2 text-xs"
@@ -137,7 +137,7 @@ function ItemForm({ date, onAdd }) {
 function ItemRow({ item, showDate, onToggle, onDelete, onCtxMenu }) {
   const overdue = item.kind === 'reminder' && !item.done && itemDateTime(item) < new Date();
   return (
-    <div className="flex items-center gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2" onContextMenu={event => onCtxMenu?.(event, [
+    <div className="flex items-center gap-2.5 rounded-lg border border-white/[0.05] bg-[#1a2236] px-3 py-2.5 transition-colors hover:bg-[#1e2740]" onContextMenu={event => onCtxMenu?.(event, [
       { id: 'toggle', label: item.done ? 'Mark as not done' : 'Mark as done', icon: 'Check', action: () => onToggle(item.id) },
       { id: 'delete', label: 'Delete', icon: 'Trash2', danger: true, action: () => onDelete(item.id) },
     ])}>
@@ -183,19 +183,19 @@ function CalendarTab({ items, onAdd, onToggle, onDelete, onCtxMenu }) {
   const selectedItems = (byDate[selected] || []).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
   return (
-    <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+    <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
       <div className="flex items-center justify-between">
-        <button className="icon-btn h-8 w-8" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} aria-label="Previous month">
+        <button className="icon-btn h-8 w-8 rounded-lg" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} aria-label="Previous month">
           <Icon name="ChevronLeft" size={16} />
         </button>
-        <div className="text-sm font-semibold">{monthLabel}</div>
-        <button className="icon-btn h-8 w-8" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} aria-label="Next month">
+        <div className="text-sm font-semibold tracking-wide">{monthLabel}</div>
+        <button className="icon-btn h-8 w-8 rounded-lg" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} aria-label="Next month">
           <Icon name="ChevronRight" size={16} />
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-white/35">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="py-1">{day}</div>)}
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium uppercase tracking-wider text-white/30">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="py-1.5">{day}</div>)}
       </div>
       <div className="grid grid-cols-7 gap-1">
         {cells.map((day, index) => {
@@ -207,9 +207,9 @@ function CalendarTab({ items, onAdd, onToggle, onDelete, onCtxMenu }) {
           return (
             <button
               key={key}
-              className={`relative flex h-11 flex-col items-center justify-center rounded-lg text-xs transition-colors ${
-                selected === key ? 'acc-soft acc-ring-soft' : 'hover:bg-white/[0.06]'
-              } ${isToday ? 'font-bold acc-text' : 'text-white/80'}`}
+              className={`relative flex h-11 flex-col items-center justify-center rounded-lg text-xs transition-colors duration-150 ${
+                selected === key ? 'acc-soft acc-ring-soft' : 'hover:bg-white/[0.05]'
+              } ${isToday ? 'font-bold acc-text' : 'text-white/75'}`}
               onClick={() => setSelected(key)}
             >
               {day}
@@ -223,10 +223,10 @@ function CalendarTab({ items, onAdd, onToggle, onDelete, onCtxMenu }) {
         })}
       </div>
 
-      <div className="mt-1 space-y-2">
-        <div className="flex items-center justify-between text-xs text-white/45">
-          <span>{new Date(`${selected}T00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-          <span>{selectedItems.length} item{selectedItems.length === 1 ? '' : 's'}</span>
+      <div className="mt-2 space-y-2.5">
+        <div className="flex items-center justify-between text-xs text-white/40">
+          <span className="font-medium">{new Date(`${selected}T00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+          <span className="text-white/30">{selectedItems.length} item{selectedItems.length === 1 ? '' : 's'}</span>
         </div>
         {selectedItems.map(item => (
           <ItemRow key={item.id} item={item} onToggle={onToggle} onDelete={onDelete} onCtxMenu={onCtxMenu} />
@@ -250,7 +250,7 @@ function PlannerTab({ items, onToggle, onDelete, onCtxMenu }) {
   const completed = items.filter(item => item.done).sort((a, b) => itemDateTime(b) - itemDateTime(a));
 
   return (
-    <div className="flex-1 space-y-5 overflow-y-auto p-4">
+    <div className="flex-1 space-y-6 overflow-y-auto p-5">
       <PlannerList title="Upcoming" list={upcoming} empty="Nothing scheduled. Add items from the Calendar tab." onToggle={onToggle} onDelete={onDelete} onCtxMenu={onCtxMenu} />
       <PlannerList title="Overdue" list={overdue} empty="Nothing overdue. Nice work." onToggle={onToggle} onDelete={onDelete} onCtxMenu={onCtxMenu} />
       <PlannerList title="Completed" list={completed} empty="Completed items will appear here." onToggle={onToggle} onDelete={onDelete} onCtxMenu={onCtxMenu} />
@@ -261,9 +261,9 @@ function PlannerTab({ items, onToggle, onDelete, onCtxMenu }) {
 function PlannerList({ title, list, empty, onToggle, onDelete, onCtxMenu }) {
   return (
     <div>
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-white/35">{title}</div>
-      <div className="space-y-1.5">
-        {list.length === 0 ? <p className="text-xs text-white/25">{empty}</p> : list.map(item => (
+      <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-white/30">{title}</div>
+      <div className="space-y-2">
+        {list.length === 0 ? <p className="text-xs text-white/20">{empty}</p> : list.map(item => (
           <ItemRow key={item.id} item={item} showDate onToggle={onToggle} onDelete={onDelete} onCtxMenu={onCtxMenu} />
         ))}
       </div>
@@ -327,7 +327,7 @@ function PomodoroTab({ onCtxMenu }) {
   };
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto p-6" onContextMenu={event => onCtxMenu?.(event, [
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto p-7" onContextMenu={event => onCtxMenu?.(event, [
       { id: 'toggle', label: running ? 'Pause' : 'Start', icon: running ? 'Pause' : 'Play', action: () => setRunning(r => !r) },
       { id: 'reset', label: 'Reset', icon: 'RotateCcw', action: reset },
       { id: 'sep', type: 'separator' },
@@ -336,12 +336,12 @@ function PomodoroTab({ onCtxMenu }) {
       { id: 'long', label: 'Long break', icon: 'Armchair', checked: mode === 'long', action: () => switchMode('long') },
     ])}>
       {/* Mode selector */}
-      <div className="flex gap-1 rounded-full bg-white/[0.05] p-1">
+      <div className="flex gap-1 rounded-full bg-[#1a2236] p-1">
         {Object.entries(POMODORO_MODES).map(([key, { label }]) => (
           <button
             key={key}
-            className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-              mode === key ? 'bg-white/15 text-white' : 'text-white/45 hover:text-white/70'
+            className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors duration-150 ${
+              mode === key ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/65'
             }`}
             onClick={() => switchMode(key)}
           >
@@ -353,7 +353,7 @@ function PomodoroTab({ onCtxMenu }) {
       {/* Timer ring */}
       <div className="relative h-52 w-52">
         <svg className="h-full w-full -rotate-90" viewBox="0 0 200 200">
-          <circle cx="100" cy="100" r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
+          <circle cx="100" cy="100" r={radius} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="6" />
           <circle
             cx="100" cy="100" r={radius} fill="none"
             stroke={config.color}
@@ -365,25 +365,25 @@ function PomodoroTab({ onCtxMenu }) {
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-mono text-5xl font-light tabular-nums">{mins}:{secs}</span>
-          <span className="mt-1 text-xs text-white/40">{config.label}</span>
+          <span className="font-mono text-5xl font-light tabular-nums tracking-wide">{mins}:{secs}</span>
+          <span className="mt-1.5 text-xs text-white/35">{config.label}</span>
         </div>
       </div>
 
       {/* Controls */}
       <div className="flex items-center gap-3">
         <button
-          className="icon-btn h-10 w-10 rounded-full border border-white/10 hover:bg-white/[0.08]"
+          className="icon-btn h-10 w-10 rounded-full border border-white/[0.08] bg-[#1a2236] transition-colors duration-150 hover:bg-[#1e2740]"
           onClick={reset}
           aria-label="Reset timer"
         >
           <Icon name="RotateCcw" size={16} />
         </button>
         <button
-          className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
-            running ? 'bg-white/15 hover:bg-white/20' : 'bg-white/10 hover:bg-white/15'
+          className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors duration-150 ${
+            running ? 'bg-white/10 hover:bg-white/15' : 'bg-white/[0.08] hover:bg-white/12'
           }`}
-          style={!running ? { backgroundColor: config.color + '30' } : {}}
+          style={!running ? { backgroundColor: config.color + '25' } : {}}
           onClick={() => setRunning(r => !r)}
           aria-label={running ? 'Pause' : 'Start'}
         >
@@ -393,14 +393,14 @@ function PomodoroTab({ onCtxMenu }) {
       </div>
 
       {/* Session counter */}
-      <div className="flex items-center gap-2 text-xs text-white/40">
+      <div className="flex items-center gap-2 text-xs text-white/35">
         <span>Sessions completed:</span>
-        <div className="flex gap-1">
+        <div className="flex gap-1.5">
           {Array.from({ length: 4 }).map((_, i) => (
             <span
               key={i}
-              className={`h-2.5 w-2.5 rounded-full ${
-                i < (sessions % 4) ? 'bg-red-400' : 'bg-white/15'
+              className={`h-2.5 w-2.5 rounded-full transition-colors ${
+                i < (sessions % 4) ? 'bg-red-400' : 'bg-white/10'
               }`}
             />
           ))}
@@ -453,14 +453,14 @@ export default function CalendarClockApp({ windowed = false, closeSelf, minimize
   const deleteItem = id => setItems(prev => prev.filter(item => item.id !== id));
 
   return (
-    <div className="flex h-full min-w-0 flex-col bg-[#0f172a] text-white">
-      <div className="flex min-w-0 items-center overflow-hidden border-b border-white/[0.06]">
+    <div className="flex h-full min-w-0 flex-col bg-[#111827] text-white">
+      <div className="flex min-w-0 items-center overflow-hidden border-b border-white/[0.04]">
         <div className="flex min-w-0 flex-1">
           {TABS.map(({ id, label, icon: iconName }) => (
             <button
               key={id}
-              className={`flex flex-1 items-center justify-center gap-2 py-2.5 text-xs font-medium transition-colors ${
-                tab === id ? 'border-b-2 acc-tab-active' : 'text-white/45 hover:text-white/80'
+              className={`flex flex-1 items-center justify-center gap-2 py-3 text-xs font-medium transition-colors duration-150 ${
+                tab === id ? 'border-b-2 acc-tab-active' : 'text-white/40 hover:text-white/70'
               }`}
               onClick={() => setTab(id)}
             >

@@ -41,6 +41,7 @@ export const editor = signal(null); // text editor overlay
 export const preview = signal(null); // preview overlay
 export const connectOpen = signal(false);
 export const storageOpen = signal(false);
+export const archiveDialog = signal(null); // { mode: 'compress'|'extract', entries, format? }
 export const cloudError = signal('');
 export const cloudLoading = signal(false);
 export const authIssue = signal(null); // config whose token was rejected

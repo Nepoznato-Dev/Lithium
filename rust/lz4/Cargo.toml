@@ -1,0 +1,12 @@
+[package]
+name = "lz4"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium LZ4 compression WASM"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }
+lz4_flex = { version = "0.11", default-features = false, features = ["safe-encode", "safe-decode"] }

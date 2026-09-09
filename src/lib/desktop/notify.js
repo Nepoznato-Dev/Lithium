@@ -6,10 +6,8 @@
  * Components can subscribe to history changes via `subscribeToHistory` to
  * render a notification center (bell badge, tray panel, etc).
  *
- * Uses Rust/WASM for history filtering and manipulation when available.
+ * Uses inline JS for history filtering and manipulation.
  */
-
-import { notifyFilterSync, notifyMarkAllReadSync, notifyMarkReadSync, notifyDismissSync, notifyUnreadCountSync } from '../core';
 
 const EVENT_NAME = 'lithium:notify';
 const HISTORY_EVENT = 'lithium:notify-history';
@@ -21,19 +19,10 @@ function readHistory() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    
-    // Try native filtering
-    const cutoff = Date.now() - MAX_AGE_MS;
-    const native = notifyFilterSync(raw, cutoff);
-    if (native !== null) {
-      const parsed = JSON.parse(native);
-      if (Array.isArray(parsed)) return parsed.slice(0, MAX_HISTORY);
-    }
-    
-    // JS fallback
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(entry => entry && entry.id && entry.ts >= cutoff);
+    const cutoff = Date.now() - MAX_AGE_MS;
+    return parsed.filter(entry => entry && entry.id && entry.ts >= cutoff).slice(0, MAX_HISTORY);
   } catch {
     return [];
   }
@@ -103,13 +92,9 @@ export function unreadCount() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return 0;
-    
-    // Try native count
-    const native = notifyUnreadCountSync(raw);
-    if (native !== null) return native;
-    
-    // JS fallback
-    return readHistory().filter(entry => !entry.read).length;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return 0;
+    return parsed.filter(e => !e.read).length;
   } catch {
     return 0;
   }
@@ -118,21 +103,6 @@ export function unreadCount() {
 export function markAllRead() {
   const list = readHistory();
   if (list.every(entry => entry.read)) return;
-  
-  // Try native
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    const native = notifyMarkAllReadSync(raw);
-    if (native !== null) {
-      try {
-        writeHistory(JSON.parse(native));
-        emitHistory();
-        return;
-      } catch { /* fall through to JS */ }
-    }
-  }
-  
-  // JS fallback
   writeHistory(list.map(entry => entry.read ? entry : { ...entry, read: true }));
   emitHistory();
 }
@@ -140,21 +110,6 @@ export function markAllRead() {
 export function markRead(id) {
   const list = readHistory();
   let changed = false;
-  
-  // Try native
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    const native = notifyMarkReadSync(raw, id);
-    if (native !== null) {
-      try {
-        writeHistory(JSON.parse(native));
-        emitHistory();
-        return;
-      } catch { /* fall through to JS */ }
-    }
-  }
-  
-  // JS fallback
   const next = list.map(entry => {
     if (entry.id === id && !entry.read) {
       changed = true;
@@ -168,20 +123,6 @@ export function markRead(id) {
 }
 
 export function dismissNotification(id) {
-  // Try native
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    const native = notifyDismissSync(raw, id);
-    if (native !== null) {
-      try {
-        writeHistory(JSON.parse(native));
-        emitHistory();
-        return;
-      } catch { /* fall through to JS */ }
-    }
-  }
-  
-  // JS fallback
   const list = readHistory();
   const next = list.filter(entry => entry.id !== id);
   if (next.length === list.length) return;

@@ -1,21 +1,25 @@
-import React from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import Icon from '../../Icon';
 import DesktopWindow from '../DesktopWindow';
 import ContextMenu from '../ContextMenu';
-import CommandPalette from '../CommandPalette';
-import TaskView from '../TaskView';
-import { AppIcon } from '../DesktopApps';
+import { AppIcon, PngIcon } from '../DesktopApps';
 import { notify } from '../../../lib/desktop/notify';
-import { purgeTrash } from '../../../lib/fileSystem';
-import { weatherEmoji, unitSymbol, weatherDescription } from '../../../lib/deviceContext';
+import { getActiveModel } from '../../../lib/services/aiService';
+import { isDndEnabled } from '../../../lib/services/notificationService';
+import { storage as localStorageStorage } from '../../../lib/storage';
+import { weatherEmoji, weatherPng, unitSymbol, weatherDescription } from '../../../lib/deviceContext';
 import { SEARCH_ENGINES } from '../../../lib/settings';
 import { CalendarPopup, PerfFooterButton, PerfPopup, StartButton, StatusTime, TaskbarClock, useSystemMetrics } from '../DesktopTickers';
 import { WALLPAPERS } from './wallpapers';
 import DesktopIcons from './DesktopIcons';
-import NotificationCenter from './NotificationCenter';
-import QuickActionsPanel from './QuickActionsPanel';
-import WeatherFlyout from './WeatherFlyout';
 import useDesktopState from './useDesktopState';
+
+// Lazy-load overlay components (only rendered when their popups are open)
+const CommandPalette = lazy(() => import('../CommandPalette'));
+const NotificationCenter = lazy(() => import('./NotificationCenter'));
+const QuickActionsPanel = lazy(() => import('./QuickActionsPanel'));
+const WeatherFlyout = lazy(() => import('./WeatherFlyout'));
+const TaskView = lazy(() => import('../TaskView'));
 
 // useSystemMetrics is re-exported for backward compat.
 export { useSystemMetrics } from '../DesktopTickers';
@@ -23,7 +27,7 @@ export { useSystemMetrics } from '../DesktopTickers';
 export default function DesktopView() {
   const s = useDesktopState();
   const {
-    windows, apps, getApp, settings, openWindow, updateWindow, focusWindow, closeWindow, focusApp,
+    windows, apps, getApp, settings, updateSetting, openWindow, updateWindow, focusWindow, closeWindow, focusApp,
     online, netSpeed, battery, batteryTooltip, networkTooltip,
     weather, weatherOpen, setWeatherOpen, aiOutlook, locationInfo, newsItems, refreshWeather,
     altTab, altTabRef,
@@ -64,6 +68,25 @@ export default function DesktopView() {
         ? { backgroundImage: yukiWallpaper.gradient || 'linear-gradient(135deg, #0f1117, #1e1b4b)' }
         : { backgroundColor: yukiWallpaper.backgroundColor || '#0f1117' }
     : {};
+
+  /* Profile switcher dropdown state */
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+
+  /* All apps overlay in start menu */
+  const [allAppsView, setAllAppsView] = useState(false);
+
+  /* Command palette (Ctrl/Cmd+K) — lazy-loaded */
+  const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = event => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCmdPaletteOpen(v => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   if (shutdown) {
     return (
@@ -145,30 +168,41 @@ export default function DesktopView() {
 
       {/* Task view overlay */}
       {taskViewOpen && (
-        <TaskView
-          windows={windows}
-          onSelect={id => { updateWindow(id, { minimized: false }); focusWindow(id); setTaskViewOpen(false); }}
-          onCloseWindow={id => closeWindow(id)}
-          onCloseAll={() => { closeAllWindows(); setTaskViewOpen(false); }}
-          onClose={() => setTaskViewOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <TaskView
+            windows={windows}
+            onSelect={id => { updateWindow(id, { minimized: false }); focusWindow(id); setTaskViewOpen(false); }}
+            onCloseWindow={id => closeWindow(id)}
+            onCloseAll={() => { closeAllWindows(); setTaskViewOpen(false); }}
+            onClose={() => setTaskViewOpen(false)}
+          />
+        </Suspense>
       )}
 
-      {/* Command palette (Ctrl/Cmd+K) */}
-      <CommandPalette
-        apps={apps}
-        onLaunch={launchApp}
-        onLock={() => window.dispatchEvent(new CustomEvent('lithium:lock-screen'))}
-        onEmptyTrash={async () => {
-          if (fsTrashedCount === 0) { notify({ title: 'Recycle Bin is already empty', tone: 'info' }); return; }
-          if (!window.confirm(`Permanently delete ${fsTrashedCount} item${fsTrashedCount === 1 ? '' : 's'} from the Recycle Bin? This cannot be undone.`)) return;
-          try { setFsTree(await purgeTrash(fsTree)); } catch (err) { notify({ title: 'Could not empty Recycle Bin', body: err.message, tone: 'error' }); }
-        }}
-        onOpenSettings={() => launchApp('settings')}
-        onOpenNotifications={() => { setNotifCenterOpen(true); }}
-        onShowDesktop={() => windows.forEach(item => updateWindow(item.id, { minimized: true }))}
-        onTaskView={() => setTaskViewOpen(true)}
-      />
+      {/* Command palette (Ctrl/Cmd+K) — lazy-loaded */}
+      {cmdPaletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette
+            open={cmdPaletteOpen}
+            onClose={() => setCmdPaletteOpen(false)}
+            apps={apps}
+            onLaunch={launchApp}
+            onLock={() => window.dispatchEvent(new CustomEvent('lithium:lock-screen'))}
+            onEmptyTrash={async () => {
+              if (fsTrashedCount === 0) { notify({ title: 'Recycle Bin is already empty', tone: 'info' }); return; }
+              if (!window.confirm(`Permanently delete ${fsTrashedCount} item${fsTrashedCount === 1 ? '' : 's'} from the Recycle Bin? This cannot be undone.`)) return;
+              try {
+                const { purgeTrash } = await import('../../../lib/fileSystem');
+                setFsTree(await purgeTrash(fsTree));
+              } catch (err) { notify({ title: 'Could not empty Recycle Bin', body: err.message, tone: 'error' }); }
+            }}
+            onOpenSettings={() => launchApp('settings')}
+            onOpenNotifications={() => { setNotifCenterOpen(true); }}
+            onShowDesktop={() => windows.forEach(item => updateWindow(item.id, { minimized: true }))}
+            onTaskView={() => setTaskViewOpen(true)}
+          />
+        </Suspense>
+      )}
 
       {/* Desktop notifications */}
       <div className="nx-toast-container">
@@ -205,7 +239,7 @@ export default function DesktopView() {
           {pinnedApps.map(app => {
             return (
               <button key={app.id} className="nx-pinned-btn" onClick={event => launchApp(app, { newWindow: event.shiftKey })} onContextMenu={event => pinnedAppContextMenu(event, app)} title={`${app.name} (Shift+Click opens a new window, right-click for options)`}>
-                {taskbarPrefs.buttons !== 'labels' && <Icon name={app.icon} size={18} />}
+                {taskbarPrefs.buttons !== 'labels' && <AppIcon icon={app.icon} iconFile={app.iconFile} color={app.color} size={16} />}
                 {taskbarPrefs.buttons !== 'icons' && <span className="nx-task-label">{app.name}</span>}
               </button>
             );
@@ -243,7 +277,7 @@ export default function DesktopView() {
           >
             {weather?.data ? (
               <>
-                <span className="nx-weather-emoji">{weatherEmoji(weather.data.current?.weather_code, weather.data.current?.is_day)}</span>
+                <PngIcon name={weatherPng(weather.data.current?.weather_code, weather.data.current?.is_day)} size={20} />
                 <span className="nx-weather-text">
                   <span>{Math.round(weather.data.current.temperature_2m)}{unitSymbol(weather.unit)}</span>
                   <span className="nx-weather-cond">{weatherDescription(weather.data.current?.weather_code)}</span>
@@ -251,7 +285,7 @@ export default function DesktopView() {
               </>
             ) : (
               <span className="nx-weather-text">
-                <span className="nx-weather-emoji">🌐</span>
+                <PngIcon name="weather-fog" size={20} />
                 <span className="nx-weather-cond">Enable weather</span>
               </span>
             )}
@@ -259,12 +293,37 @@ export default function DesktopView() {
 
           {/* System tray — clicking any item opens Quick Settings */}
           <div className="nx-tray">
+            {/* Privacy shield indicator */}
+            {(() => {
+              const shield = settings.privacy?.shieldLevel ?? 'standard';
+              if (shield === 'off') return null;
+              return (
+                <button className="nx-tray-item" title={`Privacy shields: ${shield}`} onClick={event => { event.stopPropagation(); launchApp('settings'); }}>
+                  <PngIcon name={shield === 'aggressive' ? 'shield-aggressive' : 'shield-standard'} size={15} />
+                </button>
+              );
+            })()}
+
+            {/* AI status indicator */}
+            {getActiveModel() && (
+              <button className="nx-tray-item" title={`AI: ${getActiveModel()}`} onClick={event => { event.stopPropagation(); launchApp('ai-hub'); }}>
+                <Icon name="BrainCircuit" size={15} strokeWidth={2} color="#a78bfa" />
+              </button>
+            )}
+
+            {/* DND indicator */}
+            {isDndEnabled() && (
+              <button className="nx-tray-item" title="Do Not Disturb is on" onClick={event => { event.stopPropagation(); setQuickSettingsOpen(v => !v); }}>
+                <Icon name="Moon" size={15} strokeWidth={2} color="#f59e0b" />
+              </button>
+            )}
+
             <button className="nx-tray-item" title={networkTooltip} onClick={event => { event.stopPropagation(); setQuickSettingsOpen(v => !v); setVolumePopupOpen(false); setNotifCenterOpen(false); }}>
-              {online ? <Icon name="Wifi" size={16} color="#10b981" strokeWidth={2} /> : <Icon name="WifiOff" size={16} color="#ef4444" strokeWidth={2} />}
+              <PngIcon name={online ? 'wifi-on' : 'wifi-off'} size={16} />
             </button>
 
             <button className="nx-tray-item" title={`Volume: ${soundLevel}%`} onClick={event => { event.stopPropagation(); setQuickSettingsOpen(v => !v); setVolumePopupOpen(false); setNotifCenterOpen(false); }}>
-              <Icon name={volumeIconName} size={16} strokeWidth={2} color={volumeColor} />
+              <PngIcon name={soundLevel === 0 ? 'volume-muted' : soundLevel < 50 ? 'volume-low' : 'volume-high'} size={16} />
             </button>
 
             <button
@@ -273,7 +332,7 @@ export default function DesktopView() {
               onClick={event => { event.stopPropagation(); setNotifCenterOpen(value => !value); setQuickSettingsOpen(false); }}
               style={{ position: 'relative' }}
             >
-              <Icon name="Bell" size={15} strokeWidth={2} color={notifUnread > 0 ? '#22d3ee' : '#888'} />
+              <PngIcon name={notifUnread > 0 ? 'bell-active' : 'bell'} size={15} />
               {notifUnread > 0 && (
                 <span aria-label={`${notifUnread} unread`} className="nx-tray-badge">
                   {notifUnread > 9 ? '9+' : notifUnread}
@@ -319,7 +378,7 @@ export default function DesktopView() {
               return (
                 <button key={app.id} className="nx-menu-item" style={{ padding: '7px 10px', borderRadius: 6 }} onClick={() => togglePin(app.id)}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                    <Icon name={app.icon} size={15} color={app.color} />
+                    <AppIcon icon={app.icon} iconFile={app.iconFile} color={app.color} size={15} />
                     <span style={{ fontSize: 12 }}>{app.name}</span>
                   </span>
                   <span style={{ color: pinned ? '#22d3ee' : 'rgba(255,255,255,0.25)', fontSize: 12 }}>{pinned ? '✓' : '—'}</span>
@@ -331,7 +390,7 @@ export default function DesktopView() {
           <button
             className="nx-menu-item"
             style={{ padding: '7px 10px', borderRadius: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}
-            onClick={() => setPinnedTaskbar(['games', 'media-player', 'browser', 'calculator'])}
+            onClick={() => setPinnedTaskbar(['media-player', 'browser', 'calculator'])}
           >
             Restore default pins
           </button>
@@ -362,18 +421,20 @@ export default function DesktopView() {
 
       {/* Weather flyout */}
       {weatherOpen && (
-        <WeatherFlyout
-          weather={weather}
-          locationInfo={locationInfo}
-          aiOutlook={aiOutlook}
-          newsItems={newsItems}
-          refreshWeather={refreshWeather}
-          setWeatherOpen={setWeatherOpen}
-          getApp={getApp}
-          openWindow={openWindow}
-          launchApp={launchApp}
-          openDynMenu={openDynMenu}
-        />
+        <Suspense fallback={null}>
+          <WeatherFlyout
+            weather={weather}
+            locationInfo={locationInfo}
+            aiOutlook={aiOutlook}
+            newsItems={newsItems}
+            refreshWeather={refreshWeather}
+            setWeatherOpen={setWeatherOpen}
+            getApp={getApp}
+            openWindow={openWindow}
+            launchApp={launchApp}
+            openDynMenu={openDynMenu}
+          />
+        </Suspense>
       )}
 
       {/* Slide-up performance popup */}
@@ -408,23 +469,31 @@ export default function DesktopView() {
       {calendarOpen && <CalendarPopup />}
 
       {/* Notification center */}
-      {notifCenterOpen && <NotificationCenter onCtxMenu={openDynMenu} />}
+      {notifCenterOpen && (
+        <Suspense fallback={null}>
+          <NotificationCenter onCtxMenu={openDynMenu} />
+        </Suspense>
+      )}
 
       {/* Quick settings panel */}
       {quickSettingsOpen && (
         <>
           <div className="nx-qs-backdrop" onClick={closePopups} />
-          <QuickActionsPanel
-            settings={settings}
-            soundLevel={soundLevel}
-            setSoundLevel={setSoundLevel}
-            prevVolumeRef={prevVolumeRef}
-            online={online}
-            netSpeed={netSpeed}
-            battery={battery}
-            onClose={() => setQuickSettingsOpen(false)}
-            onOpenSettings={() => launchApp('settings')}
-          />
+          <Suspense fallback={null}>
+            <QuickActionsPanel
+              settings={settings}
+              update={(path, value) => updateSetting(path, value)}
+              soundLevel={soundLevel}
+              setSoundLevel={setSoundLevel}
+              prevVolumeRef={prevVolumeRef}
+              online={online}
+              netSpeed={netSpeed}
+              battery={battery}
+              onClose={() => setQuickSettingsOpen(false)}
+              onOpenSettings={() => launchApp('settings')}
+              windows={windows}
+            />
+          </Suspense>
         </>
       )}
 
@@ -434,13 +503,13 @@ export default function DesktopView() {
           <div className="nx-start-backdrop" onClick={closePopups} />
           <div className={`nx-start-menu ${taskbarPrefs.position === 'bottom' ? `align-${taskbarPrefs.startAlign}` : ''}`} data-category={appCategory} onClick={event => event.stopPropagation()}>
             {/* Search */}
-            <div style={{ padding: '24px 24px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ padding: '28px 28px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <div className="nx-start-search-wrap">
                 <Icon name="Search" size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }} />
                 <input
                   className="nx-start-search"
                   type="text"
-                  placeholder="Search apps or web\u2026"
+                  placeholder="Search apps or web…"
                   value={searchQuery}
                   onChange={event => setSearchQuery(event.target.value)}
                   onKeyDown={event => {
@@ -452,7 +521,7 @@ export default function DesktopView() {
                         const searchUrl = SEARCH_ENGINES[settings.browser?.searchEngine]?.url || SEARCH_ENGINES.duckduckgo.url;
                         const target = getApp('browser');
                         if (target) {
-                          openWindow({ id: target.id, title: target.name, icon: <Icon name={target.icon} size={16} />, component: <Browser initialUrl={`${searchUrl}${encodeURIComponent(searchQuery)}`} /> , replaceTab: true, newWindow: false, x: 120, y: 60, width: 1000, height: 700 });
+                          openWindow({ id: target.id, title: target.name, icon: <AppIcon icon={target.icon} iconFile={target.iconFile} color={target.color} size={16} />, component: <Browser initialUrl={`${searchUrl}${encodeURIComponent(searchQuery)}`} /> , replaceTab: true, newWindow: false, x: 120, y: 60, width: 1000, height: 700 });
                           setStartMenuOpen(false);
                           setSearchQuery('');
                         }
@@ -464,21 +533,16 @@ export default function DesktopView() {
               </div>
 
               {/* Pinned apps grid */}
-              {!query && (
+              {!query && !allAppsView && (
                 <div className="nx-pinned-section">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                     <div className="nx-start-heading" style={{ margin: 0 }}>Pinned</div>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="nx-grid-toggle" onClick={() => setSortMode(m => m === 'alpha' ? 'freq' : 'alpha')} title={sortMode === 'alpha' ? 'Sort: A-Z' : 'Sort: Most used'}>
-                        <Icon name={sortMode === 'alpha' ? 'ArrowDownAZ' : 'Flame'} size={12} />
-                      </button>
-                      <button className="nx-grid-toggle" onClick={() => setAppGridView(v => v === 'grid' ? 'list' : 'grid')} title={appGridView === 'grid' ? 'Switch to list view' : 'Switch to grid view'}>
-                        <Icon name={appGridView === 'grid' ? 'List' : 'LayoutGrid'} size={12} />
-                      </button>
-                    </div>
+                    <button className="nx-start-all-apps-btn" onClick={() => setAllAppsView(true)}>
+                      All apps <Icon name="ChevronRight" size={12} />
+                    </button>
                   </div>
                   <div className="nx-pinned-grid">
-                    {pinnedAppsOrdered.slice(0, 8).map((app, i) => (
+                    {pinnedAppsOrdered.slice(0, 12).map((app, i) => (
                       <button
                         key={app.id}
                         className={`nx-pinned-tile${dragPinned === app.id ? ' dragging' : ''}${NEW_APP_IDS.has(app.id) ? ' is-new' : ''}`}
@@ -511,7 +575,7 @@ export default function DesktopView() {
                       >
                         {getAppBadge(app.id) != null && <span className="nx-app-badge">{getAppBadge(app.id)}</span>}
                         {NEW_APP_IDS.has(app.id) && <span className="nx-new-dot" />}
-                        <AppIcon icon={app.icon} color={app.color} size={20} />
+                        <AppIcon icon={app.icon} iconFile={app.iconFile} color={app.color} size={24} />
                         <span className="nx-pinned-tile-label">{app.name}</span>
                       </button>
                     ))}
@@ -519,114 +583,36 @@ export default function DesktopView() {
                 </div>
               )}
 
-              {/* Category tabs */}
-              {!query && (
-                <div className="nx-category-tabs">
-                  {APP_CATEGORIES.map(cat => (
-                    <button
-                      key={cat.id}
-                      className={`nx-category-tab${appCategory === cat.id ? ' active' : ''}`}
-                      onClick={() => setAppCategory(cat.id)}
-                    >
-                      <Icon name={cat.icon} size={11} />
-                      {cat.label}
+              {/* Search results */}
+              {query && (
+                <div style={{ padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div className="nx-start-heading" style={{ marginTop: 6 }}>Results</div>
+                  {filteredApps.map(app => (
+                    <button key={app.id} className="nx-app-row" onClick={event => launchApp(app, { newWindow: event.shiftKey })} onMouseEnter={() => setHoveredApp(app)} onMouseLeave={() => setHoveredApp(null)} onContextMenu={event => { event.stopPropagation(); event.preventDefault(); openDynMenu(event, [
+                      { id: 'open', label: `Open ${app.name}`, icon: app.icon, action: () => launchApp(app) },
+                      { id: 'new-window', label: 'Open in new window', icon: 'ExternalLink', action: () => launchApp(app, { newWindow: true }) },
+                      { id: 'sep', type: 'separator' },
+                      { id: 'pin', label: pinnedTaskbar.includes(app.id) ? 'Unpin from Start' : 'Pin to Start', icon: 'Pin', action: () => togglePin(app.id) },
+                    ]); }}>
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24 }}>
+                        <AppIcon icon={app.icon} iconFile={app.iconFile} color={app.color} size={18} />
+                      </span>
+                      <span style={{ flex: 1, fontWeight: 400 }}>{app.name}</span>
                     </button>
                   ))}
-                </div>
-              )}
-
-              {/* Body: Apps grid/list | Recent + Groups */}
-              <div className="nx-start-body">
-                <div className="nx-start-col">
-                  {query ? (
-                    <>
-                      <div className="nx-start-heading" style={{ marginTop: 6 }}>Results</div>
-                      {filteredApps.map(app => (
-                        <button key={app.id} className="nx-app-row" onClick={event => launchApp(app, { newWindow: event.shiftKey })} onMouseEnter={() => setHoveredApp(app)} onMouseLeave={() => setHoveredApp(null)} onContextMenu={event => { event.stopPropagation(); event.preventDefault(); openDynMenu(event, [
-                          { id: 'open', label: `Open ${app.name}`, icon: app.icon, action: () => launchApp(app) },
-                          { id: 'new-window', label: 'Open in new window', icon: 'ExternalLink', action: () => launchApp(app, { newWindow: true }) },
-                          { id: 'sep', type: 'separator' },
-                          { id: 'pin', label: pinnedTaskbar.includes(app.id) ? 'Unpin from Start' : 'Pin to Start', icon: 'Pin', action: () => togglePin(app.id) },
-                        ]); }}>
-                          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24 }}>
-                            <Icon name={app.icon} size={18} color={app.color} />
-                          </span>
-                          <span style={{ flex: 1, fontWeight: 400 }}>{app.name}</span>
-                        </button>
-                      ))}
-                    </>
-                  ) : appGridView === 'grid' ? (
-                    <div className="nx-all-apps-grid">
-                      {filteredApps.map((app, i) => (
-                        <button
-                          key={app.id}
-                          className={`nx-app-grid-tile${gridFocus === i ? ' focused' : ''}${NEW_APP_IDS.has(app.id) ? ' is-new' : ''}`}
-                          style={{ animationDelay: `${i * 25}ms` }}
-                          onClick={event => launchApp(app, { newWindow: event.shiftKey })}
-                          onMouseEnter={() => setHoveredApp(app)}
-                          onMouseLeave={() => setHoveredApp(null)}
-                          onContextMenu={event => {
-                            event.stopPropagation();
-                            event.preventDefault();
-                            openDynMenu(event, [
-                              { id: 'pin', label: pinnedTaskbar.includes(app.id) ? 'Unpin from Start' : 'Pin to Start', icon: 'Pin', action: () => togglePin(app.id) },
-                            ]);
-                          }}
-                        >
-                          {getAppBadge(app.id) != null && <span className="nx-app-badge">{getAppBadge(app.id)}</span>}
-                          {NEW_APP_IDS.has(app.id) && <span className="nx-new-dot" />}
-                          <AppIcon icon={app.icon} color={app.color} size={20} />
-                          <span className="nx-app-grid-name">{app.name}</span>
-                        </button>
-                      ))}
-                      {filteredApps.length === 0 && (
-                        <div style={{ gridColumn: '1 / -1', color: 'rgba(255,255,255,0.4)', fontSize: 12, textAlign: 'center', padding: 20 }}>No apps in this category.</div>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      {filteredApps.map(app => (
-                        <button key={app.id} className="nx-app-row" onClick={event => launchApp(app, { newWindow: event.shiftKey })} onMouseEnter={() => setHoveredApp(app)} onMouseLeave={() => setHoveredApp(null)} onContextMenu={event => { event.stopPropagation(); event.preventDefault(); openDynMenu(event, [
-                          { id: 'open', label: `Open ${app.name}`, icon: app.icon, action: () => launchApp(app) },
-                          { id: 'new-window', label: 'Open in new window', icon: 'ExternalLink', action: () => launchApp(app, { newWindow: true }) },
-                          { id: 'sep', type: 'separator' },
-                          { id: 'pin', label: pinnedTaskbar.includes(app.id) ? 'Unpin from Start' : 'Pin to Start', icon: 'Pin', action: () => togglePin(app.id) },
-                        ]); }}>
-                          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24 }}>
-                            <Icon name={app.icon} size={18} color={app.color} />
-                          </span>
-                          <span style={{ flex: 1, fontWeight: 400 }}>{app.name}</span>
-                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.desc}</span>
-                        </button>
-                      ))}
-                    </>
-                  )}
-                  {/* App preview card */}
-                  {previewApp && !query && (
-                    <div className="nx-app-preview-card">
-                      <AppIcon icon={previewApp.icon} color={previewApp.color} size={24} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{previewApp.name}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>{previewApp.desc}</div>
-                      </div>
-                      <button className="nx-grid-toggle" onClick={() => launchApp(previewApp)} title="Open">
-                        <Icon name="ArrowRight" size={12} />
-                      </button>
-                    </div>
-                  )}
-                  {filteredApps.length === 0 && noteResults.length === 0 && fileResults.length === 0 && query && (
+                  {filteredApps.length === 0 && noteResults.length === 0 && fileResults.length === 0 && (
                     <>
                       <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>No app results for &ldquo;{searchQuery}&rdquo;</div>
                       <button className="nx-app-row" style={{ marginTop: 8 }} onClick={() => {
                         const searchUrl = SEARCH_ENGINES[settings.browser?.searchEngine]?.url || SEARCH_ENGINES.duckduckgo.url;
                         const target = getApp('browser');
                         if (target) {
-                          openWindow({ id: target.id, title: target.name, icon: <Icon name={target.icon} size={16} />, component: <Browser initialUrl={`${searchUrl}${encodeURIComponent(searchQuery)}`} />, replaceTab: true, newWindow: false, x: 120, y: 60, width: 1000, height: 700 });
+                          openWindow({ id: target.id, title: target.name, icon: <AppIcon icon={target.icon} iconFile={target.iconFile} color={target.color} size={16} />, component: <Browser initialUrl={`${searchUrl}${encodeURIComponent(searchQuery)}`} />, replaceTab: true, newWindow: false, x: 120, y: 60, width: 1000, height: 700 });
                           setStartMenuOpen(false);
                           setSearchQuery('');
                         }
                       }}>
-                        <Icon name="Globe" size={16} color="#06b6d4" />
+                        <PngIcon name="browser" size={16} />
                         <span style={{ flex: 1, fontWeight: 400 }}>Search the web</span>
                         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>Enter \u21B5</span>
                       </button>
@@ -655,115 +641,134 @@ export default function DesktopView() {
                     </div>
                   )}
                 </div>
+              )}
 
-                <div className="nx-start-col right">
-                  {/* Recently updated */}
-                  <div>
-                    <div className="nx-start-heading" style={{ fontSize: 10, marginBottom: 10 }}>What&apos;s new</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {[{ id: 'code-studio', note: 'Code Studio now supports multi-file projects' }, { id: 'notepad', note: 'Notes got Obsidian-style wiki links' }, { id: 'games', note: 'Hydrux has 4 new HTML games' }].map(item => {
-                        const app = getApp(item.id);
-                        if (!app) return null;
-                        return (
-                          <button key={item.id} className="nx-app-row small" onClick={() => launchApp(app)} onMouseEnter={() => setHoveredApp(app)} onMouseLeave={() => setHoveredApp(null)}>
-                            <Icon name={app.icon} size={14} color={app.color} />
-                            <span style={{ flex: 1, fontSize: 11, fontWeight: 400, color: 'rgba(255,255,255,0.7)' }}>{item.note}</span>
-                            <span className="nx-new-dot" style={{ position: 'static', width: 6, height: 6 }} />
-                          </button>
-                        );
-                      })}
-                    </div>
+              {/* Recommended section */}
+              {!query && (
+                <div className="nx-start-recommended">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', marginBottom: 10 }}>
+                    <div className="nx-start-heading" style={{ margin: 0 }}>Recommended</div>
                   </div>
-
-                  {/* Recent */}
-                  <div>
-                    <div className="nx-start-heading" style={{ fontSize: 10, marginBottom: 10 }}>Recent</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {recentApps.map(getApp).filter(Boolean).map(app => {
-                        return (
-                          <button key={app.id} className="nx-app-row small" onClick={event => launchApp(app, { newWindow: event.shiftKey })} onMouseEnter={() => setHoveredApp(app)} onMouseLeave={() => setHoveredApp(null)}>
-                            <Icon name={app.icon} size={18} color={app.color} />
-                            <span style={{ flex: 1, fontWeight: 400 }}>{app.name}</span>
-                          </button>
-                        );
-                      })}
-                      {recentApps.length === 0 && <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>Launch an app and it will show up here.</div>}
-                    </div>
+                  <div style={{ padding: '0 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                    {recentApps.map(getApp).filter(Boolean).slice(0, 6).map(app => (
+                      <button key={app.id} className="nx-start-recommended-row" onClick={event => launchApp(app, { newWindow: event.shiftKey })} onMouseEnter={() => setHoveredApp(app)} onMouseLeave={() => setHoveredApp(null)}>
+                        <AppIcon icon={app.icon} iconFile={app.iconFile} color={app.color} size={20} />
+                        <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                          <div style={{ fontSize: 12, fontWeight: 500 }}>{app.name}</div>
+                          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.desc}</div>
+                        </div>
+                      </button>
+                    ))}
+                    {recentApps.length === 0 && <div style={{ gridColumn: '1 / -1', color: 'rgba(255,255,255,0.35)', fontSize: 12, padding: '8px 0' }}>Launch an app and it will show up here.</div>}
                   </div>
+                </div>
+              )}
 
-                  {/* Custom groups */}
-                  {customGroups.map((group, groupIndex) => (
-                    <div key={group.name}>
-                      <div className="nx-start-heading" style={{ fontSize: 10, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {group.name}
-                        <button
-                          onClick={() => setCustomGroups(prev => prev.filter((_, i) => i !== groupIndex))}
-                          style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 10, padding: 2 }}
-                          title="Delete group"
-                        >
-                          ×
+              {/* What's new */}
+              {!query && (
+                <div style={{ padding: '12px 24px 0' }}>
+                  <div className="nx-start-heading" style={{ fontSize: 10, marginBottom: 10 }}>What&apos;s new</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {[{ id: 'code-studio', note: 'Code Studio now supports multi-file projects' }, { id: 'notepad', note: 'Notes got Obsidian-style wiki links' }].map(item => {
+                      const app = getApp(item.id);
+                      if (!app) return null;
+                      return (
+                        <button key={item.id} className="nx-app-row small" onClick={() => launchApp(app)} onMouseEnter={() => setHoveredApp(app)} onMouseLeave={() => setHoveredApp(null)}>
+                          <AppIcon icon={app.icon} iconFile={app.iconFile} color={app.color} size={14} />
+                          <span style={{ flex: 1, fontSize: 11, fontWeight: 400, color: 'rgba(255,255,255,0.7)' }}>{item.note}</span>
+                          <span className="nx-new-dot" style={{ position: 'static', width: 6, height: 6 }} />
                         </button>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {group.items.map(getApp).filter(Boolean).map(app => {
-                          const Icon = app.icon;
-                          return (
-                            <button key={app.id} className="nx-app-row small" onClick={event => launchApp(app, { newWindow: event.shiftKey })} onMouseEnter={() => setHoveredApp(app)} onMouseLeave={() => setHoveredApp(null)}>
-                              <Icon size={18} color={app.color} />
-                              <span style={{ flex: 1, fontWeight: 400 }}>{app.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-
-                  <button
-                    className="nx-new-group"
-                    onClick={() => {
-                      const groupName = window.prompt('Group name:');
-                      if (groupName?.trim()) setCustomGroups(prev => [...prev, { name: groupName.trim(), items: [] }]);
-                    }}
-                  >
-                    + New Group
-                  </button>
-                </div>
-              </div>
-
-              {/* Status bar */}
-              <div className="nx-start-statusbar">
-                <PerfFooterButton onClick={() => { setStartMenuOpen(false); setPerfOpen(value => !value); }} />
-                {hoveredApp?.desc && <span className="nx-start-app-desc">✨ {hoveredApp.desc}</span>}
-                <div style={{ flex: 1 }} />
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                    <Icon name="Clock" size={14} />
-                    <StatusTime />
+                      );
+                    })}
                   </div>
-                  {battery && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: battery.level < 20 ? '#ff6b6b' : '#fff' }}>
-                      {battery.charging ? <Icon name="BatteryCharging" size={14} /> : <Icon name="Battery" size={14} />}
-                      <span>{battery.level}%</span>
-                    </div>
-                  )}
                 </div>
-              </div>
+              )}
+
+              {/* All apps overlay */}
+              {allAppsView && (
+                <div className="nx-all-apps-overlay">
+                  <div className="nx-all-apps-overlay-header">
+                    <button className="nx-all-apps-overlay-back" onClick={() => setAllAppsView(false)}>
+                      <Icon name="ChevronLeft" size={14} />
+                    </button>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>All apps</span>
+                  </div>
+                  <div className="nx-all-apps-overlay-body">
+                    <div className="nx-all-apps-grid">
+                      {startApps.map((app, i) => (
+                        <button
+                          key={app.id}
+                          className={`nx-app-grid-tile${gridFocus === i ? ' focused' : ''}${NEW_APP_IDS.has(app.id) ? ' is-new' : ''}`}
+                          style={{ animationDelay: `${i * 25}ms` }}
+                          onClick={event => launchApp(app, { newWindow: event.shiftKey })}
+                          onMouseEnter={() => setHoveredApp(app)}
+                          onMouseLeave={() => setHoveredApp(null)}
+                          onContextMenu={event => {
+                            event.stopPropagation();
+                            event.preventDefault();
+                            openDynMenu(event, [
+                              { id: 'pin', label: pinnedTaskbar.includes(app.id) ? 'Unpin from Start' : 'Pin to Start', icon: 'Pin', action: () => togglePin(app.id) },
+                            ]);
+                          }}
+                        >
+                          {getAppBadge(app.id) != null && <span className="nx-app-badge">{getAppBadge(app.id)}</span>}
+                          {NEW_APP_IDS.has(app.id) && <span className="nx-new-dot" />}
+                          <AppIcon icon={app.icon} iconFile={app.iconFile} color={app.color} size={24} />
+                          <span className="nx-app-grid-name">{app.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Footer: profile, settings, power */}
               <div className="nx-start-footer">
-                <button className="nx-profile-btn" onClick={() => launchApp('settings')} title="Open Settings to edit your profile">
-                  {avatar ? (
-                    <img src={avatar} alt="" className="nx-profile-avatar" style={{ objectFit: 'cover', background: 'transparent', fontSize: 0 }} />
-                  ) : (
-                    <span className="nx-profile-avatar">{settings.profile.username.charAt(0).toUpperCase() || 'U'}</span>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                  <button className="nx-profile-btn" style={{ flex: 1 }} onClick={() => setProfileDropdownOpen(v => !v)} title="Switch profile">
+                    {avatar ? (
+                      <img src={avatar} alt="" className="nx-profile-avatar" style={{ objectFit: 'cover', background: 'transparent', fontSize: 0 }} />
+                    ) : (
+                      <span className="nx-profile-avatar">{settings.profile.username.charAt(0).toUpperCase() || 'U'}</span>
+                    )}
+                    <span style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span>{settings.profile.username}</span>
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 400 }}>{settings.profiles?.list?.length > 1 ? `${settings.profiles.list.length} profiles` : 'Local user'}</span>
+                    </span>
+                    <Icon name="ChevronUp" size={12} style={{ marginLeft: 'auto', opacity: 0.4 }} />
+                  </button>
+
+                  {/* Profile dropdown */}
+                  {profileDropdownOpen && (
+                    <div className="nx-popup" style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4, minWidth: 'unset', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+                      {(settings.profiles?.list || []).map(profile => (
+                        <button key={profile.id} className="nx-menu-item" style={{ padding: '6px 10px', gap: 8 }} onClick={() => {
+                          if (profile.id !== settings.profiles.activeId) {
+                            updateSetting('profiles.activeId', profile.id);
+                            localStorageStorage.set('profile-avatar', profile.avatar || null);
+                            window.dispatchEvent(new CustomEvent('lithium:profile-changed', { detail: { profileId: profile.id } }));
+                          }
+                          setProfileDropdownOpen(false);
+                        }}>
+                          <span style={{ width: 24, height: 24, borderRadius: '50%', background: profile.avatar ? `url(${profile.avatar}) center/cover` : `linear-gradient(135deg, ${settings.theme?.accent || '#22d3ee'} 0%, #6366f1 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, color: profile.avatar ? 'transparent' : '#000', flexShrink: 0 }}>
+                            {profile.avatar || profile.name.charAt(0).toUpperCase()}
+                          </span>
+                          <span style={{ flex: 1, fontSize: 12 }}>{profile.name}</span>
+                          {profile.id === settings.profiles.activeId ? (
+                            <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(167,139,250,0.15)', color: '#a78bfa', fontWeight: 600 }}>Active</span>
+                          ) : (
+                            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Switch</span>
+                          )}
+                        </button>
+                      ))}
+                      <button className="nx-menu-item" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '6px 10px', fontSize: 11, color: 'rgba(255,255,255,0.5)' }} onClick={() => { setProfileDropdownOpen(false); launchApp('settings'); }}>
+                        <span className="flex items-center gap-2"><PngIcon name="settings" size={12} /> Manage profiles</span>
+                      </button>
+                    </div>
                   )}
-                  <span style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span>{settings.profile.username}</span>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 400 }}>Local user</span>
-                  </span>
-                </button>
+                </div>
                 <button className="nx-footer-icon" onClick={() => launchApp('settings')} title="Settings">
-                  <Icon name="Settings" size={18} />
+                  <PngIcon name="settings" size={18} />
                 </button>
                 <button className="nx-footer-icon danger" onClick={event => { event.stopPropagation(); setPowerMenuOpen(value => !value); }} title="Power menu">
                   <Icon name="Power" size={18} />

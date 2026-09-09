@@ -24,7 +24,7 @@ export async function initAuth() {
   authChecked.value = true;
 
   // Keep the signal in sync with auth state changes
-  onAuthStateChange((user) => {
+  await onAuthStateChange((user) => {
     authUser.value = user;
   });
 }

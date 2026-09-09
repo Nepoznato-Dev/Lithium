@@ -1,0 +1,11 @@
+[package]
+name = "storage"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium storage calc WASM"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }

@@ -3,7 +3,6 @@ import { notify } from './notify';
 import { storage } from '../storage/localStorage';
 import { loadTree, readEntryContent } from '../fileSystem';
 import { hydrate } from '../storage/unifiedStore';
-import { widgetFilterEntriesSync, widgetToggleEnabledSync, widgetStaleRunningIdsSync } from '../core';
 
 /**
  * Widget runtime — user-authored automation scripts stored as
@@ -26,7 +25,9 @@ let started = false;
 
 export function widgetEntries() {
   const tree = loadTree();
-  return widgetFilterEntriesSync(tree, WIDGETS_FOLDER_ID) || [];
+  if (!Array.isArray(tree)) return [];
+  return tree.filter(e => e.parentId === WIDGETS_FOLDER_ID && e.type === 'text' && (e.name || '').endsWith('.widget.js'))
+    .map(e => ({ id: e.id, name: e.name }));
 }
 
 export function listWidgets() {
@@ -80,8 +81,10 @@ export function setWidgetEnabled(id, enabled) {
     throw new Error(`no widget '${id}'`);
   }
   const list = storage.get(ENABLED_KEY, []);
-  const updated = widgetToggleEnabledSync(list, id, enabled) || list;
-  storage.set(ENABLED_KEY, updated);
+  const arr = Array.isArray(list) ? [...list] : [];
+  if (enabled) { if (!arr.includes(id)) arr.push(id); }
+  else { const idx = arr.indexOf(id); if (idx >= 0) arr.splice(idx, 1); }
+  storage.set(ENABLED_KEY, arr);
   if (enabled) startWidget(id);
   else stopWidget(id);
   window.dispatchEvent(new Event('lithium:widgets-changed'));
@@ -104,7 +107,8 @@ export function startEnabledWidgets() {
     const entries = widgetEntries();
     const validIds = entries.map(entry => entry.id);
     const runningIds = [...running.keys()];
-    const stale = widgetStaleRunningIdsSync(runningIds, validIds) || [];
+    const validSet = new Set(entries.map(entry => entry.id));
+    const stale = [...running.keys()].filter(id => !validSet.has(id));
     for (const id of stale) {
       stopWidget(id);
     }

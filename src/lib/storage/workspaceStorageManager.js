@@ -1,278 +1,259 @@
 /**
- * WorkspaceStorageManager — crash-safe persistence for desktop workspace state.
+ * WorkspaceStorageManager — checkpointed persistence for desktop workspace state.
  *
- * Uses a checkpoint + journal pattern on top of Lithium's existing IndexedDB:
- *   - Mutations are appended to a journal (fast, small writes).
- *   - Periodically the journal is folded into a compressed checkpoint (full snapshot).
- *   - On load: checkpoint is restored, then any journal entries after it are replayed.
- *   - On crash: at most one journal batch is lost; the checkpoint is always valid.
+ * Checkpoint + journal pattern on a dedicated IndexedDB:
+ *   1. Boot: load latest checkpoint (gzip-compressed full snapshot)
+ *   2. Replay journal entries (individual key→value mutations) on top
+ *   3. During use: mutations append to journal (cheap, single entries)
+ *   4. Periodically: flush journal → create new checkpoint (full snapshot)
+ *   5. On beforeunload: flush pending journal entries (fire-and-forget)
  *
- * This is ideal for workspace data (window positions, panel layouts, custom groups,
- * pinned apps, taskbar prefs) because:
- *   1. Writes are frequent but small — journal avoids rewriting the whole state.
- *   2. Crash safety matters — losing your desktop layout is frustrating.
- *   3. Reads are rare — only on page load — so checkpoint decompression is fine.
+ * Uses its own IndexedDB (`LithiumWorkspaceDB`) with two object stores
+ * instead of scanning the shared `kv` store — no key-prefix scanning overhead.
  *
- * Integrates with Lithium's existing `indexedDB.js` (openDB, idbGet, idbPut).
+ * Lightweight design choices vs. the Nexus source:
+ *   - No class wrapper — plain functions + module-level state (less overhead).
+ *   - Single checkpoint row (`id:'latest'`) — no version juggling.
+ *   - Journal auto-trimmed on every flush — bounded growth for free.
+ *   - Gzip via CompressionStream (zero dependencies).
  */
 
-import { openDB, idbGet, idbPut, idbDelete, idbKeys } from './indexedDB';
+// ─── Configuration ────────────────────────────────────────────────────────────
 
-// ─── Configuration ─────────────────────────────────────────────────────────────
-
-const CHECKPOINT_KEY = 'workspace-checkpoint';
-const JOURNAL_PREFIX = 'workspace-journal-';
-const CHECKPOINT_INTERVAL = 20; // Fold journal into checkpoint every N mutations.
+const DB_NAME = 'LithiumWorkspaceDB';
+const DB_VERSION = 1;
+const STORE_CP = 'checkpoints';
+const STORE_JOURNAL = 'journal';
+const FLUSH_DELAY_MS = 3000;
+const CHECKPOINT_INTERVAL_MS = 180_000; // 3 min
+const MAX_JOURNAL_ROWS = 2000;
 const SETTINGS_PREFIX = 'lithium_';
 
-// Workspace paths that are safe to persist (allowlist).
-const ALLOWED_KEYS = new Set([
-  'window-positions',
-  'panel-layouts',
-  'custom-groups',
-  'pinned-taskbar',
-  'taskbar-prefs',
-  'desktop-wallpaper',
-  'desktop-sound-level',
-  'recent-apps',
-  'split-snapshots',
-  'accent-color',
-  'dock-prefs',
-  'widget-layout',
-]);
+// ─── Module state ─────────────────────────────────────────────────────────────
 
-// ─── Internal state ────────────────────────────────────────────────────────────
-
-let cache = null; // In-memory mirror of the workspace state.
-let mutationCount = 0;
-let checkpointTimer = null;
+let db = null;
+let cache = {};
+let dirtyKeys = new Set();
+let flushTimer = null;
+let cpTimer = null;
 let ready = false;
 
-// ─── IndexedDB helpers ─────────────────────────────────────────────────────────
+// ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
-async function ensureDB() {
-  await openDB(); // Ensures the 'kv' store exists.
+const now = () => Date.now();
+const parse = (raw, fb = null) => { try { return JSON.parse(raw); } catch { return fb; } };
+
+async function gzip(text) {
+  if (typeof CompressionStream === 'undefined') return { enc: 'plain', data: text };
+  const s = new CompressionStream('gzip');
+  const w = s.writable.getWriter();
+  w.write(new TextEncoder().encode(text));
+  w.close();
+  const buf = await new Response(s.readable).arrayBuffer();
+  return { enc: 'gzip', data: Array.from(new Uint8Array(buf)) };
 }
 
-async function readCheckpoint() {
-  return idbGet('kv', CHECKPOINT_KEY).catch(() => null);
+async function ungzip(blob) {
+  if (!blob) return null;
+  if (blob.enc === 'plain') return blob.data;
+  if (blob.enc === 'gzip' && typeof DecompressionStream !== 'undefined') {
+    const s = new DecompressionStream('gzip');
+    const w = s.writable.getWriter();
+    w.write(new Uint8Array(blob.data));
+    w.close();
+    return new TextDecoder().decode(new Uint8Array(await new Response(s.readable).arrayBuffer()));
+  }
+  return null;
 }
 
-async function writeCheckpoint(data) {
-  const payload = {
-    version: 1,
-    timestamp: Date.now(),
-    data,
-  };
+// ─── IndexedDB plumbing ───────────────────────────────────────────────────────
 
-  // Compress with gzip when available (most modern browsers).
-  if (typeof CompressionStream !== 'undefined') {
-    try {
-      const json = JSON.stringify(payload);
-      const stream = new Response(json).body.pipeThrough(new CompressionStream('gzip'));
-      const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
-      await idbPut('kv', CHECKPOINT_KEY, { compressed, compressed: true });
-      return;
-    } catch {
-      // Fall through to uncompressed.
-    }
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onupgradeneeded = () => {
+      const idb = req.result;
+      if (!idb.objectStoreNames.contains(STORE_CP))
+        idb.createObjectStore(STORE_CP, { keyPath: 'id' });
+      if (!idb.objectStoreNames.contains(STORE_JOURNAL)) {
+        const js = idb.createObjectStore(STORE_JOURNAL, { keyPath: 'id', autoIncrement: true });
+        js.createIndex('ts', 'ts');
+      }
+    };
+  });
+}
+
+function txDone(tx) {
+  return new Promise((res, rej) => {
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+    tx.onabort = () => rej(tx.error || new Error('tx aborted'));
+  });
+}
+
+// ─── Core persistence ─────────────────────────────────────────────────────────
+
+async function restore() {
+  // 1. Load checkpoint.
+  const cpReq = db.transaction(STORE_CP, 'readonly').objectStore(STORE_CP).get('latest');
+  const cp = await new Promise(r => { cpReq.onsuccess = () => r(cpReq.result || null); });
+  if (cp?.blob) {
+    const text = await ungzip(cp.blob);
+    const parsed = parse(text);
+    if (parsed && typeof parsed === 'object') cache = parsed;
   }
 
-  await idbPut('kv', CHECKPOINT_KEY, payload);
+  // 2. Replay journal.
+  const journalTx = db.transaction(STORE_JOURNAL, 'readonly');
+  const cursorReq = journalTx.objectStore(STORE_JOURNAL).openCursor();
+  await new Promise((res, rej) => {
+    cursorReq.onerror = () => rej(cursorReq.error);
+    cursorReq.onsuccess = () => {
+      const c = cursorReq.result;
+      if (!c) return res();
+      if (c.value?.key != null) cache[c.value.key] = c.value.value;
+      c.continue();
+    };
+  });
+  await txDone(journalTx);
 }
 
-async function readJournalEntries() {
-  const keys = await idbKeys('kv').catch(() => []);
-  const journalKeys = keys.filter(k => typeof k === 'string' && k.startsWith(JOURNAL_PREFIX));
-  journalKeys.sort(); // Lexicographic sort = chronological order (timestamp suffix).
-
+async function flushJournal() {
+  if (!db || dirtyKeys.size === 0) return;
+  const ts = now();
   const entries = [];
-  for (const key of journalKeys) {
-    const entry = await idbGet('kv', key).catch(() => null);
-    if (entry) entries.push(entry);
+  dirtyKeys.forEach(k => entries.push({ ts, key: k, value: cache[k] }));
+  dirtyKeys.clear();
+
+  const tx = db.transaction(STORE_JOURNAL, 'readwrite');
+  const store = tx.objectStore(STORE_JOURNAL);
+  entries.forEach(e => store.add(e));
+  await txDone(tx);
+  await trimJournal();
+}
+
+async function trimJournal() {
+  const tx = db.transaction(STORE_JOURNAL, 'readwrite');
+  const store = tx.objectStore(STORE_JOURNAL);
+  const rows = [];
+  await new Promise((res, rej) => {
+    const req = store.openCursor();
+    req.onerror = () => rej(req.error);
+    req.onsuccess = () => {
+      const c = req.result;
+      if (!c) return res();
+      rows.push({ id: c.primaryKey, ts: c.value.ts });
+      c.continue();
+    };
+  });
+  if (rows.length > MAX_JOURNAL_ROWS) {
+    rows.sort((a, b) => a.ts - b.ts);
+    rows.slice(0, rows.length - MAX_JOURNAL_ROWS).forEach(r => store.delete(r.id));
   }
-  return entries;
+  await txDone(tx);
 }
 
-async function writeJournalEntry(mutations) {
-  const key = JOURNAL_PREFIX + Date.now().toString(36).padStart(8, '0');
-  await idbPut('kv', key, { mutations, timestamp: Date.now() });
+async function createCheckpoint(reason = 'manual') {
+  const compressed = await gzip(JSON.stringify(cache));
+  const tx = db.transaction(STORE_CP, 'readwrite');
+  tx.objectStore(STORE_CP).put({ id: 'latest', ts: now(), reason, blob: compressed });
+  await txDone(tx);
 }
 
-async function clearJournal() {
-  const keys = await idbKeys('kv').catch(() => []);
-  for (const key of keys) {
-    if (typeof key === 'string' && key.startsWith(JOURNAL_PREFIX)) {
-      await idbDelete('kv', key).catch(() => {});
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(async () => {
+    flushTimer = null;
+    try { await flushJournal(); } catch (e) { console.warn('[WorkspaceStorage] journal flush failed', e); }
+  }, FLUSH_DELAY_MS);
+}
+
+// ─── Settings mirror (bounded, allowlisted localStorage keys) ─────────────────
+
+function mirrorSettings() {
+  for (const key of Object.keys(localStorage)) {
+    if (!key.startsWith(SETTINGS_PREFIX)) continue;
+    const raw = localStorage.getItem(key);
+    if (typeof raw === 'string' && raw.length <= 4096) {
+      cache[`_settings.${key}`] = parse(raw, raw);
     }
   }
 }
 
-// ─── Public API ────────────────────────────────────────────────────────────────
+// ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Initialize the workspace storage manager.
- * Must be called once at app startup before any get/set calls.
+ * Call once at app startup before any get/set calls.
  * @returns {Promise<Object>} The restored workspace state.
  */
 export async function initWorkspaceStorage() {
   if (ready) return cache;
-
-  await ensureDB();
-
-  // 1. Read checkpoint.
-  const checkpoint = await readCheckpoint();
-  let state = {};
-
-  if (checkpoint) {
-    if (checkpoint.compressed) {
-      // Decompress gzip checkpoint.
-      try {
-        const stream = new Response(checkpoint.compressed).body.pipeThrough(new DecompressionStream('gzip'));
-        const json = await new Response(stream).text();
-        const parsed = JSON.parse(json);
-        state = parsed.data || {};
-      } catch {
-        state = {};
-      }
-    } else {
-      state = checkpoint.data || {};
-    }
-  }
-
-  // 2. Replay journal entries on top of checkpoint.
-  const journal = await readJournalEntries();
-  for (const entry of journal) {
-    for (const mut of entry.mutations) {
-      if (mut.type === 'set' && mut.value !== undefined) {
-        state[mut.key] = mut.value;
-      } else if (mut.type === 'delete') {
-        delete state[mut.key];
-      }
-    }
-  }
-
-  cache = state;
+  db = await openDb();
+  mirrorSettings();
+  await restore();
   ready = true;
 
-  // 3. Schedule periodic checkpoint folding.
-  checkpointTimer = setInterval(() => {
-    if (mutationCount >= CHECKPOINT_INTERVAL) {
-      foldCheckpoint().catch(() => {});
-    }
-  }, 30_000);
+  // Periodic checkpoint every 3 min.
+  cpTimer = setInterval(async () => {
+    try { await flushJournal(); await createCheckpoint('periodic'); }
+    catch (e) { console.warn('[WorkspaceStorage] periodic checkpoint failed', e); }
+  }, CHECKPOINT_INTERVAL_MS);
 
-  // 4. Flush on page unload.
   window.addEventListener('beforeunload', () => {
-    if (mutationCount > 0) {
-      foldCheckpoint().catch(() => {});
-    }
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+    flushJournal().catch(() => {});
   });
 
   return cache;
 }
 
-/**
- * Get a workspace value by key.
- * @param {string} key - One of the ALLOWED_KEYS.
- * @param {*} fallback - Default value if key doesn't exist.
- * @returns {*} The stored value or fallback.
- */
+/** Get a workspace value by key. */
 export function workspaceGet(key, fallback = null) {
-  if (!ready) {
-    console.warn('[WorkspaceStorage] Not initialized — call initWorkspaceStorage() first.');
-    return fallback;
-  }
-  if (!ALLOWED_KEYS.has(key)) {
-    console.warn(`[WorkspaceStorage] Key "${key}" not in allowlist.`);
-    return fallback;
-  }
+  if (!ready) { console.warn('[WorkspaceStorage] Not initialized'); return fallback; }
   return key in cache ? cache[key] : fallback;
 }
 
-/**
- * Set a workspace value. The mutation is journaled immediately and the
- * checkpoint is folded periodically (every CHECKPOINT_INTERVAL mutations).
- * @param {string} key - One of the ALLOWED_KEYS.
- * @param {*} value - The value to store.
- */
+/** Set a workspace value. Journaled asynchronously, checkpointed periodically. */
 export async function workspaceSet(key, value) {
-  if (!ready) {
-    console.warn('[WorkspaceStorage] Not initialized — call initWorkspaceStorage() first.');
-    return;
-  }
-  if (!ALLOWED_KEYS.has(key)) {
-    console.warn(`[WorkspaceStorage] Key "${key}" not in allowlist.`);
-    return;
-  }
-
-  // Update in-memory cache instantly (UI never waits).
+  if (!ready) { console.warn('[WorkspaceStorage] Not initialized'); return; }
   cache[key] = value;
-
-  // Journal the mutation.
-  try {
-    await writeJournalEntry([{ type: 'set', key, value }]);
-    mutationCount++;
-
-    // Auto-fold if threshold reached.
-    if (mutationCount >= CHECKPOINT_INTERVAL) {
-      foldCheckpoint().catch(() => {});
-    }
-  } catch (err) {
-    console.error('[WorkspaceStorage] Failed to journal mutation:', err);
-  }
+  dirtyKeys.add(key);
+  scheduleFlush();
 }
 
-/**
- * Delete a workspace value.
- * @param {string} key - One of the ALLOWED_KEYS.
- */
+/** Delete a workspace value. */
 export async function workspaceDelete(key) {
   if (!ready) return;
-  if (!ALLOWED_KEYS.has(key)) return;
-
   delete cache[key];
-
-  try {
-    await writeJournalEntry([{ type: 'delete', key }]);
-    mutationCount++;
-    if (mutationCount >= CHECKPOINT_INTERVAL) {
-      foldCheckpoint().catch(() => {});
-    }
-  } catch (err) {
-    console.error('[WorkspaceStorage] Failed to journal deletion:', err);
-  }
+  dirtyKeys.add(key);
+  scheduleFlush();
 }
 
-/**
- * Fold the journal into a full checkpoint.
- * This is called automatically, but can be triggered manually (e.g., before unload).
- */
+/** Fold journal into a full checkpoint immediately. */
 export async function foldCheckpoint() {
-  if (!ready || mutationCount === 0) return;
-
-  try {
-    await writeCheckpoint(cache);
-    await clearJournal();
-    mutationCount = 0;
-  } catch (err) {
-    console.error('[WorkspaceStorage] Failed to fold checkpoint:', err);
-  }
+  if (!ready || dirtyKeys.size === 0) return;
+  try { await flushJournal(); await createCheckpoint('manual'); }
+  catch (e) { console.error('[WorkspaceStorage] checkpoint fold failed', e); }
 }
 
-/**
- * Get a snapshot of the current workspace state (for debugging / storage accounting).
- */
-export function workspaceSnapshot() {
-  return { ...cache };
-}
+/** Snapshot of current workspace state (debug / storage accounting). */
+export function workspaceSnapshot() { return { ...cache }; }
 
-/**
- * Clear all workspace data (checkpoint + journal).
- */
+/** Clear all workspace data (checkpoint + journal). */
 export async function clearWorkspace() {
   cache = {};
-  mutationCount = 0;
-  await writeCheckpoint({}).catch(() => {});
-  await clearJournal().catch(() => {});
+  dirtyKeys.clear();
+  if (db) {
+    try {
+      const tx1 = db.transaction(STORE_CP, 'readwrite');
+      tx1.objectStore(STORE_CP).clear();
+      await txDone(tx1);
+      const tx2 = db.transaction(STORE_JOURNAL, 'readwrite');
+      tx2.objectStore(STORE_JOURNAL).clear();
+      await txDone(tx2);
+    } catch { /* best-effort */ }
+  }
 }

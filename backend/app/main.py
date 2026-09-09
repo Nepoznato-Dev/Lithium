@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db, local_llm, providers
-from .routers import chat, keys, local, memory, models, openai_server, web
+from .routers import chat, keys, local, memory, models, mcp, openai_server, web
 
 VERSION = '1.0.0'
 
@@ -37,6 +37,7 @@ app.include_router(memory.router)
 app.include_router(chat.router)
 app.include_router(local.router)
 app.include_router(openai_server.router)
+app.include_router(mcp.router)
 app.include_router(web.router)
 
 

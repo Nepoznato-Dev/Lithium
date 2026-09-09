@@ -100,7 +100,29 @@ export async function searchJamendo(term, clientId) {
  *  Soloist — Spotify local WebSocket client for full playback control.
  * ================================================================ */
 
-import { soloistEntityInfoSync, soloistPositionSync } from './core';
+function _entityInfo(item) {
+  if (!item || !item.uri) return { uri: '', name: 'Unknown', artist: '', album: '', cover: null, durationMs: 0 };
+  const decor = item.decorations;
+  if (!decor) return { uri: item.uri || '', name: 'Unknown', artist: '', album: '', cover: null, durationMs: 0 };
+  const name = decor.identity?.name || 'Unknown';
+  let artist = '';
+  if (Array.isArray(decor.creators)) {
+    artist = decor.creators.map(c => c?.entity?.decorations?.identity?.name).filter(Boolean).join(', ');
+  }
+  const album = decor.parent?.entity?.decorations?.identity?.name || '';
+  const cover = decor.visual_identity?.cover?.[0]?.url || null;
+  const durationMs = decor.playback?.duration_ms || 0;
+  return { uri: item.uri, name, artist, album, cover, durationMs };
+}
+
+function _position(anchor, status) {
+  if (!anchor) return 0;
+  const posMs = anchor.position_ms || 0;
+  const tsMs = anchor.timestamp_ms || 0;
+  const speed = anchor.speed || 0;
+  if (status !== 'playing' || speed === 0) return posMs / 1000;
+  return (posMs + (Date.now() - tsMs) * speed) / 1000;
+}
 
 export function connectSoloist(url, hooks = {}) {
   let ws = null;
@@ -157,13 +179,13 @@ export function connectSoloist(url, hooks = {}) {
 /** Interpolate the playback position (seconds) from a position_sync anchor. */
 export function soloistPosition(anchor, status) {
   if (!anchor) return 0;
-  return soloistPositionSync(anchor, status) || 0;
+  return _position(anchor, status) || 0;
 }
 
 /** Pull display info out of a Soloist entity envelope. */
 export function soloistEntityInfo(item) {
   if (!item) return null;
-  return soloistEntityInfoSync(item) || null;
+  return _entityInfo(item) || null;
 }
 
 /* ================================================================

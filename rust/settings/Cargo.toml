@@ -1,0 +1,11 @@
+[package]
+name = "settings"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium settings WASM"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }

@@ -3,7 +3,7 @@
  * New feature — shows metadata and inline preview.
  */
 import { useState, useEffect } from 'react';
-import Icon from '../../../../Components/Icon';
+import { PngIcon } from '../common/PngIcon.jsx';
 import { selectedItems, nav } from '../../state/signals.jsx';
 import { readEntryContent, getEntry } from '../../../fileSystem.js';
 import PropertyPanel from './PropertyPanel.jsx';
@@ -29,26 +29,26 @@ export default function PreviewPane({ tree, drive }) {
 
   if (!entry) {
     return (
-      <div className="flex w-64 shrink-0 flex-col border-l border-white/[0.06] bg-[#1a1a1e] p-4">
-        <p className="text-xs text-white/30">Select a file to preview</p>
+      <div className="flex w-64 shrink-0 flex-col border-l border-white/[0.08] bg-[#202125] p-4">
+        <p className="text-xs text-white/35">Select a file to preview</p>
       </div>
     );
   }
 
   return (
-    <div className="flex w-64 shrink-0 flex-col border-l border-white/[0.06] bg-[#1a1a1e]">
-      <div className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-2">
-        <Icon name="Eye" size={14} className="text-white/40" />
-        <span className="flex-1 truncate text-xs font-medium text-white/70">{entry.name}</span>
+    <div className="flex w-64 shrink-0 flex-col border-l border-white/[0.08] bg-[#202125]">
+      <div className="flex items-center gap-2 border-b border-white/[0.08] px-3 py-2.5">
+        <PngIcon name="Eye" size={14} className="text-white/45" />
+        <span className="flex-1 truncate text-xs font-medium text-white/75">{entry.name}</span>
       </div>
       <div className="flex-1 overflow-y-auto p-3">
         {entry.type === 'image' && previewUrl ? (
-          <img src={previewUrl} alt={entry.name} className="mb-3 w-full rounded object-contain" />
+          <img src={previewUrl} alt={entry.name} className="mb-3 w-full rounded-md object-contain" />
         ) : entry.type === 'text' && previewText ? (
-          <pre className="mb-3 max-h-48 overflow-auto rounded bg-white/[0.03] p-2 font-mono text-[10px] leading-relaxed text-white/60">{previewText.slice(0, 2000)}</pre>
+          <pre className="mb-3 max-h-48 overflow-auto rounded-md bg-[#1a1b1f] p-2.5 font-mono text-[10px] leading-relaxed text-white/65">{previewText.slice(0, 2000)}</pre>
         ) : (
-          <div className="mb-3 flex items-center justify-center rounded bg-white/[0.03] py-8">
-            <Icon name="FileText" size={32} color="#9ca3af" strokeWidth={1.2} />
+          <div className="mb-3 flex items-center justify-center rounded-md bg-[#1a1b1f] py-8">
+            <PngIcon name="FileText" size={32} color="#9ca3af" strokeWidth={1.2} />
           </div>
         )}
         <PropertyPanel entry={entry} tree={tree} />

@@ -12,6 +12,7 @@ import { loadDriveConfigs, testConnection } from '../cloudDrives';
 import { listWidgets, setWidgetEnabled } from '../desktop/widgetRuntime';
 import { hasWasm, fsOpSync } from '../core';
 import { registerCodeApis } from '../codeApi';
+import { addDynamicApp, removeDynamicApp, getDynamicApps } from '../li-apps/liDynamicApps';
 
 /**
  * Built-in API handlers. UI-level handlers (apps.*, settings.*,
@@ -208,4 +209,38 @@ export function registerBuiltinHandlers() {
 
   registerHandler('widgets.list', () => listWidgets());
   registerHandler('widgets.set_enabled', ({ id, enabled }) => setWidgetEnabled(id, enabled));
+
+  /* ---------- dynamic .li apps ---------- */
+
+  registerHandler('apps.create', ({ manifest, html }) => {
+    const created = addDynamicApp(manifest, html);
+    return { id: created.id, name: created.name, created: true };
+  });
+
+  registerHandler('apps.update', ({ manifest, html }) => {
+    const existing = getDynamicApps().find(a => a.manifest.id === manifest.id);
+    const htmlContent = html || existing?.html;
+    if (!htmlContent) throw new Error(`no existing app '${manifest.id}' and no html provided`);
+    const updated = addDynamicApp(manifest, htmlContent);
+    return { id: updated.id, name: updated.name, updated: true };
+  });
+
+  registerHandler('apps.delete_app', ({ id }) => {
+    const removed = removeDynamicApp(id);
+    if (!removed) throw new Error(`no dynamic app '${id}'`);
+    return { id, deleted: true };
+  });
+
+  registerHandler('apps.list_dynamic', () =>
+    getDynamicApps().map(entry => ({
+      id: entry.manifest.id,
+      name: entry.manifest.name,
+      icon: entry.manifest.icon,
+      color: entry.manifest.color,
+      category: entry.manifest.category,
+      description: entry.manifest.description,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    }))
+  );
 }

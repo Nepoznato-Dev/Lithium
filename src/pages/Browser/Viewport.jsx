@@ -3,24 +3,29 @@
  * Renders the active tab's content based on viewport mode:
  *   normal (iframe), search, reader, rebuild, fullRender, or new tab.
  */
-import { useEffect, useState, useRef } from 'preact/hooks';
-import { activeTab, currentUrl, setTabLoading, setTabTitle, updateTab, activeTabMode, activeTabSearchData } from './stores/tabStore';
-import { readerData, rebuildData, fullRenderData, setViewportMode, backendUp } from './stores/browserStore';
+import { useEffect, useState, useRef, useCallback } from 'preact/hooks';
+import { activeTab, currentUrl, setTabLoading, setTabTitle, updateTab, activeTabMode, activeTabSearchData, goBack, goForward, reloadTab } from './stores/tabStore';
+import { readerData, rebuildData, fullRenderData, setViewportMode, backendUp, articleDetected } from './stores/browserStore';
 import { activeSearchProvider } from './stores/searchStore';
 import { SCRAPE_PROVIDERS } from '../../lib/searchProxy';
-import { buildProxyUrl } from './io/network';
+import { buildProxyUrl, rebuildPageContent } from './io/network';
 import { renderSearchResults } from '../../lib/searchResultsRenderer';
 import { hoverUrl } from './StatusBar';
-import NewTabPage from './NewTabPage';
+import ContextMenu from './ContextMenu';
 import Icon from '../../Components/Icon';
-import * as core from '../../lib/core';
 import { useSettings } from '../../Components/SettingsContext';
 import { authUser, getAuthEmail, initAuth } from './stores/authStore';
+import { notify as notifyService } from '../../lib/services/notificationService';
 
 function hostname(url) {
-  const result = core.browserHostnameSync(url);
-  if (result) return result;
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+  if (!url) return '';
+  let s = url;
+  const schemeIdx = s.indexOf('://');
+  if (schemeIdx >= 0) s = s.slice(schemeIdx + 3);
+  s = s.split(/[/?#]/)[0];
+  if (s.startsWith('www.')) s = s.slice(4);
+  s = s.split(':')[0];
+  return s;
 }
 
 export default function Viewport() {
@@ -35,6 +40,8 @@ export default function Viewport() {
   const [captchaDetected, setCaptchaDetected] = useState(false);
   const [popupUrl, setPopupUrl] = useState(null);
   const [loginFormDetected, setLoginFormDetected] = useState(false);
+  const [pageCtxMenu, setPageCtxMenu] = useState(null); // { x, y }
+  const captchaNotifiedRef = useRef(new Set());
   const iframeRef = useRef(null);
 
   // Initialise Supabase auth on first render
@@ -55,7 +62,11 @@ export default function Viewport() {
               searchData: { html: result.html, query, provider: result.provider, providerKey: result.providerKey, searchUrl: result.searchUrl, loading: false }
             });
           } catch (err) {
-            updateTab(tab.id, { searchData: { html: null, query, provider: '', providerKey: pKey, searchUrl: url, loading: false, error: err.message } });
+            updateTab(tab.id, { searchData: { html: null, query, provider: '', providerKey: pKey, searchUrl: url, loading: false, error: err.message, isCaptchaError: err.isCaptchaError } });
+            if (err.isCaptchaError && !captchaNotifiedRef.current.has('search')) {
+              captchaNotifiedRef.current.add('search');
+              notifyService({ title: 'Storage Required — Brave Search', body: err.message, tone: 'warning' });
+            }
           }
         })();
       }
@@ -88,7 +99,11 @@ export default function Viewport() {
             }
           });
         } catch (err) {
-          updateTab(tab.id, { searchData: { ...tab.searchData, html: null, loading: false, error: err.message } });
+          updateTab(tab.id, { searchData: { ...tab.searchData, html: null, loading: false, error: err.message, isCaptchaError: err.isCaptchaError } });
+          if (err.isCaptchaError && !captchaNotifiedRef.current.has('msg-search')) {
+            captchaNotifiedRef.current.add('msg-search');
+            notifyService({ title: 'Storage Required — Brave Search', body: err.message, tone: 'warning' });
+          }
         }
       } else if (data.type === 'lithium-popup' && data.url) {
         // Login/OAuth popup — show in a modal overlay
@@ -115,7 +130,11 @@ export default function Viewport() {
               }
             });
           } catch (err) {
-            updateTab(tab.id, { searchData: { ...tab.searchData, loading: false, error: err.message } });
+            updateTab(tab.id, { searchData: { ...tab.searchData, loading: false, error: err.message, isCaptchaError: err.isCaptchaError } });
+            if (err.isCaptchaError && !captchaNotifiedRef.current.has('switch-provider')) {
+              captchaNotifiedRef.current.add('switch-provider');
+              notifyService({ title: 'Storage Required — Brave Search', body: err.message, tone: 'warning' });
+            }
           }
         }
       }
@@ -149,7 +168,11 @@ export default function Viewport() {
             }
           });
         } catch (err) {
-          updateTab(tab.id, { searchData: { ...tab.searchData, loading: false, error: err.message } });
+          updateTab(tab.id, { searchData: { ...tab.searchData, loading: false, error: err.message, isCaptchaError: err.isCaptchaError } });
+          if (err.isCaptchaError && !captchaNotifiedRef.current.has('click-provider')) {
+            captchaNotifiedRef.current.add('click-provider');
+            notifyService({ title: 'Storage Required — Brave Search', body: err.message, tone: 'warning' });
+          }
         }
       }
       return;
@@ -191,7 +214,11 @@ export default function Viewport() {
             }
           });
         } catch (err) {
-          updateTab(tab.id, { searchData: { ...tab.searchData, loading: false, error: err.message } });
+          updateTab(tab.id, { searchData: { ...tab.searchData, loading: false, error: err.message, isCaptchaError: err.isCaptchaError } });
+          if (err.isCaptchaError && !captchaNotifiedRef.current.has('nav-provider')) {
+            captchaNotifiedRef.current.add('nav-provider');
+            notifyService({ title: 'Storage Required — Brave Search', body: err.message, tone: 'warning' });
+          }
         }
       }
     }
@@ -209,17 +236,17 @@ export default function Viewport() {
     }
   };
 
-  // lithium://newtab URL = new tab page (when not in a special mode)
-  if (url === 'lithium://newtab' && mode === 'normal') {
-    return <NewTabPage />;
-  }
-
   const rd = readerData.value;
   const rb = rebuildData.value;
   const fr = fullRenderData.value;
 
   return (
-    <div className="relative flex-1 bg-[#14141d]">
+    <div className="relative flex-1 bg-[#14141d]" onContextMenu={(e) => {
+      if (url && url !== 'lithium://newtab') {
+        e.preventDefault();
+        setPageCtxMenu({ x: e.clientX, y: e.clientY });
+      }
+    }}>
       {tab.isLoading && <div className="browser-progress" />}
 
       <div className="browser-view absolute inset-0">
@@ -255,7 +282,7 @@ export default function Viewport() {
           sp.loading ? (
             <LoadingState message={`Searching ${SCRAPE_PROVIDERS[sp.providerKey]?.label || sp.provider || ''}…`} />
           ) : sp.error || !sp.html ? (
-            <ErrorState message={sp.error || 'No results'} subMessage="Try a different provider or query." />
+            <ErrorState message={sp.error || 'No results'} subMessage="Try a different provider or query." isCaptchaError={sp.isCaptchaError} />
           ) : (
             <div
               className="search-page-viewport h-full w-full overflow-auto bg-white"
@@ -328,6 +355,20 @@ export default function Viewport() {
                   const origin = new URL(url).origin;
                   updateTab(tab.id, { favicon: `https://www.google.com/s2/favicons?domain=${origin}&sz=32` });
                 } catch {}
+                // Article detection for reader mode trigger (C4)
+                try {
+                  const doc = iframeRef.current?.contentDocument;
+                  if (doc) {
+                    const article = doc.querySelector('article, [role="main"], main');
+                    const hasLongContent = article && article.textContent.trim().length > 600;
+                    const hasArticleClass = doc.querySelector('.article, .post, .entry-content, .article-body, .story-body, [itemprop="articleBody"]');
+                    articleDetected.value = !!(hasLongContent || hasArticleClass);
+                  } else {
+                    articleDetected.value = false;
+                  }
+                } catch {
+                  articleDetected.value = false;
+                }
               }}
               onMouseOver={(e) => {
                 const a = e.target.closest?.('a[href]');
@@ -409,6 +450,56 @@ export default function Viewport() {
           </div>
         )}
       </div>
+
+      {/* Page context menu (C5: Wayback Machine + actions) */}
+      {pageCtxMenu && (
+        <ContextMenu
+          x={pageCtxMenu.x}
+          y={pageCtxMenu.y}
+          onClose={() => setPageCtxMenu(null)}
+          items={[
+            { icon: 'ArrowLeft', label: 'Back', shortcut: 'Alt+\u2190', action: () => goBack(tab.id) },
+            { icon: 'ArrowRight', label: 'Forward', shortcut: 'Alt+\u2192', action: () => goForward(tab.id) },
+            { icon: 'RotateCw', label: 'Reload', shortcut: 'Ctrl+R', action: () => reloadTab(tab.id) },
+            { separator: true },
+            { icon: 'Clock', label: 'View on Wayback Machine', action: () => { if (url) window.open(`https://web.archive.org/web/${url}`, '_blank'); } },
+            { icon: 'ExternalLink', label: 'Open in external browser', action: () => { if (url) window.open(url, '_blank'); } },
+            { separator: true },
+            { icon: 'BookOpen', label: 'Reader mode', action: () => {
+              if (readerData.value) { readerData.value = null; setViewportMode('normal'); return; }
+              if (!url) return;
+              readerData.value = { url, text: null, error: '', loading: true };
+              setViewportMode('reader');
+              fetch(`https://r.jina.ai/${url}`).then(r => r.text()).then(text => { readerData.value = { url, text, error: '', loading: false }; }).catch(() => { readerData.value = { url, text: null, error: 'Could not fetch readable copy.', loading: false }; });
+            } },
+            { icon: 'FileText', label: 'Rebuild page', action: async () => {
+              if (rebuildData.value) { rebuildData.value = null; setViewportMode('normal'); return; }
+              if (!url) return;
+              rebuildData.value = { html: null, title: '', source: '', readerable: false, loading: true };
+              setViewportMode('rebuild');
+              try {
+                const result = await rebuildPageContent(url);
+                rebuildData.value = { ...result, loading: false };
+              } catch (err) {
+                rebuildData.value = { html: null, title: '', source: '', readerable: false, loading: false, error: err.message };
+              }
+            } },
+            { separator: true },
+            { icon: 'BrainCircuit', label: 'Ask AI about this page', action: () => {
+              import('../../lib/services/aiContext').then(({ collectBrowserContext, askAboutContext }) => {
+                const ctx = collectBrowserContext({ pageUrl: url, pageTitle: tab.title });
+                askAboutContext('What is this page about? Summarize it.', ctx);
+              }).catch(() => {});
+            }},
+            { icon: 'FileText', label: 'Summarize this page', action: () => {
+              import('../../lib/services/aiContext').then(({ collectBrowserContext, summarizeAction }) => {
+                const ctx = collectBrowserContext({ pageUrl: url, pageTitle: tab.title });
+                summarizeAction(ctx);
+              }).catch(() => {});
+            }},
+          ]}
+        />
+      )}
     </div>
   );
 }
@@ -421,7 +512,36 @@ function LoadingState({ message }) {
   );
 }
 
-function ErrorState({ message, subMessage, onDismiss, showOpenTab, url }) {
+function ErrorState({ message, subMessage, onDismiss, showOpenTab, url, isCaptchaError }) {
+  if (isCaptchaError) {
+    // Split the message into paragraphs for readable rendering.
+    const sections = message.split('\n\n');
+    const intro = sections[0] || '';
+    const steps = (sections[1] || '').split('\n').filter(Boolean);
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#141419] px-6 text-sm text-white/50">
+        <div className="flex items-center gap-2 text-amber-400">
+          <Icon name="ShieldAlert" size={20} />
+          <span className="text-base font-medium text-amber-300">Storage Permission Required</span>
+        </div>
+        <p className="max-w-lg text-center leading-relaxed text-white/60">{intro}</p>
+        {steps.length > 0 && (
+          <div className="w-full max-w-md space-y-2 rounded-lg border border-white/[0.06] bg-white/[0.03] p-4 text-left text-xs text-white/50">
+            <p className="mb-1 font-medium text-white/70">Troubleshooting steps:</p>
+            {steps.map((step, i) => (
+              <p key={i} className="leading-relaxed">{step.replace(/^\d+\.\s*/, '')}</p>
+            ))}
+          </div>
+        )}
+        {onDismiss && (
+          <button className="btn-ghost rounded-lg px-3 py-1.5 text-xs" onClick={onDismiss}>Back to normal view</button>
+        )}
+        {showOpenTab && url && (
+          <a className="btn-ghost px-3 py-1.5 text-xs" href={url} target="_blank" rel="noreferrer">Open in a real tab</a>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#141419] text-sm text-white/50">
       <p>{message}</p>

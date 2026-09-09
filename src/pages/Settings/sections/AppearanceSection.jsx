@@ -3,6 +3,20 @@ import { AccentPicker, CardGroup, SettingsRow, SegmentedControl, EnhancedToggle 
 export default function AppearanceSection({ settings, update }) {
   return (
     <div>
+      <CardGroup label="Color Mode">
+        <SettingsRow title="Theme mode" description="Choose dark, light, or follow your OS setting">
+          <SegmentedControl
+            value={settings.theme.mode || 'dark'}
+            onChange={v => update('theme.mode', v)}
+            options={[
+              { value: 'dark', label: 'Dark' },
+              { value: 'light', label: 'Light' },
+              { value: 'system', label: 'System' },
+            ]}
+          />
+        </SettingsRow>
+      </CardGroup>
+
       <CardGroup label="Accent Color">
         <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
           <div>

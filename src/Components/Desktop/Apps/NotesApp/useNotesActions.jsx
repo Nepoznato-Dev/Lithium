@@ -307,6 +307,14 @@ export default function useNotesActions(s, areaRef, gutterRef) {
     { id: 'star', label: starred.includes(entry.id) ? 'Unstar' : 'Star', icon: 'Star', action: () => toggleStar(entry.id) },
     { id: 'rename', label: 'Rename', icon: 'Pencil', action: () => renameEntry(entry) },
     { id: 'sep-1', type: 'separator' },
+    { id: 'ai-summarize', label: 'Summarize note with AI', icon: 'BrainCircuit', action: () => {
+      const content = entry.content || '';
+      if (content) {
+        import('../../../../lib/services/aiContext').then(({ summarizeAction, collectNoteContext }) => {
+          summarizeAction(collectNoteContext(entry.name, content));
+        }).catch(() => {});
+      }
+    }},
     { id: 'delete', label: 'Delete note', icon: 'Trash2', danger: true, action: () => deleteEntry(entry) },
   ];
 

@@ -1,5 +1,5 @@
 import { storage } from './storage/localStorage';
-import { backendHealth, backendUrl } from './backendApi';
+import { backendFeatureEnabled, backendHealth, backendUrl } from './backendApi';
 import { opfsAvailable, opfsDelete, opfsWriteStream } from './storage/indexedDB';
 import { hydrate } from './storage/unifiedStore';
 import { createEntry, loadTree, saveTree, updateEntry, removeEntryDeep } from './fileSystem';
@@ -45,6 +45,7 @@ let backendOnline = null;
 let backendCheckedAt = 0;
 
 async function backendOnlineCached() {
+  if (!backendFeatureEnabled()) return false;
   const now = Date.now();
   if (backendOnline === null || now - backendCheckedAt > 15000) {
     backendOnline = Boolean(await backendHealth());
@@ -55,7 +56,7 @@ async function backendOnlineCached() {
 
 /** Open a stream for a URL: proxy-first when the backend is up, else direct. */
 export async function openStream(url, signal) {
-  const attempts = (await backendOnlineCached()) ? ['proxy', 'direct'] : ['direct', 'proxy'];
+  const attempts = (await backendOnlineCached()) ? ['proxy', 'direct'] : ['direct'];
   let lastError = null;
   for (const mode of attempts) {
     try {

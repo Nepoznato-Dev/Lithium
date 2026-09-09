@@ -1,10 +1,11 @@
 /**
  * Status bar — item count, selection info, drive label.
  */
+import { memo } from 'react';
 import { selectedItems, view, nav, cloudItems } from '../../state/signals.jsx';
 import { childrenOf, trashedItems, getEntry, TRASH_ID } from '../../../fileSystem.js';
 
-export default function StatusBar({ tree, drive, items }) {
+export default memo(function StatusBar({ tree, drive, items }) {
   const folderId = nav.value.stack[nav.value.stack.length - 1]?.id;
   const isInTrash = !drive && nav.value.driveId === 'local' && folderId === TRASH_ID;
   const isTrashSubfolder = !drive && folderId !== TRASH_ID && (() => {
@@ -35,10 +36,10 @@ export default function StatusBar({ tree, drive, items }) {
         : ' · Local Disk (C:)';
 
   return (
-    <div className="border-t border-white/[0.06] px-4 py-1.5 text-[11px] text-white/40">
+    <div className="border-t border-white/[0.08] px-4 py-2 text-[11px] text-white/45">
       {viewLabel}
       {selectedEntry ? ` · 1 selected (${selectedEntry.name})` : selectedCount > 0 ? ` · ${selectedCount} selected` : ''}
       {driveLabel}
     </div>
   );
-}
+});

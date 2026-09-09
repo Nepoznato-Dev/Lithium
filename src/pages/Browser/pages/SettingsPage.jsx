@@ -26,7 +26,7 @@ export default function SettingsPage() {
   const shieldsOn = shieldsEnabled.value;
 
   return (
-    <div className="flex h-full bg-[#0f0f17]">
+    <div className="flex h-full" style={{ background: 'hsl(var(--background))' }}>
       {/* Sidebar */}
       <div className="w-52 shrink-0 border-r border-white/[0.06] p-3">
         <h2 className="mb-3 px-2 text-sm font-semibold text-white">Settings</h2>

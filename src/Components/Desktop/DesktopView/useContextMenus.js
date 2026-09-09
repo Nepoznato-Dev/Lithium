@@ -56,6 +56,37 @@ export default function useContextMenus({ apps, windows, fsTree, wallpaper, pinn
       { id: 'personalize', label: 'Personalize', icon: 'Palette', action: () => launchApp('settings') },
       { id: 'sep2', type: 'separator' },
       { id: 'terminal', label: 'Open in Terminal', icon: 'SquareTerminal', action: () => launchApp('code-studio') },
+      { id: 'ai-sep', type: 'separator' },
+      { id: 'ai', label: 'AI', icon: 'BrainCircuit', items: [
+        { id: 'ai-ask', label: 'Ask AI', icon: 'BrainCircuit', action: () => launchApp('ai-hub') },
+        { id: 'ai-summarize', label: 'Summarize selection', icon: 'FileText', action: () => {
+          const sel = window.getSelection?.()?.toString()?.trim();
+          if (sel) {
+            import('../../../lib/services/aiContext').then(({ summarizeAction, collectSelectionContext }) => {
+              summarizeAction(collectSelectionContext());
+              launchApp('ai-hub');
+            });
+          } else { launchApp('ai-hub'); }
+        }},
+        { id: 'ai-explain', label: 'Explain selection', icon: 'HelpCircle', action: () => {
+          const sel = window.getSelection?.()?.toString()?.trim();
+          if (sel) {
+            import('../../../lib/services/aiContext').then(({ explainAction, collectSelectionContext }) => {
+              explainAction(collectSelectionContext());
+              launchApp('ai-hub');
+            });
+          } else { launchApp('ai-hub'); }
+        }},
+        { id: 'ai-translate', label: 'Translate selection', icon: 'Languages', action: () => {
+          const sel = window.getSelection?.()?.toString()?.trim();
+          if (sel) {
+            import('../../../lib/services/aiContext').then(({ translateAction, collectSelectionContext }) => {
+              translateAction(collectSelectionContext());
+              launchApp('ai-hub');
+            });
+          } else { launchApp('ai-hub'); }
+        }},
+      ]},
       { id: 'more', label: 'Show more options', icon: 'Menu', shortcut: 'Shift+F10', action: () => launchApp('settings') },
     ]);
   };

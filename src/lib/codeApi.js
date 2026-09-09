@@ -38,7 +38,14 @@ export function buildCodeDoc() {
 {"api":"code.write","params":{"path":"project/file.js","content":"// code"}}
 \`\`\`
 Available actions:\n${lines}
-Paths are relative to Projects (first segment = project folder; use code.list with no path or "." to see roots). You may emit multiple api blocks in one reply to touch many files. Also include a short fenced code block of the key code for the inline diff.`;
+Paths are relative to Projects (first segment = project folder; use code.list with no path or "." to see roots). You may emit multiple api blocks in one reply to touch many files. Also include a short fenced code block of the key code for the inline diff.
+
+You can also create standalone .li apps that appear as first-class desktop windows. Use apps.create to build a new app:
+\`\`\`api
+{"api":"apps.create","params":{"manifest":{"id":"my-app","name":"My App","entry":"index.html","icon":"Sparkles","color":"#8b5cf6","category":"tools","description":"A custom app","permissions":["storage"]},"html":"<html>...</html>"}}
+\`\`\`
+Manifest fields: id (unique slug), name, entry (always "index.html"), icon (lucide name: Sparkles, Palette, Music, etc.), color (hex), category (productivity|media|tools|system), description, permissions (storage, notifications, photos).
+The html param is a complete standalone HTML document with inline CSS/JS. Apps communicate with the host via window.li.* (li.storage.get/set, li.notify, li.getTheme, li.setTitle, li.savePhoto, li.onReady).`;
 }
 
 const segsOf = path => String(path || '').split('/').filter(Boolean);

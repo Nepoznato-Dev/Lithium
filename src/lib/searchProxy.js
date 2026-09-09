@@ -147,6 +147,60 @@ const duckduckgo = {
 };
 
 /* ------------------------------------------------------------------ */
+/*  CAPTCHA detection                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * User-facing message explaining that persistent storage is required to
+ * retain Brave Search session tokens after CAPTCHA verification.
+ */
+const CAPTCHA_STORAGE_MESSAGE =
+  'Brave Search requires access to browser data storage (cookies and local storage) ' +
+  'to save temporary access tokens. This is necessary to maintain session continuity ' +
+  'after completing CAPTCHA challenges.\n\n' +
+  'Troubleshooting steps:\n' +
+  '1. Verify that your current browser supports persistent storage.\n' +
+  '2. Brave Browser: navigate to brave://settings/content/siteData and ensure ' +
+  'permissions are granted for this site.\n' +
+  '3. Firefox: go to about:preferences#privacy, select "Cookies and Site Data," ' +
+  'then use "Manage Exceptions" to allow data storage for this site.';
+
+/**
+ * Error thrown when a search provider returns a CAPTCHA challenge instead
+ * of results.  Carries `isCaptchaError = true` so UI components can render
+ * troubleshooting guidance.
+ */
+export class BraveCaptchaError extends Error {
+  constructor(message = CAPTCHA_STORAGE_MESSAGE) {
+    super(message);
+    this.name = 'BraveCaptchaError';
+    this.isCaptchaError = true;
+  }
+}
+
+/**
+ * Inspect raw HTML for CAPTCHA challenge indicators.
+ * Returns true when the page appears to be a CAPTCHA gate rather than
+ * actual search results.
+ */
+export function detectCaptcha(html) {
+  if (!html) return false;
+  // Common CAPTCHA DOM markers used by hCaptcha, reCAPTCHA, and Brave's
+  // own challenge wrapper.
+  return (
+    /id=["']captcha/i.test(html) ||
+    /class=["'][^"']*captcha[^"']*["']/i.test(html) ||
+    /class=["'][^"']*challenge[^"']*["']/i.test(html) ||
+    /iframe[^>]+hcaptcha/i.test(html) ||
+    /iframe[^>]+recaptcha/i.test(html) ||
+    /iframe[^>]+g-recaptcha/i.test(html) ||
+    /Verify you are human/i.test(html) ||
+    /Complete the security check/i.test(html) ||
+    /cf-chl-b/i.test(html) // Cloudflare challenge frame
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Provider: Brave Search                                            */
 /* ------------------------------------------------------------------ */
 
@@ -155,6 +209,11 @@ const brave = {
   buildUrl: q => `https://search.brave.com/search?q=${encodeURIComponent(q)}&source=web`,
 
   parse(html) {
+    // Detect CAPTCHA challenge pages before attempting to parse results.
+    if (detectCaptcha(html)) {
+      throw new BraveCaptchaError();
+    }
+
     const doc = parseHTML(html);
     const results = [];
 

@@ -18,6 +18,7 @@ import StatusBar from './StatusBar';
 import FindBar from './FindBar';
 import Viewport from './Viewport';
 import ShieldsPanel from './ShieldsPanel';
+import ContainerBar from './ContainerBar';
 import MenuButton from './MenuButton';
 import SettingsPage from './pages/SettingsPage';
 import BookmarksPage from './pages/BookmarksPage';
@@ -27,6 +28,11 @@ import ExtensionsPage from './pages/ExtensionsPage';
 import WalletPage from './pages/WalletPage';
 import HelpPage from './pages/HelpPage';
 import ReadingListPage from './pages/ReadingListPage';
+import ApiViewerPage from './pages/ApiViewerPage';
+import SearchEnginesPage from './pages/SearchEnginesPage';
+import ReaderPage from './pages/ReaderPage';
+import PrivacyPage from './pages/PrivacyPage';
+import NewTabPage from './NewTabPage';
 import WinControls from '../../Components/Desktop/WinControls';
 import { useSettings } from '../../Components/SettingsContext';
 
@@ -39,11 +45,32 @@ const INTERNAL_PAGES = {
   '#/wallet': WalletPage,
   '#/help': HelpPage,
   '#/reading-list': ReadingListPage,
+  '#/reader': ReaderPage,
+  '#/privacy': PrivacyPage,
+};
+
+/** Map lithium:// protocol hostnames to internal page components. */
+const LITHIUM_PAGES = {
+  about: HelpPage,
+  settings: SettingsPage,
+  extensions: ExtensionsPage,
+  history: HistoryPage,
+  bookmarks: BookmarksPage,
+  downloads: DownloadsPage,
+  api: ApiViewerPage,
+  'search-engines': SearchEnginesPage,
+  reader: ReaderPage,
+  privacy: PrivacyPage,
 };
 
 export default function BrowserChrome({ windowed = false, closeSelf, minimizeSelf, maximizeSelf, isMaximized, initialUrl }) {
   const { settings } = useSettings();
   const omniboxRef = useRef(null);
+  // Resolve lithium:// protocol URLs to internal page components
+  const url = currentUrl.value;
+  const lithiumHost = url && url.startsWith('lithium://') ? url.replace('lithium://', '').split(/[/?#]/)[0] : '';
+  const LithiumPage = lithiumHost ? (lithiumHost === 'newtab' ? NewTabPage : LITHIUM_PAGES[lithiumHost]) : null;
+
   const route = internalRoute.value;
   const showBookmarksBar = settings.browser?.showBookmarksBar !== false;
   const showStatusBar = settings.browser?.showStatusBar !== false;
@@ -102,6 +129,7 @@ export default function BrowserChrome({ windowed = false, closeSelf, minimizeSel
   }, []);
 
   const InternalPage = INTERNAL_PAGES[route];
+  const ActivePage = LithiumPage || InternalPage;
 
   return (
     <div className={windowed ? 'flex h-full min-h-0 min-w-0 flex-col' : 'flex h-[calc(100dvh-57px)] min-w-0 flex-col md:h-dvh'}>
@@ -119,6 +147,9 @@ export default function BrowserChrome({ windowed = false, closeSelf, minimizeSel
         <NavigationBar omniboxRef={omniboxRef} />
       </div>
 
+      {/* Container tabs bar (C1) */}
+      <ContainerBar />
+
       {/* Shields panel overlay */}
       <div className="relative browser-chrome">
         <ShieldsPanel />
@@ -135,10 +166,10 @@ export default function BrowserChrome({ windowed = false, closeSelf, minimizeSel
         <div className="browser-progress" style={{ width: '60%' }} />
       )}
 
-      {/* Main content: internal page or viewport */}
-      {InternalPage ? (
+      {/* Main content: lithium:// page, internal page, or viewport */}
+      {ActivePage ? (
         <div className="flex-1 overflow-hidden bg-[#1a1a26]">
-          <InternalPage />
+          <ActivePage />
         </div>
       ) : (
         <Viewport />

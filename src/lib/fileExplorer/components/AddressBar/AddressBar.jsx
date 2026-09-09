@@ -2,12 +2,12 @@
  * Address bar — breadcrumb navigation with back/forward/refresh + search input.
  * Composes Breadcrumb and PathInput sub-components.
  */
-import { useState, useCallback } from 'react';
-import Icon from '../../../../Components/Icon';
+import { useState, useCallback, memo } from 'react';
+import { PngIcon } from '../common/PngIcon.jsx';
 import { nav, view, draggingId } from '../../state/signals.jsx';
 import { useHistory } from '../../hooks/useHistory.jsx';
 
-export default function AddressBar({ dropTarget }) {
+export default memo(function AddressBar({ dropTarget }) {
   const [editing, setEditing] = useState(false);
   const [pathText, setPathText] = useState('');
   const { back, forward, canBack, canForward } = useHistory();
@@ -27,15 +27,15 @@ export default function AddressBar({ dropTarget }) {
   }, []);
 
   return (
-    <div className="flex items-center gap-1.5 border-b border-white/[0.06] px-3 py-1.5">
-      <button className="icon-btn h-7 w-7" disabled={!canBack} onClick={back} aria-label="Back">
-        <Icon name="ChevronLeft" size={14} />
+    <div className="flex items-center gap-2 border-b border-white/[0.08] px-3 py-2">
+      <button className="icon-btn h-7 w-7 rounded-md hover:bg-white/[0.08]" disabled={!canBack} onClick={back} aria-label="Back">
+        <PngIcon name="ChevronLeft" size={14} />
       </button>
-      <button className="icon-btn h-7 w-7" disabled={!canForward} onClick={forward} aria-label="Forward">
-        <Icon name="ChevronRight" size={14} />
+      <button className="icon-btn h-7 w-7 rounded-md hover:bg-white/[0.08]" disabled={!canForward} onClick={forward} aria-label="Forward">
+        <PngIcon name="ChevronRight" size={14} />
       </button>
 
-      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-lg bg-white/[0.04] px-3 py-1.5 text-xs text-white/70">
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-md bg-[#222328] px-3 py-1.5 text-xs text-white/75">
         {editing ? (
           <input
             className="w-full bg-transparent text-xs text-white/90 outline-none"
@@ -50,7 +50,7 @@ export default function AddressBar({ dropTarget }) {
         ) : (
           nav.value.stack.map((crumb, index) => (
             <span key={`${crumb.id}-${index}`} className="flex items-center gap-1">
-              {index > 0 && <Icon name="ChevronRight" size={12} className="shrink-0 text-white/25" />}
+              {index > 0 && <PngIcon name="ChevronRight" size={12} className="shrink-0 text-white/25" />}
               <button
                 className="truncate hover:text-white"
                 onClick={() => nav.value = { ...nav.value, stack: nav.value.stack.slice(0, index + 1) }}
@@ -64,4 +64,4 @@ export default function AddressBar({ dropTarget }) {
       </div>
     </div>
   );
-}
+});

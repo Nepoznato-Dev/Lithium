@@ -1,0 +1,1 @@
+C:\Users\PC\Downloads\Lithium\Lithium\rust\target\wasm32-unknown-unknown\release\settings.wasm: C:\Users\PC\Downloads\Lithium\Lithium\rust\lithium-abi\src\lib.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\settings\src\..\..\core\src\settings.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\settings\src\lib.rs
