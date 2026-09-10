@@ -6,7 +6,6 @@ import { useSettings } from '../SettingsContext';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: 'Home', end: true },
-  { to: '/games', label: 'Games', icon: 'Gamepad2' },
   { to: '/music', label: 'Music', icon: 'Music' },
   { to: '/browser', label: 'Browser', icon: 'Globe' },
   { to: '/calculator', label: 'Calculator', icon: 'Calculator' },
@@ -78,7 +77,7 @@ export default function Shell() {
             {({ isActive }) => (
               <>
                 <Icon name="Sparkles" className="h-[18px] w-[18px]" />
-                Yuki's Stuff
+                Yuki&apos;s Stuff
                 {isActive && <span className="nav-dot ml-auto h-1.5 w-1.5 rounded-full" />}
               </>
             )}

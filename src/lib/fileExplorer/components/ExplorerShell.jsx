@@ -6,6 +6,7 @@ import { useEffect, useCallback, useMemo, useRef } from 'react';
 import { useMemoCompare } from '../hooks/useMemoCompare.js';
 import Icon from '../../../Components/Icon';
 import { PngIcon } from './common/PngIcon.jsx';
+import { iconUrl } from '../../iconUrl.js';
 import ContextMenu from '../../../Components/Desktop/ContextMenu';
 import {
   childrenOf, createEntry, getEntry, isTrashed,
@@ -709,7 +710,7 @@ function HomeView({ rootChildren, folderChildrenCounts, recentFiles, openItem, o
           return (
             <button key={entry.id} className="flex w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left text-xs text-white/75 transition-colors hover:bg-[#222328]" onDoubleClick={() => openItem(entry)} onClick={() => selectedItems.value = new Set([entry.id])} onContextMenu={event => { event.stopPropagation(); onItemContext(event, entry); }}>
               {pngName
-                ? <img src={`/icons/${pngName}.png`} alt="" style={{ width: 18, height: 18 }} className="object-contain" />
+                ? <img src={iconUrl(pngName)} alt="" style={{ width: 18, height: 18 }} className="object-contain" />
                 : <Icon name={iconName} size={18} color={iconColor} strokeWidth={1.4} />
               }
               <span className="min-w-0 flex-1 truncate">{entry.name}</span>

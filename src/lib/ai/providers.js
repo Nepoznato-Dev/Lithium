@@ -313,69 +313,67 @@ export async function streamChatCompletion(provider, messages, { signal, model, 
   const system = messages.filter(m => m.role === 'system').map(m => m.content).join('\n');
   const turns = messages.filter(m => m.role !== 'system');
 
-  try {
-    // OpenAI-compatible providers
-    if (['groq', 'free', 'openai', 'xai', 'cerebras', 'mistral', 'openrouter', 'zai'].includes(effectiveProvider)) {
-      const baseUrls = {
-        groq: 'https://api.groq.com/openai/v1',
-        openai: 'https://api.openai.com/v1',
-        xai: 'https://api.x.ai/v1',
-        cerebras: 'https://api.cerebras.ai/v1',
-        mistral: 'https://api.mistral.ai/v1',
-        openrouter: 'https://openrouter.ai/api/v1',
-        zai: 'https://api.z.ai/api/paas/v4',
-      };
-      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` };
-      if (effectiveProvider === 'openrouter') headers['X-Title'] = 'Lithium';
-      const response = await fetch(`${baseUrls[effectiveProvider]}/chat/completions`, {
-        method: 'POST', signal, headers,
-        body: JSON.stringify({ model: modelName, messages, temperature: 0.7, stream: true }),
-      });
-      if (!response.ok) throw new Error(`${AI_PROVIDERS[provider].label}: ${await errorText(response)}`);
-      return await readSSEStream(response, onToken, extractOpenAIDelta);
-    }
-
-    // Anthropic
-    if (provider === 'anthropic') {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST', signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: modelName, max_tokens: 4096, stream: true,
-          system: system || undefined, messages: turns,
-        }),
-      });
-      if (!response.ok) throw new Error(`Anthropic: ${await errorText(response)}`);
-      return await readSSEStream(response, onToken, extractAnthropicDelta);
-    }
-
-    // Google
-    if (provider === 'google') {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key)}`,
-        {
-          method: 'POST', signal,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: system ? { parts: [{ text: system }] } : undefined,
-            contents: turns.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-          }),
-        }
-      );
-      if (!response.ok) throw new Error(`Google: ${await errorText(response)}`);
-      return await readSSEStream(response, onToken, extractGoogleDelta);
-    }
-
-    throw new Error('Unknown provider');
-  } catch (err) {
-    // If streaming fails before any tokens, fall back to non-streaming
-    throw err;
+  // OpenAI-compatible providers
+  if (['groq', 'free', 'openai', 'xai', 'cerebras', 'mistral', 'openrouter', 'zai'].includes(effectiveProvider)) {
+    const baseUrls = {
+      groq: 'https://api.groq.com/openai/v1',
+      openai: 'https://api.openai.com/v1',
+      xai: 'https://api.x.ai/v1',
+      cerebras: 'https://api.cerebras.ai/v1',
+      mistral: 'https://api.mistral.ai/v1',
+      openrouter: 'https://openrouter.ai/api/v1',
+      zai: 'https://api.z.ai/api/paas/v4',
+    };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + key,
+    };
+    const response = await fetch(`${baseUrls[effectiveProvider]}/chat/completions`, {
+      method: 'POST', signal, headers,
+      body: JSON.stringify({ model: modelName, messages, temperature: 0.7, stream: true }),
+    });
+    if (!response.ok) throw new Error(`${AI_PROVIDERS[provider].label}: ${await errorText(response)}`);
+    return await readSSEStream(response, onToken, extractOpenAIDelta);
   }
+
+  // Anthropic
+  if (provider === 'anthropic') {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: modelName, max_tokens: 4096, stream: true,
+        system: system || undefined, messages: turns,
+      }),
+    });
+    if (!response.ok) throw new Error(`Anthropic: ${await errorText(response)}`);
+    return await readSSEStream(response, onToken, extractAnthropicDelta);
+  }
+
+  // Google
+  if (provider === 'google') {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key)}`,
+      {
+        method: 'POST', signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: system ? { parts: [{ text: system }] } : undefined,
+          contents: turns.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+        }),
+      }
+    );
+    if (!response.ok) throw new Error(`Google: ${await errorText(response)}`);
+    return await readSSEStream(response, onToken, extractGoogleDelta);
+  }
+
+  throw new Error('Unknown provider');
+
 }
 
 /** messages: [{ role: 'system'|'user'|'assistant', content }] → assistant text
@@ -410,7 +408,10 @@ export async function chatCompletion(provider, messages, { signal, model } = {})
       openrouter: 'https://openrouter.ai/api/v1',
       zai: 'https://api.z.ai/api/paas/v4',
     };
-    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + key,
+    };
     if (effectiveProvider === 'openrouter') headers['X-Title'] = 'Lithium';
     const response = await fetch(`${baseUrls[effectiveProvider]}/chat/completions`, {
       method: 'POST',

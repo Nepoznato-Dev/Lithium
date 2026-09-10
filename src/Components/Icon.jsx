@@ -1,6 +1,12 @@
+import { iconUrl } from '../lib/iconUrl.js';
+
 // Zero-dependency icon component data
 // Extracted from lucide-react v1.34.0 (ISC License)
 // 128 icons
+
+const CUSTOM_ICON_MAP = {
+  Gamepad2: 'hydrux',
+};
 
 const ICONS = {
   Activity: [["path",{"d":"M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2","key":"169zse"}]],
@@ -171,6 +177,22 @@ Snowflake: [["line",{"x1":"12","x2":"12","y1":"2","y2":"22","key":"13g7gc"}],["p
 };
 
 export default function Icon({ name, size = 24, color = 'currentColor', strokeWidth = 2, className, style, ...props }) {
+  const customFile = CUSTOM_ICON_MAP[name];
+  if (customFile) {
+    return (
+      <img
+        src={iconUrl(customFile)}
+        alt=""
+        width={size}
+        height={size}
+        className={className}
+        style={{ objectFit: 'contain', ...style }}
+        draggable={false}
+        {...props}
+      />
+    );
+  }
+
   const nodes = ICONS[name];
   if (!nodes) {
     if (import.meta.env.DEV) console.warn('Icon not found: ' + name);

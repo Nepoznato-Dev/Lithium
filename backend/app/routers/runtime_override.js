@@ -2,7 +2,7 @@
 var C={"proxy":"{{PROXY}}","target":"{{TARGET}}","backend":"{{BACKEND}}"};
 var PROXY=C.proxy,TARGET=C.target,BACKEND=C.backend;
 function wrap(u){
-try{u=new URL(u,document.baseURI||TARGET).href;}catch(e){return null;}
+try{u=new URL(u,document.baseURI||TARGET).href;}catch{return null;}
 if(!/^https?:/i.test(u))return null;
 if(u.indexOf(PROXY)===0)return null;
 if(BACKEND&&u.indexOf(BACKEND)===0)return null;
@@ -22,13 +22,13 @@ if(w){
 if(init&&init.mode==="no-cors"){
 init=Object.assign({},init,{mode:"cors"});}
 return of.call(this,w,init);}
-}catch(e){}
+}catch{/* Ignore invalid URL fetches. */}
 return of.apply(this,arguments);};}
 var oo=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(m,u){
 try{if(typeof u==="string"){var w=wrap(u);
 if(w){var a=Array.prototype.slice.call(arguments);a[1]=w;
-return oo.apply(this,a);}}}catch(e){}
+return oo.apply(this,a);}}}catch{/* Ignore invalid XHR URLs. */}
 return oo.apply(this,arguments);};
 // Intercept window.open() for login/OAuth popups.
 // Instead of opening a real popup (which breaks inside our proxy
@@ -39,7 +39,7 @@ try{var r=new URL(u,document.baseURI||TARGET).href;
 if(window.parent&&window.parent!==window){
 window.parent.postMessage({type:"lithium-popup",url:r},"*");
 return null;}
-}catch(e){}
+}catch{/* Ignore invalid popup URLs. */}
 return ow?ow.apply(this,arguments):null;};
 // Also intercept clicks on target="_blank" links so login links
 // open in the parent popup modal instead of a real browser popup.
@@ -50,7 +50,7 @@ if(h&&/^https?:/i.test(h)){
 e.preventDefault();
 try{var r=new URL(h,document.baseURI||TARGET).href;
 window.parent.postMessage({type:"lithium-popup",url:r},"*");
-}catch(e2){}}}
+}catch{/* Ignore invalid popup links. */}}}
 },true);
 // --- Login form detection + auto-fill ---
 // Detect password fields and notify the parent frame so it can

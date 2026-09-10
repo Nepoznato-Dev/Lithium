@@ -17,7 +17,9 @@ export async function checkBackendHealth() {
   try {
     const res = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(4000) });
     return true; // any response = backend is running
-  } catch { /* health endpoint unreachable — try proxy endpoint */ }
+  } catch {
+    // health endpoint unreachable — try proxy endpoint
+  }
   // Fallback: try the proxy endpoint (older backends may not have /api/health)
   try {
     const res = await fetch(
@@ -38,33 +40,35 @@ function extractYouTubeVideoId(url) {
   try {
     const parsed = new URL(url);
     const hostname = parsed.hostname.toLowerCase();
-    
+
     // youtube.com/watch?v=VIDEO_ID
     if (hostname.includes('youtube.com') && parsed.pathname === '/watch') {
       return parsed.searchParams.get('v');
     }
-    
+
     // youtu.be/VIDEO_ID
     if (hostname === 'youtu.be') {
       const videoId = parsed.pathname.slice(1);
       if (videoId && videoId.length >= 11) return videoId;
     }
-    
+
     // youtube.com/embed/VIDEO_ID
     if (hostname.includes('youtube.com') && parsed.pathname.startsWith('/embed/')) {
       return parsed.pathname.split('/embed/')[1]?.split('/')[0]?.split('?')[0];
     }
-    
+
     // youtube.com/v/VIDEO_ID
     if (hostname.includes('youtube.com') && parsed.pathname.startsWith('/v/')) {
       return parsed.pathname.split('/v/')[1]?.split('/')[0]?.split('?')[0];
     }
-    
+
     // youtube.com/shorts/VIDEO_ID
     if (hostname.includes('youtube.com') && parsed.pathname.includes('/shorts/')) {
       return parsed.pathname.split('/shorts/')[1]?.split('/')[0]?.split('?')[0];
     }
-  } catch {}
+  } catch {
+    // Ignore invalid URLs; this helper returns null when the URL is not a YouTube video.
+  }
   return null;
 }
 
@@ -95,8 +99,10 @@ export function buildProxyUrl(url, proxyOrigin, backendUp) {
     const host = new URL(url).hostname.replace(/^www\./, '');
     const ua = getUaForHost(host);
     if (ua) uaParam = `&ua=${encodeURIComponent(ua)}`;
-  } catch {}
-  
+  } catch {
+    // Ignore invalid URLs when no per-site UA override is available.
+  }
+
   // Build proxy URL
   const base = proxyOrigin || (backendUp ? getBackendUrl() : '');
   if (base) return `${base}/api/web/proxy?url=${encodeURIComponent(url)}${uaParam}`;

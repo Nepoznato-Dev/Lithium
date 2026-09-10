@@ -10,16 +10,24 @@ const UA_OVERRIDES_KEY = 'lithium:ua-overrides';
 
 /** Load persisted overrides from localStorage. */
 function loadOverrides() {
-  try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY)) || {}; } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY)) || {}; } catch {
+    return {};
+  }
 }
 function saveOverrides(val) {
-  try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(val)); } catch {}
+  try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(val)); } catch {
+    // Ignore storage failures for site overrides.
+  }
 }
 function loadUaOverrides() {
-  try { return JSON.parse(localStorage.getItem(UA_OVERRIDES_KEY)) || {}; } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(UA_OVERRIDES_KEY)) || {}; } catch {
+    return {};
+  }
 }
 function saveUaOverrides(val) {
-  try { localStorage.setItem(UA_OVERRIDES_KEY, JSON.stringify(val)); } catch {}
+  try { localStorage.setItem(UA_OVERRIDES_KEY, JSON.stringify(val)); } catch {
+    // Ignore storage failures for UA overrides.
+  }
 }
 
 /** Global shields stats (accumulated across all sites). */

@@ -32,7 +32,9 @@ export function collectSelectionContext() {
     if (text && text.length > 0) {
       return { selection: text.slice(0, 4000) }; // limit to 4k chars
     }
-  } catch {}
+  } catch {
+    // Ignore browser/selection APIs that are unavailable in some contexts.
+  }
   return {};
 }
 

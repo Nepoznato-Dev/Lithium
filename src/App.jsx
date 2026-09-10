@@ -8,7 +8,6 @@ import { hasPin } from './lib/desktop/ui';
 const LockScreen = lazy(() => import('./Components/Desktop/LockScreen'));
 
 /* Shell routes are lazy so the idle desktop bundle stays small. */
-const Games = React.lazy(() => import('./pages/Games'));
 const Music = React.lazy(() => import('./pages/Music'));
 const Browser = React.lazy(() => import('./pages/Browser'));
 const Calculator = React.lazy(() => import('./pages/Calculator'));
@@ -95,7 +94,6 @@ export default function App() {
             <Route path="/yuki/themes" element={<Suspense fallback={null}><YukiThemes /></Suspense>} />
             <Route path="/yuki/about" element={<Suspense fallback={null}><YukiAbout /></Suspense>} />
             <Route element={<Shell />}>
-              <Route path="/games" element={<Suspense fallback={null}><Games /></Suspense>} />
               <Route path="/music" element={<Suspense fallback={null}><Music /></Suspense>} />
               <Route path="/browser" element={<Suspense fallback={null}><Browser /></Suspense>} />
               <Route path="/calculator" element={<Suspense fallback={null}><Calculator /></Suspense>} />

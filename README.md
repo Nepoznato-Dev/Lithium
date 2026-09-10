@@ -200,6 +200,12 @@ files are at the project root:
   `BASE_PATH=/<repo>/` so assets and client-side routing resolve under that
   sub-path, and copies `index.html` to `404.html` so deep links work without
   server-side rewrites.
+- **UI Testing Pages:** [`.github/workflows/deploy-ui-testing.yml`](.github/workflows/deploy-ui-testing.yml)
+  builds the `UI-Testing` branch and publishes it to the separate
+  `gh-pages-ui-testing` branch without changing the main Pages deployment.
+  Point repo **Settings → Pages → Source** at that branch when you want to
+  preview the UI branch, and keep the default Pages configuration on `main`
+  for the stable site.
 
 For production deployments, run `npm run build` and serve the generated
 `dist/` directory with SPA fallback routing to `index.html`. Set the

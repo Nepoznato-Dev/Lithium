@@ -2,6 +2,7 @@
  * Vercel serverless proxy — mirrors the Python backend's /api/web/proxy.
  * Fetches any public URL, strips CSP headers/meta tags, and returns with CORS.
  */
+import { Buffer } from 'node:buffer';
 import { safeGet } from '../lib/urlGuard.js';
 import { corsOrigin } from '../lib/cors.js';
 import { rateLimit, clientIp } from '../lib/rateLimit.js';

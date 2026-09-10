@@ -91,13 +91,14 @@ export default function Omnibox({ inputRef, onNavigate }) {
       // 3. Calculator — simple arithmetic
       try {
         if (/^[\d\s+\-*/().]+$/.test(draft) && /\d/.test(draft)) {
-          // eslint-disable-next-line no-eval
           const calcResult = Function(`"use strict"; return (${draft})`)();
           if (typeof calcResult === 'number' && isFinite(calcResult)) {
             results.push({ type: 'calc', title: `= ${calcResult}`, url: '', value: String(calcResult) });
           }
         }
-      } catch {}
+      } catch {
+        // Ignore invalid calculator expressions while typing.
+      }
 
       // 4. Open tabs
       const openTabs = tabs.value.filter(t => {
@@ -259,7 +260,9 @@ export default function Omnibox({ inputRef, onNavigate }) {
           setActiveTab(s.tabId);
         } else if (s.type === 'calc') {
           // Copy result to clipboard
-          try { navigator.clipboard?.writeText(s.value); } catch {}
+          try { navigator.clipboard?.writeText(s.value); } catch {
+            // Clipboard access is optional and may fail in some contexts.
+          }
           setFocused(false);
           inputRef.current?.blur();
           return;
@@ -352,7 +355,9 @@ export default function Omnibox({ inputRef, onNavigate }) {
                 } else if (s.type === 'tab') {
                   setActiveTab(s.tabId);
                 } else if (s.type === 'calc') {
-                  try { navigator.clipboard?.writeText(s.value); } catch {}
+                  try { navigator.clipboard?.writeText(s.value); } catch {
+                    // Clipboard access is optional and may fail in some contexts.
+                  }
                 } else if (s.type === 'engine') {
                   setDraft(s.keyword + ' ');
                   return;

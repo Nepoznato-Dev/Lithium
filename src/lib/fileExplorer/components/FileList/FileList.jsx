@@ -9,6 +9,7 @@ import { PROVIDERS } from '../../../cloudDrives.js';
 import FileGrid from './FileGrid.jsx';
 import FileTable from './FileTable.jsx';
 import { PngIcon } from '../common/PngIcon.jsx';
+import { iconUrl } from '../../../iconUrl.js';
 
 export default memo(function FileList({ treeRef, drive, items, openItem, onItemContext, onEmptyContext, dragProps, dropTarget }) {
   const folderId = nav.value.stack[nav.value.stack.length - 1]?.id;
@@ -51,7 +52,7 @@ export default memo(function FileList({ treeRef, drive, items, openItem, onItemC
   if (items.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-white/35">
-        <img src="/icons/files.png" alt="" style={{ width: 40, height: 40 }} className="object-contain opacity-40" />
+        <img src={iconUrl('files')} alt="" style={{ width: 40, height: 40 }} className="object-contain opacity-40" />
         <p className="text-xs">{isInTrash ? 'The Recycle Bin is empty.' : 'This folder is empty'}</p>
         {isInTrash && <p className="max-w-xs text-center text-[11px] text-white/30">Deleted items land here and can be restored to their original location.</p>}
       </div>

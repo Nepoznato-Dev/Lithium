@@ -30,7 +30,6 @@ const ApiManagerApp = React.lazy(() => import('../Apps/ApiManagerApp'));
 const DownloaderApp = React.lazy(() => import('../Apps/DownloaderApp'));
 const CodeStudioApp = React.lazy(() => import('../Apps/CodeStudioApp'));
 const TaskManagerApp = React.lazy(() => import('../Apps/TaskManagerApp'));
-const Games = React.lazy(() => import('../../../pages/Games'));
 const GamePlayer = React.lazy(() => import('../../../pages/Games').then(m => ({ default: m.GamePlayer })));
 const MusicPage = React.lazy(() => import('../../../pages/Music'));
 const Browser = React.lazy(() => import('../../../pages/Browser'));
@@ -87,7 +86,6 @@ export default function useDesktopState() {
 
   /* --- App registry (built-in + .li) --- */
   const builtinApps = useMemo(() => [
-    { id: 'games', name: 'Hydrux', icon: 'Gamepad2', iconFile: 'hydrux', color: '#ec4899', width: 1100, height: 750, component: <Games />, desc: 'Game library and launcher', category: 'media' },
     { id: 'media-player', name: 'Media Player', icon: 'Music', iconFile: 'media-player', color: '#22d3ee', width: 1150, height: 720, component: <MusicPage />, desc: 'Music, radio & media player', category: 'media' },
     { id: 'browser', name: 'Browser', icon: 'Globe', iconFile: 'browser', color: '#06b6d4', width: 1000, height: 700, component: <Browser />, desc: 'Browse the web', category: 'tools' },
     { id: 'calculator', name: 'Calculator', icon: 'Calculator', iconFile: 'calculator', color: '#3b82f6', width: 420, height: 640, component: <CalculatorPage />, desc: 'Quick calculations', category: 'tools' },
@@ -312,7 +310,9 @@ export default function useDesktopState() {
           const app = apps.find(a => a.id === appId);
           if (app) launchRef.current(appId);
         }
-      } catch {}
+      } catch {
+        // Workspace restore is best-effort and may fail if the saved layout is incomplete.
+      }
     };
     window.addEventListener('lithium:restore-workspace', onRestoreWorkspace);
     startEnabledWidgets();
@@ -331,7 +331,7 @@ export default function useDesktopState() {
   useEffect(() => { emitEvent('volume.changed', { level: soundLevel }); }, [soundLevel]);
   useEffect(() => { if (weather?.data) emitEvent('weather.updated', { fetchedAt: weather.fetchedAt }); }, [weather]);
 
-  /* --- Browser / game / start deep-link listeners --- */
+  /* --- Browser / start deep-link listeners --- */
   useEffect(() => {
     const onOpenBrowser = event => {
       const url = event.detail;

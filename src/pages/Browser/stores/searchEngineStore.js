@@ -20,18 +20,26 @@ const BUILTIN = Object.entries(SEARCH_ENGINES).map(([key, eng]) => ({
 
 /** Load custom engines from localStorage. */
 function loadCustom() {
-  try { return JSON.parse(localStorage.getItem(CUSTOM_ENGINES_KEY)) || []; } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(CUSTOM_ENGINES_KEY)) || []; } catch {
+    return [];
+  }
 }
 function saveCustom(engines) {
-  try { localStorage.setItem(CUSTOM_ENGINES_KEY, JSON.stringify(engines)); } catch {}
+  try { localStorage.setItem(CUSTOM_ENGINES_KEY, JSON.stringify(engines)); } catch {
+    // Ignore storage errors for custom search engines.
+  }
 }
 
 /** Load engine order from localStorage. */
 function loadOrder() {
-  try { return JSON.parse(localStorage.getItem(ENGINE_ORDER_KEY)) || null; } catch { return null; }
+  try { return JSON.parse(localStorage.getItem(ENGINE_ORDER_KEY)) || null; } catch {
+    return null;
+  }
 }
 function saveOrder(order) {
-  try { localStorage.setItem(ENGINE_ORDER_KEY, JSON.stringify(order)); } catch {}
+  try { localStorage.setItem(ENGINE_ORDER_KEY, JSON.stringify(order)); } catch {
+    // Ignore storage errors for engine ordering.
+  }
 }
 
 /** All engines: built-in + custom, in configured order. */
@@ -98,14 +106,18 @@ export function setKeyword(id, keyword) {
     // Store built-in keyword in a separate key
     const kwKey = 'lithium:builtin-keywords';
     let kws = {};
-    try { kws = JSON.parse(localStorage.getItem(kwKey)) || {}; } catch {}
-    if (keyword) { kws[id] = keyword; } else { delete kws[id]; }
-    try { localStorage.setItem(kwKey, JSON.stringify(kws)); } catch {}
-    // Patch the BUILTIN array in memory
-    const eng = BUILTIN.find(e => e.id === id);
-    if (eng) eng.keyword = keyword;
+  try { kws = JSON.parse(localStorage.getItem(kwKey)) || {}; } catch {
+    kws = {};
   }
-  engines.value = buildEngineList();
+  if (keyword) { kws[id] = keyword; } else { delete kws[id]; }
+  try { localStorage.setItem(kwKey, JSON.stringify(kws)); } catch {
+    // Ignore storage write failures for built-in keywords.
+  }
+  // Patch the BUILTIN array in memory
+  const eng = BUILTIN.find(e => e.id === id);
+  if (eng) eng.keyword = keyword;
+}
+engines.value = buildEngineList();
 }
 
 /** Reorder engines by moving an engine to a new position. */
