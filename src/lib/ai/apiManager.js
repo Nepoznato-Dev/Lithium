@@ -78,6 +78,7 @@ const _SETTINGS_SCHEMA = [
   { path: 'performance.lowEndMode', kind: 'boolean' },
   { path: 'games.fullscreenOnLaunch', kind: 'boolean' }, { path: 'games.escToClose', kind: 'boolean' },
   { path: 'browser.searchEngine', kind: 'string', values: ['duckduckgo','qwant','mojeek','startpage'] },
+  { path: 'storage.maxUploadMB', kind: 'number', min: 10, max: 5000 },
 ];
 
 function _typeMatch(value, kind) {

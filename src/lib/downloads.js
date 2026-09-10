@@ -1,5 +1,6 @@
 import { allModels, loadModelMeta } from './ai/models';
-import { cacheEntries, putBlob } from './storage/manager';
+import { cacheEntries } from './storage/manager';
+import { putBlob } from './storage/liStorage';
 import { hydrate } from './storage/unifiedStore';
 import { childrenOf, createEntry, loadTree, saveTree, storeEntryContent, updateEntry } from './fileSystem';
 
@@ -143,7 +144,7 @@ export async function registerBlobDownload(name, blob) {
   let tree = loadTree();
   tree = createEntry(tree, { name, type: 'file', parentId: DOWNLOADS_ID, content: '' });
   const created = tree[tree.length - 1];
-  await putBlob(created.id, blob, { name });
+  await putBlob('download', created.id, blob, undefined, { name });
   tree = updateEntry(loadTree(), created.id, { content: null, idb: true, size: blob.size });
   saveTree(tree);
   window.dispatchEvent(new Event(DOWNLOADS_EVENT));

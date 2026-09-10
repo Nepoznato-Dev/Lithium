@@ -85,6 +85,7 @@ export default async function handler(req, res) {
     const response = await fetch(ddgUrl, {
       headers: { 'User-Agent': BROWSER_UA },
       redirect: 'follow',
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
@@ -109,6 +110,7 @@ export default async function handler(req, res) {
     }
 
     if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Cache-Control', 'private, max-age=300');
     return res.status(200).json({
         query: trimmed,
         provider: 'duckduckgo',

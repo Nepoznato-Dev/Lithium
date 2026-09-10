@@ -1,5 +1,6 @@
 import { strToU8, strFromU8 } from 'fflate';
-import { getBlob, putBlob } from './manager';
+import { getBlob } from './manager';
+import { putBlob } from './liStorage';
 
 /**
  * TAR + GZip archive engine — folder export & import using native CompressionStream.
@@ -225,7 +226,7 @@ export async function importTarToFolder(tree, parentId, tarGzBlob, { onProgress,
       next = [...next, { id: makeId(), name, type: 'text', parentId: parentDirId, content: strFromU8(fileData), createdAt: now, updatedAt: now }];
     } else if (fileData.length <= MAX_BINARY) {
       const id = makeId();
-      await putBlob(id, new Blob([fileData]), { name });
+      await putBlob('archive', id, new Blob([fileData]), undefined, { name });
       next = [...next, { id, name, type: 'file', parentId: parentDirId, content: null, idb: true, size: fileData.length, createdAt: now, updatedAt: now }];
     }
     count++;

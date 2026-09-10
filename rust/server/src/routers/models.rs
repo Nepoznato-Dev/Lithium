@@ -44,12 +44,13 @@ pub async fn list_models() -> Json<Vec<serde_json::Value>> {
         stmt.query_map([], |r| {
             Ok(model_to_json(r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?))
         }).unwrap().filter_map(|r| r.ok()).collect::<Vec<_>>()
-    });
+    }).await;
     Json(rows)
 }
 
 pub async fn get_model(Path(model_id): Path<String>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let row = db::with_conn(|conn| fetch_model(conn, &model_id))
+    let mid = model_id.clone();
+    let row = db::with_conn(move |conn| fetch_model(conn, &mid)).await
         .ok_or((StatusCode::NOT_FOUND, format!("model '{}' not found", model_id)))?;
     Ok(Json(row))
 }
@@ -59,37 +60,54 @@ pub async fn create_model(Json(body): Json<ModelIn>) -> Json<serde_json::Value> 
         format!("{}-{}", body.provider, body.model_name).replace('/', "-").replace('.', "-")
     });
     let now = db::chrono_millis();
-    db::with_conn(|conn| {
-        if body.is_default { conn.execute("UPDATE models SET is_default = 0", []).unwrap(); }
+    let mid = model_id.clone();
+    let is_default = body.is_default;
+    let name = body.name;
+    let provider = body.provider;
+    let model_name_val = body.model_name;
+    let cw = body.context_window;
+    let temp = body.temperature;
+    db::with_conn(move |conn| {
+        if is_default { conn.execute("UPDATE models SET is_default = 0", []).unwrap(); }
         conn.execute(
             "INSERT INTO models (id, name, provider, model_name, context_window, temperature, is_default, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![model_id, body.name, body.provider, body.model_name, body.context_window, body.temperature, body.is_default as i64, now],
+            params![mid, name, provider, model_name_val, cw, temp, is_default as i64, now],
         ).unwrap();
-    });
-    let row = db::with_conn(|conn| fetch_model(conn, &model_id)).unwrap();
+    }).await;
+    let mid2 = model_id.clone();
+    let row = db::with_conn(move |conn| fetch_model(conn, &mid2)).await.unwrap();
     Json(row)
 }
 
 pub async fn update_model(Path(model_id): Path<String>, Json(body): Json<ModelIn>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    db::with_conn(|conn| {
-        if fetch_model(conn, &model_id).is_none() {
-            return Err((StatusCode::NOT_FOUND, format!("model '{}' not found", model_id)));
+    let mid = model_id.clone();
+    let is_default = body.is_default;
+    let name = body.name;
+    let provider = body.provider;
+    let model_name_val = body.model_name;
+    let cw = body.context_window;
+    let temp = body.temperature;
+    db::with_conn(move |conn| {
+        if fetch_model(conn, &mid).is_none() {
+            return Err((StatusCode::NOT_FOUND, format!("model '{}' not found", mid)));
         }
-        if body.is_default { conn.execute("UPDATE models SET is_default = 0", []).unwrap(); }
+        if is_default { conn.execute("UPDATE models SET is_default = 0", []).unwrap(); }
         conn.execute(
             "UPDATE models SET name = ?1, provider = ?2, model_name = ?3, context_window = ?4, temperature = ?5, is_default = ?6 WHERE id = ?7",
-            params![body.name, body.provider, body.model_name, body.context_window, body.temperature, body.is_default as i64, model_id],
+            params![name, provider, model_name_val, cw, temp, is_default as i64, mid],
         ).unwrap();
         Ok(())
-    })?;
-    let row = db::with_conn(|conn| fetch_model(conn, &model_id)).unwrap();
+    }).await?;
+    let mid2 = model_id.clone();
+    let row = db::with_conn(move |conn| fetch_model(conn, &mid2)).await.unwrap();
     Ok(Json(row))
 }
 
 pub async fn delete_model(Path(model_id): Path<String>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let deleted = db::with_conn(|conn| {
-        conn.execute("DELETE FROM models WHERE id = ?1", params![model_id]).unwrap()
-    });
+    let mid = model_id.clone();
+    let deleted = db::with_conn(move |conn| {
+        conn.execute("DELETE FROM models WHERE id = ?1", params![mid]).unwrap()
+    }).await;
     if deleted == 0 {
         return Err((StatusCode::NOT_FOUND, format!("model '{}' not found", model_id)));
     }

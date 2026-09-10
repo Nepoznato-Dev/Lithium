@@ -48,9 +48,18 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
   useEffect(() => onError(state => {
     if (state.track) setError(`Couldn't play "${state.track.title}" — the provider blocked the stream. Try the next track.`);
   }), []);
-  useEffect(() => storage.set('music-likes', likes), [likes]);
-  useEffect(() => storage.set('music-library', userTracks.filter(track => !track.local)), [userTracks]);
-  useEffect(() => storage.set('music-local-library', userTracks.filter(track => track.local).map(({ id, title, artist, local, artwork }) => ({ id, title, artist, local, hasArtwork: Boolean(artwork) }))), [userTracks]);
+
+  // Debounced localStorage writes (300ms) to avoid synchronous writes on every state change
+  const _saveTimer = useRef(null);
+  useEffect(() => {
+    clearTimeout(_saveTimer.current);
+    _saveTimer.current = setTimeout(() => {
+      storage.set('music-likes', likes);
+      storage.set('music-library', userTracks.filter(track => !track.local));
+      storage.set('music-local-library', userTracks.filter(track => track.local).map(({ id, title, artist, local, artwork }) => ({ id, title, artist, local, hasArtwork: Boolean(artwork) })));
+    }, 300);
+    return () => clearTimeout(_saveTimer.current);
+  }, [likes, userTracks]);
 
   // Restore blob URLs for local tracks on mount (blob URLs don't survive reloads).
   useEffect(() => {
@@ -73,6 +82,16 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
     })();
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Revoke blob URLs on unmount to prevent memory leaks
+  const _blobUrls = useRef(new Set());
+  useEffect(() => {
+    return () => {
+      for (const url of _blobUrls.current) URL.revokeObjectURL(url);
+      _blobUrls.current.clear();
+    };
+  }, []);
+
   useEffect(() => {
     storage.set('music-player-settings', prefs);
     relatedRef.current = related;

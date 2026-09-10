@@ -1,14 +1,14 @@
 //! SQLite persistence — schema, seed data, connection helper.
 
 use rusqlite::{Connection, params};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 
-static DB: std::sync::LazyLock<Mutex<Connection>> = std::sync::LazyLock::new(|| {
+static DB: std::sync::LazyLock<Arc<Mutex<Connection>>> = std::sync::LazyLock::new(|| {
     let path = db_path();
     let conn = Connection::open(&path).expect("failed to open lithium.db");
     conn.execute_batch("PRAGMA journal_mode=WAL;").ok();
-    Mutex::new(conn)
+    Arc::new(Mutex::new(conn))
 });
 
 fn db_path() -> PathBuf {
@@ -75,11 +75,17 @@ pub fn chrono_millis() -> i64 {
         .unwrap_or(0)
 }
 
-/// Run a closure with a reference to the SQLite connection.
-pub fn with_conn<F, R>(f: F) -> R
+/// Run a closure with a reference to the SQLite connection on a blocking thread.
+pub async fn with_conn<F, R>(f: F) -> R
 where
-    F: FnOnce(&Connection) -> R,
+    F: FnOnce(&Connection) -> R + Send + 'static,
+    R: Send + 'static,
 {
-    let conn = DB.lock().unwrap();
-    f(&conn)
+    let db = DB.clone();
+    tokio::task::spawn_blocking(move || {
+        let conn = db.lock().unwrap();
+        f(&conn)
+    })
+    .await
+    .expect("spawn_blocking join failed")
 }

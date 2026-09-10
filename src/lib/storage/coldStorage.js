@@ -1,5 +1,6 @@
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
-import { putBlob, getBlob, deleteBlob } from './manager';
+import { getBlob } from './manager';
+import { putBlob, deleteBlob } from './liStorage';
 
 /**
  * Cold storage tier — compresses idle files into ZIP archives in IndexedDB.
@@ -85,7 +86,7 @@ export async function coldArchive(tree, entryIds, { onProgress } = {}) {
 
   // Store the ZIP in IndexedDB.
   const coldKey = COLD_PREFIX + archiveId;
-  await putBlob(coldKey, zipBlob, { name: `cold-archive-${archiveId}`, coldArchive: true });
+  await putBlob('cold', coldKey, zipBlob, undefined, { name: `cold-archive-${archiveId}`, coldArchive: true });
 
   // Update tree entries to point at the cold archive.
   let next = tree;
@@ -109,7 +110,7 @@ export async function coldArchive(tree, entryIds, { onProgress } = {}) {
   // If we moved idb entries, clean up their standalone blobs.
   for (const entry of targets) {
     if (entry.idb && !entry.blobRef) {
-      await deleteBlob(entry.id).catch(() => {});
+      await deleteBlob('file', entry.id).catch(() => {});
     }
   }
 
@@ -156,7 +157,7 @@ export async function coldRestore(tree, entryId) {
       : e
     );
   } else {
-    await putBlob(entryId, new Blob([bytes]), { name: entry.name });
+    await putBlob('file', entryId, new Blob([bytes]), undefined, { name: entry.name });
     next = next.map(e => e.id === entryId
       ? { ...e, content: null, cold: false, coldRef: undefined, coldOrigSize: undefined, idb: true, size: bytes.length }
       : e
@@ -166,7 +167,7 @@ export async function coldRestore(tree, entryId) {
   // Check if the archive has any remaining entries; if not, delete it.
   const remaining = tree.filter(e => e.cold && e.coldRef?.startsWith(archiveId + '/') && e.id !== entryId);
   if (remaining.length === 0) {
-    await deleteBlob(coldKey).catch(() => {});
+    await deleteBlob('cold', coldKey).catch(() => {});
   }
 
   return { tree: next, restored: true };
@@ -215,11 +216,11 @@ export async function coldRestoreAll(tree, archiveId) {
 
   // Batch-write all blobs.
   for (const { id, bytes, name } of blobWrites) {
-    await putBlob(id, new Blob([bytes]), { name }).catch(() => {});
+    await putBlob('file', id, new Blob([bytes]), undefined, { name }).catch(() => {});
   }
 
   // Delete the cold archive.
-  await deleteBlob(coldKey).catch(() => {});
+  await deleteBlob('cold', coldKey).catch(() => {});
 
   return { tree: next, restored };
 }

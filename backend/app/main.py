@@ -3,6 +3,7 @@
 # Run:  double-click start-backend.cmd at the repo root (outside the IDE!),
 #       or:  cd backend && python run.py
 # Docs: http://localhost:8734/docs  (interactive Swagger UI)
+import asyncio
 import socket
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -43,14 +44,19 @@ app.include_router(web.router)
 
 @app.get('/api/health')
 async def health():
-    with db.connect() as conn:
-        model_count = conn.execute('SELECT COUNT(*) AS n FROM models').fetchone()['n']
-        memory_count = conn.execute('SELECT COUNT(*) AS n FROM memories').fetchone()['n']
-        default = conn.execute('SELECT id, name FROM models WHERE is_default = 1 LIMIT 1').fetchone()
+    def _db_stats():
+        with db.connect() as conn:
+            model_count = conn.execute('SELECT COUNT(*) AS n FROM models').fetchone()['n']
+            memory_count = conn.execute('SELECT COUNT(*) AS n FROM memories').fetchone()['n']
+            default = conn.execute('SELECT id, name FROM models WHERE is_default = 1 LIMIT 1').fetchone()
+        return model_count, memory_count, default
+
+    model_count, memory_count, default = await asyncio.to_thread(_db_stats)
     # Self-diagnostic: can THIS process reach the internet? Sandboxed terminals
     # (e.g. the IDE's) block DNS for long-running apps while browsers work fine.
+    loop = asyncio.get_running_loop()
     try:
-        socket.getaddrinfo('huggingface.co', 443)
+        await loop.getaddrinfo('huggingface.co', 443)
         internet = True
     except OSError:
         internet = False

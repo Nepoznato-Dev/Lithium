@@ -1,19 +1,46 @@
 # Local GGUF model store endpoints: upload, download-from-URL, list, delete.
 import asyncio
 import re
+import time
 import uuid
 from urllib.parse import urlparse
 from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+import httpx
 from .. import local_llm
 from ..url_guard import safe_get
 
 router = APIRouter(prefix='/api/llm')
 
-# Active server-side downloads: job_id → {url, name, received, total, status, error, modelId}
+# Active server-side downloads: job_id → {url, name, received, total, status, error, modelId, finished_at}
 DOWNLOADS = {}
+_DOWNLOAD_TTL = 600  # 10 minutes
+
+# Shared httpx client for the proxy endpoint (Fix 3)
+_shared_proxy_client: httpx.AsyncClient | None = None
+
+
+def _get_proxy_client() -> httpx.AsyncClient:
+    global _shared_proxy_client
+    if _shared_proxy_client is None or _shared_proxy_client.is_closed:
+        _shared_proxy_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, read=None),
+            follow_redirects=True,
+        )
+    return _shared_proxy_client
+
+
+def _cleanup_downloads():
+    """Evict DOWNLOADS entries with status 'done' or 'error' older than 10 min."""
+    now = time.time()
+    stale = [jid for jid, j in DOWNLOADS.items()
+             if j['status'] in ('done', 'error')
+             and j.get('finished_at')
+             and now - j['finished_at'] > _DOWNLOAD_TTL]
+    for jid in stale:
+        del DOWNLOADS[jid]
 
 
 class DownloadIn(BaseModel):
@@ -28,6 +55,7 @@ async def status():
 
 @router.get('/models')
 def models():
+    _cleanup_downloads()
     return {'models': local_llm.list_models(), 'downloads': list(DOWNLOADS.values())}
 
 
@@ -62,6 +90,7 @@ async def download(body: DownloadIn):
     job = {
         'jobId': job_id, 'url': body.url, 'name': file_name,
         'received': 0, 'total': 0, 'status': 'downloading', 'error': '', 'modelId': None,
+        'finished_at': None,
     }
     DOWNLOADS[job_id] = job
     asyncio.create_task(_download_job(job_id, body.url, file_name))
@@ -103,7 +132,6 @@ async def _try_ollama_import(model_id):
 
 
 async def _download_job(job_id, url, file_name):
-    import httpx
     job = DOWNLOADS[job_id]
     local_llm.ensure_dir()
     target = local_llm.MODELS_DIR / file_name
@@ -119,10 +147,12 @@ async def _download_job(job_id, url, file_name):
         entry = local_llm.add_model(local_llm.slugify(file_name[:-5]), file_name[:-5], file_name, target, url)
         job['status'] = 'done'
         job['modelId'] = entry['id']
+        job['finished_at'] = time.time()
         await _try_ollama_import(entry['id'])
     except Exception as err:  # surface any failure to the polling client
         job['status'] = 'error'
         job['error'] = str(err)[:300]
+        job['finished_at'] = time.time()
         target.unlink(missing_ok=True)
 
 
@@ -134,7 +164,6 @@ async def _download_job(job_id, url, file_name):
 
 @router.get('/proxy')
 async def proxy(url: str):
-    import httpx
     parsed = urlparse(url)
     host = parsed.hostname or ''
     # api.huggingface.co doesn't resolve on many networks — the API also lives
@@ -145,19 +174,16 @@ async def proxy(url: str):
     if parsed.scheme not in ('http', 'https') or not host:
         raise HTTPException(400, 'the proxy only allows http(s) URLs')
 
-    client = httpx.AsyncClient(timeout=httpx.Timeout(60.0, read=None))
+    client = _get_proxy_client()
     try:
         upstream = await safe_get(client, url, stream=True)
     except ValueError as err:
-        await client.aclose()
         raise HTTPException(400, str(err)) from err
     except httpx.HTTPError as err:
-        await client.aclose()
         raise HTTPException(502, f'upstream unreachable ({err.__class__.__name__}: {err})') from err
 
     if upstream.status_code >= 400:
         await upstream.aclose()
-        await client.aclose()
         raise HTTPException(upstream.status_code, f'upstream returned HTTP {upstream.status_code}')
 
     async def stream():
@@ -166,7 +192,6 @@ async def proxy(url: str):
                 yield chunk
         finally:
             await upstream.aclose()
-            await client.aclose()
 
     headers = {}
     length = upstream.headers.get('content-length')

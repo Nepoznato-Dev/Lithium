@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import WinControls from '../../Components/Desktop/WinControls';
 import { useSettings } from '../../Components/SettingsContext';
 import { BUILD_VERSION, DEFAULT_SETTINGS } from '../../lib/settings';
@@ -6,24 +6,25 @@ import { createBackupZip, restoreBackupZip, downloadBlob as downloadZipBlob } fr
 import { registerSavedFile } from '../../lib/downloads';
 import Icon from '../../Components/Icon';
 
-import SecuritySection from './sections/SecuritySection';
-import ProfileSection from './sections/ProfileSection';
-import AppearanceSection from './sections/AppearanceSection';
-import DisplaySection from './sections/DisplaySection';
-import MotionSection from './sections/MotionSection';
-import BackgroundSection from './sections/BackgroundSection';
-import PowerSection from './sections/PowerSection';
-import NotificationsSection from './sections/NotificationsSection';
-import WindowSection from './sections/WindowSection';
-import GamesSection from './sections/GamesSection';
-import BrowserSection from './sections/BrowserSection';
-import DataSection from './sections/DataSection';
-import AboutSection from './sections/AboutSection';
-import YukisCustomizationSection from './sections/YukisCustomizationSection';
-import PrivacySettingsSection from './sections/PrivacySettingsSection';
-import AiSection from './sections/AiSection';
-import SearchEnginesSection from './sections/SearchEnginesSection';
-import ProfilesSection from './sections/ProfilesSection';
+// Lazy-load all 18 section components to reduce initial bundle size
+const SecuritySection = lazy(() => import('./sections/SecuritySection'));
+const ProfileSection = lazy(() => import('./sections/ProfileSection'));
+const AppearanceSection = lazy(() => import('./sections/AppearanceSection'));
+const DisplaySection = lazy(() => import('./sections/DisplaySection'));
+const MotionSection = lazy(() => import('./sections/MotionSection'));
+const BackgroundSection = lazy(() => import('./sections/BackgroundSection'));
+const PowerSection = lazy(() => import('./sections/PowerSection'));
+const NotificationsSection = lazy(() => import('./sections/NotificationsSection'));
+const WindowSection = lazy(() => import('./sections/WindowSection'));
+const GamesSection = lazy(() => import('./sections/GamesSection'));
+const BrowserSection = lazy(() => import('./sections/BrowserSection'));
+const DataSection = lazy(() => import('./sections/DataSection'));
+const AboutSection = lazy(() => import('./sections/AboutSection'));
+const YukisCustomizationSection = lazy(() => import('./sections/YukisCustomizationSection'));
+const PrivacySettingsSection = lazy(() => import('./sections/PrivacySettingsSection'));
+const AiSection = lazy(() => import('./sections/AiSection'));
+const SearchEnginesSection = lazy(() => import('./sections/SearchEnginesSection'));
+const ProfilesSection = lazy(() => import('./sections/ProfilesSection'));
 
 /* ================================================================
    Section definitions
@@ -209,25 +210,26 @@ export default function Settings({ windowed = false, closeSelf, minimizeSelf, ma
   }, [filteredSections, searchQuery, activeSection]);
 
   const renderSection = () => {
+    const fallback = null;
     switch (currentSection?.id) {
-      case 'profile': return <ProfileSection settings={settings} update={update} />;
-      case 'appearance': return <AppearanceSection settings={settings} update={update} />;
-      case 'display': return <DisplaySection settings={settings} update={update} />;
-      case 'motion': return <MotionSection settings={settings} update={update} />;
-      case 'background': return <BackgroundSection settings={settings} update={update} />;
-      case 'yuki-customization': return <YukisCustomizationSection settings={settings} update={update} />;
-      case 'power': return <PowerSection settings={settings} update={update} />;
-      case 'notifications': return <NotificationsSection settings={settings} update={update} />;
-      case 'window': return <WindowSection settings={settings} update={update} />;
-      case 'games': return <GamesSection settings={settings} update={update} />;
-      case 'browser': return <BrowserSection settings={settings} update={update} />;
-      case 'security': return <SecuritySection settings={settings} update={update} />;
-      case 'privacy': return <PrivacySettingsSection settings={settings} update={update} />;
-      case 'ai': return <AiSection settings={settings} update={update} />;
-      case 'search-engines': return <SearchEnginesSection settings={settings} update={update} />;
-      case 'profiles': return <ProfilesSection settings={settings} update={update} />;
-      case 'data': return <DataSection exportSettings={exportSettings} importSettings={importSettings} exportAllData={exportAllData} exportFullZip={exportFullZip} importFullZip={importFullZip} zipBusy={zipBusy} deleteAllData={deleteAllData} />;
-      case 'about': return <AboutSection />;
+      case 'profile': return <Suspense fallback={fallback}><ProfileSection settings={settings} update={update} /></Suspense>;
+      case 'appearance': return <Suspense fallback={fallback}><AppearanceSection settings={settings} update={update} /></Suspense>;
+      case 'display': return <Suspense fallback={fallback}><DisplaySection settings={settings} update={update} /></Suspense>;
+      case 'motion': return <Suspense fallback={fallback}><MotionSection settings={settings} update={update} /></Suspense>;
+      case 'background': return <Suspense fallback={fallback}><BackgroundSection settings={settings} update={update} /></Suspense>;
+      case 'yuki-customization': return <Suspense fallback={fallback}><YukisCustomizationSection settings={settings} update={update} /></Suspense>;
+      case 'power': return <Suspense fallback={fallback}><PowerSection settings={settings} update={update} /></Suspense>;
+      case 'notifications': return <Suspense fallback={fallback}><NotificationsSection settings={settings} update={update} /></Suspense>;
+      case 'window': return <Suspense fallback={fallback}><WindowSection settings={settings} update={update} /></Suspense>;
+      case 'games': return <Suspense fallback={fallback}><GamesSection settings={settings} update={update} /></Suspense>;
+      case 'browser': return <Suspense fallback={fallback}><BrowserSection settings={settings} update={update} /></Suspense>;
+      case 'security': return <Suspense fallback={fallback}><SecuritySection settings={settings} update={update} /></Suspense>;
+      case 'privacy': return <Suspense fallback={fallback}><PrivacySettingsSection settings={settings} update={update} /></Suspense>;
+      case 'ai': return <Suspense fallback={fallback}><AiSection settings={settings} update={update} /></Suspense>;
+      case 'search-engines': return <Suspense fallback={fallback}><SearchEnginesSection settings={settings} update={update} /></Suspense>;
+      case 'profiles': return <Suspense fallback={fallback}><ProfilesSection settings={settings} update={update} /></Suspense>;
+      case 'data': return <Suspense fallback={fallback}><DataSection exportSettings={exportSettings} importSettings={importSettings} exportAllData={exportAllData} exportFullZip={exportFullZip} importFullZip={importFullZip} zipBusy={zipBusy} deleteAllData={deleteAllData} /></Suspense>;
+      case 'about': return <Suspense fallback={fallback}><AboutSection /></Suspense>;
       default: return null;
     }
   };

@@ -31,7 +31,7 @@ fn default_true() -> bool { true }
 #[derive(Deserialize)]
 pub struct SearchQ { #[serde(default)] pub q: String }
 
-pub fn list_memory() -> serde_json::Value {
+pub async fn list_memory() -> serde_json::Value {
     db::with_conn(|conn| {
         let mut stmt = conn.prepare("SELECT key, value, updated_at FROM memories ORDER BY updated_at DESC").unwrap();
         let mut map = serde_json::Map::new();
@@ -43,11 +43,11 @@ pub fn list_memory() -> serde_json::Value {
             }
         }
         serde_json::Value::Object(map)
-    })
+    }).await
 }
 
 pub async fn list_memory_handler() -> Json<serde_json::Value> {
-    Json(list_memory())
+    Json(list_memory().await)
 }
 
 pub async fn write_memory(Json(body): Json<MemoryIn>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
@@ -55,34 +55,33 @@ pub async fn write_memory(Json(body): Json<MemoryIn>) -> Result<Json<serde_json:
     if key.is_empty() { return Err((StatusCode::BAD_REQUEST, "memory key must not be empty".into())); }
     let value = body.value.chars().take(VALUE_CAP).collect::<String>();
     let now = db::chrono_millis();
-    db::with_conn(|conn| {
+    let k = key.clone();
+    db::with_conn(move |conn| {
         conn.execute(
             "INSERT INTO memories (key, value, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-            params![key, value, now],
+            params![k, value, now],
         ).unwrap();
-        let rows: Vec<String> = {
-            let mut stmt = conn.prepare("SELECT key FROM memories ORDER BY updated_at DESC").unwrap();
-            stmt.query_map([], |r| r.get::<_, String>(0)).unwrap().filter_map(|r| r.ok()).collect()
-        };
-        for k in rows.iter().skip(ENTRY_CAP) {
-            conn.execute("DELETE FROM memories WHERE key = ?1", params![k]).unwrap();
-        }
-    });
+        conn.execute(
+            "DELETE FROM memories WHERE key IN (SELECT key FROM memories ORDER BY updated_at DESC LIMIT -1 OFFSET ?1)",
+            params![ENTRY_CAP as i64],
+        ).unwrap();
+    }).await;
     Ok(Json(serde_json::json!({"ok": true, "key": key})))
 }
 
 pub async fn delete_memory(Path(key): Path<String>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let deleted = db::with_conn(|conn| {
-        conn.execute("DELETE FROM memories WHERE key = ?1", params![key]).unwrap()
-    });
+    let k = key.clone();
+    let deleted = db::with_conn(move |conn| {
+        conn.execute("DELETE FROM memories WHERE key = ?1", params![k]).unwrap()
+    }).await;
     if deleted == 0 { return Err((StatusCode::NOT_FOUND, format!("no memory entry '{}'", key))); }
     Ok(Json(serde_json::json!({"ok": true})))
 }
 
 pub async fn search_memory(Query(params): Query<SearchQ>) -> Json<serde_json::Value> {
     let needle = params.q.trim().to_lowercase();
-    if needle.is_empty() { return Json(list_memory()); }
-    let memory = list_memory();
+    let memory = list_memory().await;
+    if needle.is_empty() { return Json(memory); }
     let hits: serde_json::Map<String, serde_json::Value> = memory.as_object().unwrap().iter()
         .filter(|(k, v)| {
             k.to_lowercase().contains(&needle) ||
@@ -94,29 +93,33 @@ pub async fn search_memory(Query(params): Query<SearchQ>) -> Json<serde_json::Va
 }
 
 pub async fn sync_memory(Json(body): Json<SyncIn>) -> Json<serde_json::Value> {
-    let stored = list_memory();
+    let stored = list_memory().await;
     let now = db::chrono_millis();
-    db::with_conn(|conn| {
-        for (key, entry) in &body.entries {
-            let clean_key = key.trim().chars().take(KEY_CAP).collect::<String>();
-            if clean_key.is_empty() { continue; }
-            let incoming_at = entry.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(now);
-            if let Some(current) = stored.get(&clean_key) {
-                if current.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(0) >= incoming_at { continue; }
+    let entries = body.entries;
+    db::with_conn({
+        let stored = stored.clone();
+        move |conn| {
+            for (key, entry) in &entries {
+                let clean_key = key.trim().chars().take(KEY_CAP).collect::<String>();
+                if clean_key.is_empty() { continue; }
+                let incoming_at = entry.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(now);
+                if let Some(current) = stored.get(&clean_key) {
+                    if current.get("updatedAt").and_then(|v| v.as_i64()).unwrap_or(0) >= incoming_at { continue; }
+                }
+                let value = entry.get("value").and_then(|v| v.as_str()).unwrap_or("");
+                let value = value.chars().take(VALUE_CAP).collect::<String>();
+                conn.execute(
+                    "INSERT INTO memories (key, value, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+                    params![clean_key, value, incoming_at],
+                ).unwrap();
             }
-            let value = entry.get("value").and_then(|v| v.as_str()).unwrap_or("");
-            let value = value.chars().take(VALUE_CAP).collect::<String>();
-            conn.execute(
-                "INSERT INTO memories (key, value, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-                params![clean_key, value, incoming_at],
-            ).unwrap();
         }
-    });
-    Json(list_memory())
+    }).await;
+    Json(stored)
 }
 
-fn memory_block(max_entries: usize) -> String {
-    let memory = list_memory();
+async fn memory_block(max_entries: usize) -> String {
+    let memory = list_memory().await;
     let keys: Vec<&String> = memory.as_object().map(|m| m.keys().take(max_entries).collect()).unwrap_or_default();
     if keys.is_empty() { return String::new(); }
     let lines: Vec<String> = keys.iter().filter_map(|k| {
@@ -129,18 +132,21 @@ fn memory_block(max_entries: usize) -> String {
 pub async fn build_context(Json(body): Json<ContextIn>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     if body.messages.is_empty() { return Err((StatusCode::BAD_REQUEST, "messages must not be empty".into())); }
 
-    let mut budget = body.max_tokens.unwrap_or_else(|| {
-        if let Some(ref mid) = body.model_id {
-            db::with_conn(|conn| {
-                conn.query_row("SELECT context_window FROM models WHERE id = ?1", [mid], |r| r.get::<_, i64>(0)).ok()
-            }).unwrap_or(8192)
-        } else { 8192 }
-    });
+    let mut budget = if let Some(max) = body.max_tokens {
+        max
+    } else if let Some(ref mid) = body.model_id {
+        let mid = mid.clone();
+        db::with_conn(move |conn| {
+            conn.query_row("SELECT context_window FROM models WHERE id = ?1", [&mid], |r| r.get::<_, i64>(0)).ok()
+        }).await.unwrap_or(8192)
+    } else {
+        8192
+    };
     budget = budget.max(1024);
     let reserve = 1024i64;
 
     let mut messages = body.messages.clone();
-    let memory_text = if body.include_memory { memory_block(40) } else { String::new() };
+    let memory_text = if body.include_memory { memory_block(40).await } else { String::new() };
 
     if !memory_text.is_empty() {
         let sys_idx = messages.iter().position(|m| m["role"] == "system");

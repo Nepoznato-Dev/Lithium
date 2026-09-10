@@ -1,5 +1,6 @@
-import { deleteBlob, getBlob, putBlob } from './manager';
-import { idbGet, idbPut } from './indexedDB';
+import { getBlob } from './manager';
+import { idbGet } from './indexedDB';
+import { put as liPut, del as liDel, putBlob, deleteBlob } from './liStorage';
 import * as core from '../core';
 import { storage } from './localStorage';
 
@@ -132,13 +133,11 @@ function scheduleSave() {
 export async function persistNow() {
   if (!hydrated && !tree) return null;
   const entries = tree || [];
-  const jsonBytes = new TextEncoder().encode(JSON.stringify(entries));
+  const jsonString = JSON.stringify(entries);
 
-  let payload = jsonBytes;
-  let raw = true;
-  let binary = false;
+  let payload, raw, binary;
   if (core.hasWasm()) {
-    const bin = await core.snapshotEncode(new TextDecoder().decode(jsonBytes));
+    const bin = await core.snapshotEncode(jsonString);
     if (bin) {
       binary = true;
       const compressed = await core.wasmCompress(bin);
@@ -147,8 +146,15 @@ export async function persistNow() {
         raw = false;
       } else {
         payload = bin;
+        raw = true;
       }
     }
+  }
+  // Fallback: raw JSON bytes when wasm path didn't produce a payload
+  if (!payload) {
+    payload = new TextEncoder().encode(jsonString);
+    raw = true;
+    binary = false;
   }
 
   const hash = await core.wasmHash(payload);
@@ -156,21 +162,21 @@ export async function persistNow() {
   const previous = await idbGet('kv', POINTER_KEY);
 
   // Blob wrapper so storage accounting measures exact bytes.
-  await putBlob(key, new Blob([payload]), { name: 'lithium-fs-snapshot' });
+  await putBlob('file', key, new Blob([payload]), undefined, { name: 'lithium-fs-snapshot' });
   const pointer = {
     key,
     prevKey: previous?.key || null,
     raw,
     binary,
     hash,
-    rawSize: jsonBytes.length,
-    compSize: payload.length,
+    rawSize: new Blob([jsonString]).size,
+    compSize: payload.length || payload.byteLength,
     engine: binary ? (raw ? 'wasm-bin' : 'wasm-bin+lz4') : 'json',
     at: Date.now(),
   };
-  await idbPut('kv', POINTER_KEY, pointer);
+  await liPut('fs-pointer', POINTER_KEY, pointer);
   if (pointer.prevKey && pointer.prevKey !== key) {
-    await deleteBlob(pointer.prevKey).catch(() => {});
+    await deleteBlob('file', pointer.prevKey).catch(() => {});
   }
   storage.remove('fs'); // legacy mirror no longer needed
   lastStats = pointer;

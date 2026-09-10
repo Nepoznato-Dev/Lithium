@@ -17,6 +17,34 @@ from ..cookie_manager import cookie_manager
 log = logging.getLogger(__name__)
 router = APIRouter(prefix='/api/web')
 
+# -- Pre-compiled regex patterns (hot-path) --
+RE_TAG = re.compile(r'<[^>]+>')
+RE_WHITESPACE = re.compile(r'\s+')
+RE_SCRIPT_STYLE = re.compile(r'<(script|style|noscript)[^>]*>.*?</\1>', re.I | re.S)
+RE_TITLE = re.compile(r'<title[^>]*>(.*?)</title>', re.I | re.S)
+RE_DDG_RESULT = re.compile(r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>(.*?)(?=<a[^>]+class="result__a"|</body>)', re.I | re.S)
+RE_META_CSP = re.compile(r'<meta[^>]+http-equiv=["\'](?:content-security-policy|x-frame-options|refresh)["\'][^>]*>', re.I)
+RE_RECAPTCHA_KEY = re.compile(r'recaptcha.*?sitekey["\s:=]+["\']([A-Za-z0-9_-]+)', re.I)
+RE_HCAPTCHA_KEY = re.compile(r'hcaptcha.*?sitekey["\s:=]+["\']([A-Za-z0-9_-]+)', re.I)
+
+# -- Shared httpx client (Fix 2) --
+_shared_web_client: httpx.AsyncClient | None = None
+
+
+def _get_web_client() -> httpx.AsyncClient:
+    global _shared_web_client
+    if _shared_web_client is None or _shared_web_client.is_closed:
+        _shared_web_client = httpx.AsyncClient(
+            headers=HEADERS,
+            follow_redirects=True,
+            timeout=PROXY_TIMEOUT,
+        )
+    return _shared_web_client
+
+
+# -- Cached runtime_override.js template (Fix 9) --
+_override_template: str | None = None
+
 
 def _safe_url_for_log(url: str, max_len: int = 200) -> str:
     """Return a URL safe for logging — strips query string and truncates."""
@@ -50,7 +78,7 @@ class ScrapeIn(BaseModel):
 
 
 def clean(value):
-    return re.sub(r'\s+', ' ', unescape(re.sub(r'<[^>]+>', ' ', value))).strip()
+    return RE_WHITESPACE.sub(' ', unescape(RE_TAG.sub(' ', value))).strip()
 
 
 def safe_url(value):
@@ -105,9 +133,11 @@ def runtime_override_script(proxy_base, target_url, backend_origin=''):
 
     backend_origin: the origin of our own backend (e.g. 'http://127.0.0.1:8734')
     so that same-backend requests are NOT wrapped through the proxy."""
-    template_path = Path(__file__).parent / 'runtime_override.js'
-    template = template_path.read_text()
-    js = (template
+    global _override_template
+    if _override_template is None:
+        template_path = Path(__file__).parent / 'runtime_override.js'
+        _override_template = template_path.read_text()
+    js = (_override_template
         .replace('{{PROXY}}', f'{proxy_base}/api/web/proxy?url=')
         .replace('{{TARGET}}', target_url)
         .replace('{{BACKEND}}', backend_origin))
@@ -117,18 +147,19 @@ def runtime_override_script(proxy_base, target_url, backend_origin=''):
 def _detect_captcha(html: str) -> dict | None:
     """Detect captcha challenges in an HTML page.
     Returns captcha info dict if found, else None."""
+    html_lower = html.lower()
     # reCAPTCHA v2 / v3
-    m = re.search(r'recaptcha.*?sitekey["\s:=]+["\']([A-Za-z0-9_-]+)', html, re.I)
-    if m or 'g-recaptcha' in html.lower() or 'recaptcha' in html.lower():
+    m = RE_RECAPTCHA_KEY.search(html)
+    if m or 'g-recaptcha' in html_lower or 'recaptcha' in html_lower:
         site_key = m.group(1) if m else ''
         return {'type': 'recaptcha', 'siteKey': site_key}
     # hCaptcha
-    m = re.search(r'hcaptcha.*?sitekey["\s:=]+["\']([A-Za-z0-9_-]+)', html, re.I)
-    if m or 'h-captcha' in html.lower() or 'hcaptcha' in html.lower():
+    m = RE_HCAPTCHA_KEY.search(html)
+    if m or 'h-captcha' in html_lower or 'hcaptcha' in html_lower:
         site_key = m.group(1) if m else ''
         return {'type': 'hcaptcha', 'siteKey': site_key}
     # Cloudflare Turnstile / challenge
-    if 'cf-challenge' in html.lower() or 'turnstile' in html.lower() or 'challenge-platform' in html.lower():
+    if 'cf-challenge' in html_lower or 'turnstile' in html_lower or 'challenge-platform' in html_lower:
         return {'type': 'turnstile', 'siteKey': ''}
     return None
 
@@ -177,10 +208,10 @@ async def api_hub_search(query, limit):
     api_key = os.getenv('LITHIUM_SEARCH_API_KEY', '').strip()
     if api_key:
         headers['Authorization'] = f'Bearer {api_key}'
-    async with httpx.AsyncClient(headers=headers, timeout=SEARCH_TIMEOUT) as client:
-        response = await client.post(endpoint, json={'query': query, 'limit': limit})
-        response.raise_for_status()
-        payload = response.json()
+    client = _get_web_client()
+    response = await client.post(endpoint, headers=headers, json={'query': query, 'limit': limit}, timeout=SEARCH_TIMEOUT)
+    response.raise_for_status()
+    payload = response.json()
     items = payload.get('results', payload) if isinstance(payload, dict) else payload
     return normalize_results(items if isinstance(items, list) else [], limit)
 
@@ -195,15 +226,14 @@ async def search(body: SearchIn):
     except (httpx.HTTPError, ValueError, TypeError):
         pass
     try:
-        async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=SEARCH_TIMEOUT) as client:
-            response = await client.get(f'https://html.duckduckgo.com/html/?q={quote_plus(query)}')
-            response.raise_for_status()
+        client = _get_web_client()
+        response = await client.get(f'https://html.duckduckgo.com/html/?q={quote_plus(query)}', timeout=SEARCH_TIMEOUT)
+        response.raise_for_status()
     except httpx.HTTPError as err:
         raise HTTPException(502, f'DuckDuckGo search failed: {err}') from err
 
     parsed_results = []
-    pattern = re.compile(r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>(.*?)(?=<a[^>]+class="result__a"|</body>)', re.I | re.S)
-    for match in pattern.finditer(response.text):
+    for match in RE_DDG_RESULT.finditer(response.text):
         raw_url = unescape(match.group(1))
         parsed = urlparse(raw_url)
         url = parse_qs(parsed.query).get('uddg', [raw_url])[0]
@@ -214,15 +244,16 @@ async def search(body: SearchIn):
 @router.post('/scrape')
 async def scrape(body: ScrapeIn):
     try:
-        async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
-            response = await safe_get(client, body.url)
-            response.raise_for_status()
+        client = _get_web_client()
+        response = await safe_get(client, body.url)
+        response.raise_for_status()
     except ValueError as err:
         raise HTTPException(400, str(err)) from err
     except httpx.HTTPError as err:
         raise HTTPException(502, f'Page fetch failed: {err}') from err
-    text = clean(re.sub(r'<(script|style|noscript)[^>]*>.*?</\1>', ' ', response.text, flags=re.I | re.S))
-    return {'url': str(response.url), 'title': clean(re.search(r'<title[^>]*>(.*?)</title>', response.text, re.I | re.S).group(1)) if re.search(r'<title[^>]*>(.*?)</title>', response.text, re.I | re.S) else str(response.url), 'content': text[:body.max_chars]}
+    text = clean(RE_SCRIPT_STYLE.sub(' ', response.text))
+    title_match = RE_TITLE.search(response.text)
+    return {'url': str(response.url), 'title': clean(title_match.group(1)) if title_match else str(response.url), 'content': text[:body.max_chars]}
 
 
 @router.api_route('/proxy', methods=['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS', 'PATCH'])
@@ -256,7 +287,7 @@ async def proxy(url: str, request: Request):
     
     # Validate the URL / SSRF guard
     try:
-        current = _public_url(url)
+        current = await _public_url(url)
     except ValueError as err:
         raise HTTPException(400, str(err)) from err
 
@@ -309,33 +340,31 @@ async def proxy(url: str, request: Request):
     response = None
     try:
         stored_cookies = cookie_manager.get_cookies_for(current)
-        async with httpx.AsyncClient(
-            headers=req_headers,
-            timeout=PROXY_TIMEOUT,
-            cookies=stored_cookies,
-        ) as client:
-            for _hop in range(6):
-                request_obj = client.build_request(
-                    request.method, current,
-                    content=request_body if request.method in ('POST', 'PUT', 'PATCH') else None,
-                )
-                response = await client.send(request_obj, follow_redirects=False)
-                # Store any Set-Cookie headers from the response
-                cookie_manager.store_from_response(response, current)
-                if response.status_code not in (301, 302, 303, 307, 308):
-                    break
-                location = response.headers.get('location')
-                await response.aclose()
-                if not location:
-                    break
-                from urllib.parse import urljoin as _urljoin
-                current = _public_url(_urljoin(current, location))
-                parsed_target = urlparse(current)
-                target_origin = f'{parsed_target.scheme}://{parsed_target.netloc}'
-                req_headers['Origin'] = target_origin
-                req_headers['Referer'] = current
-            else:
-                raise HTTPException(502, 'Too many redirects')
+        client = _get_web_client()
+        for _hop in range(6):
+            request_obj = client.build_request(
+                request.method, current,
+                headers=req_headers,
+                cookies=stored_cookies,
+                content=request_body if request.method in ('POST', 'PUT', 'PATCH') else None,
+            )
+            response = await client.send(request_obj, follow_redirects=False)
+            # Store any Set-Cookie headers from the response
+            cookie_manager.store_from_response(response, current)
+            if response.status_code not in (301, 302, 303, 307, 308):
+                break
+            location = response.headers.get('location')
+            await response.aclose()
+            if not location:
+                break
+            from urllib.parse import urljoin as _urljoin
+            current = await _public_url(_urljoin(current, location))
+            parsed_target = urlparse(current)
+            target_origin = f'{parsed_target.scheme}://{parsed_target.netloc}'
+            req_headers['Origin'] = target_origin
+            req_headers['Referer'] = current
+        else:
+            raise HTTPException(502, 'Too many redirects')
     except HTTPException:
         raise
     except Exception as err:
@@ -401,9 +430,7 @@ async def proxy(url: str, request: Request):
             if captcha_detected:
                 log.info('Captcha detected (%s) for %s', captcha_detected['type'], current[:120])
 
-            html = re.sub(
-                r'<meta[^>]+http-equiv=["\'](?:content-security-policy|x-frame-options|refresh)["\'][^>]*>',
-                '', html, flags=re.I)
+            html = RE_META_CSP.sub('', html)
             proxy_base = str(request.base_url).rstrip('/')
             backend_origin = proxy_base
             inject = f'<base href="{url}">' + runtime_override_script(proxy_base, url, backend_origin)

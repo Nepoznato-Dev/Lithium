@@ -1,9 +1,22 @@
 //! AI provider dispatch — OpenAI-compat, Anthropic, Google, Ollama.
 
 use reqwest::Client;
+use regex::Regex;
 use serde_json::Value;
+use std::sync::LazyLock;
 
 static OLLAMA_BASE: &str = "http://localhost:11434";
+
+static RE_KEY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"[?&]key=[^\s&'"]+"#).unwrap());
+static RE_BEARER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"Bearer\s+[^\s'"]+"#).unwrap());
+static RE_XKEY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(?i)(x-api-key["\s:]+)[^\s'"]+"#).unwrap());
+
+static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
+    Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .unwrap()
+});
 
 static OPENAI_COMPAT: &[(&str, &str)] = &[
     ("openai", "https://api.openai.com/v1"),
@@ -12,11 +25,11 @@ static OPENAI_COMPAT: &[(&str, &str)] = &[
 ];
 
 pub async fn ollama_reachable() -> bool {
-    let client = Client::builder().timeout(std::time::Duration::from_secs(2)).build().ok();
-    match client {
-        Some(c) => c.get(format!("{}/api/tags", OLLAMA_BASE)).send().await.map(|r| r.status().is_success()).unwrap_or(false),
-        None => false,
-    }
+    HTTP_CLIENT.get(format!("{}/api/tags", OLLAMA_BASE))
+        .timeout(std::time::Duration::from_secs(2))
+        .send().await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
 }
 
 pub async fn dispatch(provider: &str, model_name: &str, messages: &Value, key: Option<&str>, temperature: f64) -> Result<String, String> {
@@ -32,12 +45,9 @@ pub async fn dispatch(provider: &str, model_name: &str, messages: &Value, key: O
 }
 
 fn sanitize(text: &str) -> String {
-    let re_key = regex::Regex::new(r#"[?&]key=[^\s&'"]+"#).unwrap();
-    let re_bearer = regex::Regex::new(r#"Bearer\s+[^\s'"]+"#).unwrap();
-    let re_xkey = regex::Regex::new(r#"(?i)(x-api-key["\s:]+)[^\s'"]+"#).unwrap();
-    let t = re_key.replace_all(text, "?key=***");
-    let t = re_bearer.replace_all(&t, "Bearer ***");
-    let t = re_xkey.replace_all(&t, "${1}***");
+    let t = RE_KEY.replace_all(text, "?key=***");
+    let t = RE_BEARER.replace_all(&t, "Bearer ***");
+    let t = RE_XKEY.replace_all(&t, "${1}***");
     t.to_string()
 }
 
@@ -59,8 +69,7 @@ fn raise_for(provider: &str, status: u16, body: &str) -> Result<String, String> 
 
 async fn openai_compat(provider: &str, base: &str, model_name: &str, messages: &Value, key: Option<&str>, temperature: f64) -> Result<String, String> {
     let key = key.ok_or_else(|| format!("{}: no API key stored", provider))?;
-    let client = Client::builder().timeout(std::time::Duration::from_secs(120)).build().map_err(|e| e.to_string())?;
-    let resp = client.post(format!("{}/chat/completions", base))
+    let resp = HTTP_CLIENT.post(format!("{}/chat/completions", base))
         .header("Authorization", format!("Bearer {}", key))
         .json(&serde_json::json!({ "model": model_name, "messages": messages, "temperature": temperature }))
         .send().await.map_err(|e| format!("{}: network error ({})", provider, e))?;
@@ -76,13 +85,12 @@ async fn anthropic(model_name: &str, messages: &Value, key: Option<&str>) -> Res
     let msgs = messages.as_array().ok_or("messages must be an array")?;
     let system: String = msgs.iter().filter(|m| m["role"] == "system").map(|m| m["content"].as_str().unwrap_or("")).collect::<Vec<_>>().join("\n");
     let turns: Vec<&Value> = msgs.iter().filter(|m| m["role"] != "system").collect();
-    let client = Client::builder().timeout(std::time::Duration::from_secs(120)).build().map_err(|e| e.to_string())?;
     let body = serde_json::json!({
         "model": model_name, "max_tokens": 1024,
         "system": if system.is_empty() { Value::Null } else { Value::String(system) },
         "messages": turns,
     });
-    let resp = client.post("https://api.anthropic.com/v1/messages")
+    let resp = HTTP_CLIENT.post("https://api.anthropic.com/v1/messages")
         .header("x-api-key", key).header("anthropic-version", "2023-06-01")
         .json(&body).send().await.map_err(|e| format!("anthropic: network error ({})", e))?;
     let status = resp.status().as_u16();
@@ -108,9 +116,8 @@ async fn google(model_name: &str, messages: &Value, key: Option<&str>) -> Result
     if !system.is_empty() {
         body["systemInstruction"] = serde_json::json!({ "parts": [{"text": system}] });
     }
-    let client = Client::builder().timeout(std::time::Duration::from_secs(120)).build().map_err(|e| e.to_string())?;
     let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}", model_name, key);
-    let resp = client.post(&url).json(&body).send().await.map_err(|e| format!("google: network error ({})", e))?;
+    let resp = HTTP_CLIENT.post(&url).json(&body).send().await.map_err(|e| format!("google: network error ({})", e))?;
     let status = resp.status().as_u16();
     let text = resp.text().await.map_err(|e| e.to_string())?;
     raise_for("google", status, &text)?;
@@ -123,8 +130,7 @@ async fn google(model_name: &str, messages: &Value, key: Option<&str>) -> Result
 }
 
 async fn ollama(model_name: &str, messages: &Value, temperature: f64) -> Result<String, String> {
-    let client = Client::builder().timeout(std::time::Duration::from_secs(120)).build().map_err(|e| e.to_string())?;
-    let resp = client.post(format!("{}/api/chat", OLLAMA_BASE))
+    let resp = HTTP_CLIENT.post(format!("{}/api/chat", OLLAMA_BASE))
         .json(&serde_json::json!({ "model": model_name, "messages": messages, "stream": false, "options": { "temperature": temperature } }))
         .send().await.map_err(|e| format!("ollama: network error ({})", e))?;
     let status = resp.status().as_u16();

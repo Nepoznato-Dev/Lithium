@@ -50,10 +50,12 @@ def write_memory(body: MemoryIn):
             ' ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
             (key, value, now),
         )
-        # Evict oldest entries past the cap (mirrors the frontend store).
-        rows = conn.execute('SELECT key FROM memories ORDER BY updated_at DESC').fetchall()
-        for row in rows[ENTRY_CAP:]:
-            conn.execute('DELETE FROM memories WHERE key = ?', (row['key'],))
+        # Evict oldest entries past the cap (single SQL, mirrors the frontend store).
+        conn.execute(
+            'DELETE FROM memories WHERE key NOT IN '
+            '(SELECT key FROM memories ORDER BY updated_at DESC LIMIT ?)',
+            (ENTRY_CAP,),
+        )
     return {'ok': True, 'key': key}
 
 
@@ -71,9 +73,12 @@ def search_memory(q: str = ''):
     needle = q.strip().lower()
     if not needle:
         return list_memory()
-    memory = list_memory()
-    hits = {k: v for k, v in memory.items() if needle in k.lower() or needle in v['value'].lower()}
-    return hits
+    with db.connect() as conn:
+        rows = conn.execute(
+            'SELECT key, value, updated_at FROM memories WHERE key LIKE ? OR value LIKE ? ORDER BY updated_at DESC',
+            (f'%{needle}%', f'%{needle}%'),
+        ).fetchall()
+    return {row['key']: {'value': row['value'], 'updatedAt': row['updated_at']} for row in rows}
 
 
 @router.post('/memory/sync')
@@ -90,12 +95,14 @@ def sync_memory(body: SyncIn):
             current = stored.get(clean_key)
             if current and current['updatedAt'] >= incoming_at:
                 continue
+            value = str(entry.get('value', ''))[:VALUE_CAP]
             conn.execute(
                 'INSERT INTO memories (key, value, updated_at) VALUES (?, ?, ?)'
                 ' ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
-                (clean_key, str(entry.get('value', ''))[:VALUE_CAP], incoming_at),
+                (clean_key, value, incoming_at),
             )
-    return list_memory()
+            stored[clean_key] = {'value': value, 'updatedAt': incoming_at}
+    return stored
 
 
 def memory_block(max_entries=40):

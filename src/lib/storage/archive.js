@@ -12,7 +12,8 @@
  * ensuring fast compression without extra dependencies.
  */
 import { zipSync, unzipSync, strToU8, strFromU8, deflateSync, inflateSync } from 'fflate';
-import { getBlob, putBlob } from './manager';
+import { getBlob } from './manager';
+import { putBlob } from './liStorage';
 
 /* ─ Format detection ─────────────────────────────────────────────────── */
 
@@ -443,7 +444,7 @@ export async function extractGzip(tree, parentId, blob, { onProgress, nameOverri
   if (TEXT_EXT.has(ext) || data.length < 64 * 1024) {
     next = [...next, { id, name: fileName, type: 'text', parentId, content: strFromU8(data), createdAt: now, updatedAt: now }];
   } else {
-    await putBlob(id, new Blob([data]), { name: fileName });
+    await putBlob('archive', id, new Blob([data]), undefined, { name: fileName });
     next = [...next, { id, name: fileName, type: 'file', parentId, content: null, idb: true, size: data.length, createdAt: now, updatedAt: now }];
   }
   onProgress?.({ phase: 'done' });
@@ -578,7 +579,7 @@ async function buildTreeFromFiles(tree, parentId, fileMap, onProgress, folderNam
       nextRef.current = [...nextRef.current, { id: makeId(idPrefix), name, type: 'text', parentId: parentDirId, content: strFromU8(bytes), createdAt: now, updatedAt: now }];
     } else if (bytes.length <= MAX_BINARY) {
       const id = makeId(idPrefix);
-      await putBlob(id, new Blob([bytes]), { name });
+      await putBlob('archive', id, new Blob([bytes]), undefined, { name });
       nextRef.current = [...nextRef.current, { id, name, type: 'file', parentId: parentDirId, content: null, idb: true, size: bytes.length, createdAt: now, updatedAt: now }];
     }
     count++;

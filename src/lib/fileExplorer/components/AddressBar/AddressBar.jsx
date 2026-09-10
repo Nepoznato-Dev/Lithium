@@ -4,7 +4,7 @@
  */
 import { useState, useCallback, memo } from 'react';
 import { PngIcon } from '../common/PngIcon.jsx';
-import { nav, view, draggingId } from '../../state/signals.jsx';
+import { nav, view } from '../../state/signals.jsx';
 import { useHistory } from '../../hooks/useHistory.jsx';
 
 export default memo(function AddressBar({ dropTarget }) {

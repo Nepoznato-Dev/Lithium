@@ -90,7 +90,7 @@ async fn health() -> axum::Json<serde_json::Value> {
             |r| Ok(serde_json::json!({"id": r.get::<_, String>(0)?, "name": r.get::<_, String>(1)?}))
         ).ok();
         (mc, mem, dm)
-    });
+    }).await;
 
     let internet = tokio::task::spawn_blocking(|| {
         use std::net::ToSocketAddrs;

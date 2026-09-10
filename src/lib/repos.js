@@ -2,7 +2,8 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { openStream } from './downloader';
 import { hydrate } from './storage/unifiedStore';
 import { loadTree, saveTree } from './fileSystem';
-import { putBlob, getBlob } from './storage/manager';
+import { getBlob } from './storage/manager';
+import { putBlob } from './storage/liStorage';
 
 /**
  * GitHub repo importer — pulls a repo into Projects/{repo} using only
@@ -129,7 +130,7 @@ export async function importGithubRepo(url, { onProgress } = {}) {
       tree = [...tree, { id: makeId(), name, type: 'text', parentId, content: strFromU8(bytes), createdAt: now, updatedAt: now }];
     } else if (bytes.length <= MAX_BINARY) {
       const id = makeId();
-      await putBlob(id, new Blob([bytes]), { name });
+      await putBlob('repo', id, new Blob([bytes]), undefined, { name });
       tree = [...tree, { id, name, type: 'file', parentId, content: null, idb: true, size: bytes.length, createdAt: now, updatedAt: now }];
     } else {
       continue;
@@ -179,7 +180,7 @@ export async function extractZipEntry(entry, { onProgress } = {}) {
       tree = [...tree, { id: makeId(), name, type: 'text', parentId, content: strFromU8(bytes), createdAt: now, updatedAt: now }];
     } else if (bytes.length <= MAX_BINARY) {
       const id = makeId();
-      await putBlob(id, new Blob([bytes]), { name });
+      await putBlob('repo', id, new Blob([bytes]), undefined, { name });
       tree = [...tree, { id, name, type: 'file', parentId, content: null, idb: true, size: bytes.length, createdAt: now, updatedAt: now }];
     } else continue;
     count++;

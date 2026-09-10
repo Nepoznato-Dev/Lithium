@@ -1,1 +1,0 @@
-C:\Users\PC\Downloads\Lithium\Lithium\rust\target\wasm32-unknown-unknown\release\snap.wasm: C:\Users\PC\Downloads\Lithium\Lithium\rust\lithium-abi\src\lib.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\snap\src\..\..\shell\src\snap.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\snap\src\lib.rs

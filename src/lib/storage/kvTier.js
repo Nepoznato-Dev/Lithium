@@ -1,4 +1,5 @@
-import { idbAll, idbDelete, idbKeys, idbPut } from './indexedDB';
+import { idbAll, idbKeys } from './indexedDB';
+import { put, del } from './liStorage';
 import { storage } from './localStorage';
 
 /**
@@ -54,7 +55,7 @@ export function hydrateKv() {
           overflow.set(key, raw);
           // Keep the localStorage copy until the IDB write lands, then drop
           // it — never destroy data before the overflow copy is durable.
-          idbPut('kv', PREFIX + key, raw)
+          put('kv', PREFIX + key, raw)
             .then(() => storage.remove(key))
             .catch(() => overflow.delete(key));
         }
@@ -94,10 +95,10 @@ export function kvSet(key, value) {
   if (shouldOverflow) {
     overflow.set(key, json);
     storage.remove(key);
-    idbPut('kv', PREFIX + key, json).catch(() => {});
+    put('kv', PREFIX + key, json).catch(() => {});
   } else {
     if (overflow.delete(key)) {
-      idbDelete('kv', PREFIX + key).catch(() => {});
+      del('kv', PREFIX + key).catch(() => {});
     }
     storage.set(key, value);
   }

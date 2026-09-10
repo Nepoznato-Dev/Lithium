@@ -6,13 +6,10 @@ import { memo } from 'react';
 import { PngIcon } from '../common/PngIcon.jsx';
 import {
   view, nav, pins, thisPCOpen, networkOpen,
-  cloudLoading, authIssue,
 } from '../../state/signals.jsx';
-import { childrenOf, getEntry, trashedItems, TRASH_ID, isTrashed } from '../../../fileSystem.js';
+import { getEntry, trashedItems, TRASH_ID, isTrashed } from '../../../fileSystem.js';
 import { PROVIDERS } from '../../../cloudDrives.js';
-import { IDB_CAP, formatBytes } from '../../../storage/manager.js';
 import SideRow from './SideRow.jsx';
-import TreeView from './TreeView.jsx';
 
 const QUICK_DEFAULT = ['default-desktop', 'default-downloads', 'default-documents', 'default-pictures', 'default-music', 'default-videos'];
 
@@ -25,6 +22,24 @@ const QUICK_META = {
   Videos: { icon: 'Film', color: '#a78bfa' },
 };
 
+/** Isolated Recycle Bin row — owns its trashedItems(tree) traversal so
+ *  the rest of the Sidebar doesn't re-compute it on every render. */
+const RecycleBinRow = memo(function RecycleBinRow({ tree }) {
+  const count = trashedItems(tree).length;
+  const folderId = nav.value.stack[nav.value.stack.length - 1]?.id;
+  const active = view.value === 'files' && nav.value.driveId === 'local' && (folderId === TRASH_ID || (getEntry(tree, folderId) && isTrashed(getEntry(tree, folderId))));
+  return (
+    <SideRow
+      icon="Trash"
+      color="#9ca3af"
+      label="Recycle Bin"
+      active={active}
+      onClick={() => { view.value = 'files'; nav.value = { driveId: 'local', stack: [{ id: 'root', name: 'Local Disk (C:)' }, { id: TRASH_ID, name: 'Recycle Bin' }] }; }}
+      right={count > 0 ? <span className="rounded-full bg-white/10 px-1.5 text-[10px] text-white/55">{count}</span> : null}
+    />
+  );
+});
+
 export default memo(function Sidebar({ tree, configs, updateConfigs, openMenu, goDrive, togglePin, dropTarget, setStorageOpen, setConnectOpen }) {
   const folderId = nav.value.stack[nav.value.stack.length - 1]?.id;
 
@@ -32,14 +47,7 @@ export default memo(function Sidebar({ tree, configs, updateConfigs, openMenu, g
     <aside className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-white/[0.08] bg-[#202125] p-2">
       <SideRow icon="Home" color="#f59e0b" label="Home" active={view.value === 'home'} onClick={() => { view.value = 'home'; }} />
       <SideRow icon="Image" color="#38bdf8" label="Gallery" active={view.value === 'gallery'} onClick={() => { view.value = 'gallery'; }} />
-      <SideRow
-        icon="Trash"
-        color="#9ca3af"
-        label="Recycle Bin"
-        active={view.value === 'files' && nav.value.driveId === 'local' && (folderId === TRASH_ID || (getEntry(tree, folderId) && isTrashed(getEntry(tree, folderId))))}
-        onClick={() => { view.value = 'files'; nav.value = { driveId: 'local', stack: [{ id: 'root', name: 'Local Disk (C:)' }, { id: TRASH_ID, name: 'Recycle Bin' }] }; }}
-        right={trashedItems(tree).length > 0 ? <span className="rounded-full bg-white/10 px-1.5 text-[10px] text-white/55">{trashedItems(tree).length}</span> : null}
-      />
+      <RecycleBinRow tree={tree} />
       {configs.filter(c => c.provider === 'onedrive').map(config => (
         <SideRow key={config.id} icon="Cloud" color={PROVIDERS.onedrive.color} label={config.label} active={view.value === 'files' && nav.value.driveId === config.id} onClick={() => goDrive(config.id)} />
       ))}

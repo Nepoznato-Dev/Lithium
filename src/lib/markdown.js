@@ -461,3 +461,26 @@ export function applyHeading(lineText, level) {
   if (current === level) return stripped;
   return `${'#'.repeat(level)} ${stripped}`;
 }
+
+/* ================================================================
+   Render cache — avoids reparsing identical markdown on every render.
+   Simple LRU cache keyed by source string, max 64 entries.
+   ================================================================ */
+const _mdCache = new Map();
+const MD_CACHE_MAX = 64;
+
+/** Cached wrapper around renderMarkdown. Returns cached HTML when the
+ *  exact same source+options combo was rendered recently. */
+const _rawRenderMarkdown = renderMarkdown;
+export function renderMarkdownCached(source, options) {
+  const key = (options?.headingOffset || 0) + '\0' + source;
+  if (_mdCache.has(key)) return _mdCache.get(key);
+  const html = _rawRenderMarkdown(source, options);
+  if (_mdCache.size >= MD_CACHE_MAX) {
+    // Evict oldest entry
+    const first = _mdCache.keys().next().value;
+    _mdCache.delete(first);
+  }
+  _mdCache.set(key, html);
+  return html;
+}

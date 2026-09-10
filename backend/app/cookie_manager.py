@@ -48,8 +48,10 @@ class CookieManager:
 
     def store_from_response(self, response: httpx.Response, url: str):
         """Extract ``Set-Cookie`` headers from *response* and store them."""
+        before = len(self.jar.jar)
         self.jar.extract_cookies(response)
-        self._save()
+        if len(self.jar.jar) != before:
+            self._save()
 
     def clear(self):
         """Drop all stored cookies."""

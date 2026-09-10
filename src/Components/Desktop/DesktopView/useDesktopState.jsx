@@ -364,14 +364,14 @@ export default function useDesktopState() {
     return () => window.removeEventListener('lithium:open-game', onOpenGame);
   }, [openWindow, closeWindow]);
 
-  /* --- Derived UI data --- */
-  const startApps = apps.filter(app => app.showInStart !== false);
+  /* --- Derived UI data (memoized to prevent cascade re-renders) --- */
+  const startApps = useMemo(() => apps.filter(app => app.showInStart !== false), [apps]);
   const query = searchQuery.trim().toLowerCase();
-  const sortedStartApps = query
+  const sortedStartApps = useMemo(() => query
     ? startApps.filter(app => app.name.toLowerCase().includes(query))
-    : [...startApps].sort((a, b) => a.name.localeCompare(b.name));
-  const noteResults = query ? fsTree.filter(entry => entry.type === 'text' && !entry.name.startsWith('.') && inVault(fsTree, entry) && entry.name.toLowerCase().includes(query)).slice(0, 5) : [];
-  const fileResults = query ? fsTree.filter(entry => entry.type !== 'folder' && !(entry.type === 'text' && inVault(fsTree, entry)) && entry.name.toLowerCase().includes(query)).slice(0, 5) : [];
+    : [...startApps].sort((a, b) => a.name.localeCompare(b.name)), [startApps, query]);
+  const noteResults = useMemo(() => query ? fsTree.filter(entry => entry.type === 'text' && !entry.name.startsWith('.') && inVault(fsTree, entry) && entry.name.toLowerCase().includes(query)).slice(0, 5) : [], [query, fsTree]);
+  const fileResults = useMemo(() => query ? fsTree.filter(entry => entry.type !== 'folder' && !(entry.type === 'text' && inVault(fsTree, entry)) && entry.name.toLowerCase().includes(query)).slice(0, 5) : [], [query, fsTree]);
   const openNoteResult = id => {
     setStartMenuOpen(false); setSearchQuery(''); launchApp('notepad');
     setTimeout(() => window.dispatchEvent(new CustomEvent('lithium:open-note', { detail: id })), 120);
@@ -442,9 +442,9 @@ export default function useDesktopState() {
     return () => { if (previewTimer.current) clearTimeout(previewTimer.current); };
   }, [hoveredApp]);
 
-  /* --- Computed display values --- */
-  const visibleWindows = windows.filter(item => !item.minimized);
-  const maxZ = visibleWindows.length ? Math.max(...visibleWindows.map(item => item.zIndex)) : 0;
+  /* --- Computed display values (memoized) --- */
+  const visibleWindows = useMemo(() => windows.filter(item => !item.minimized), [windows]);
+  const maxZ = useMemo(() => visibleWindows.length ? Math.max(...visibleWindows.map(item => item.zIndex)) : 0, [visibleWindows]);
   const volumeIconName = soundLevel === 0 ? 'VolumeX' : soundLevel < 50 ? 'Volume1' : 'Volume2';
   const volumeColor = soundLevel === 0 ? '#ef4444' : soundLevel < 50 ? '#f59e0b' : '#10b981';
   const batteryColor = battery ? (battery.level <= 20 ? '#ef4444' : battery.level <= 50 ? '#f59e0b' : '#10b981') : '#10b981';

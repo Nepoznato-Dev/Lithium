@@ -1,7 +1,8 @@
+import { memo } from 'react';
 import Icon from '../../Components/Icon';
 import { formatTime, openInLithiumBrowser } from './musicUtils';
 
-export default function TrackList({ title, tracks, currentId, playing, onPlay, onLike, isLiked, hideLike = false, onDownload, downloading, empty }) {
+const TrackList = memo(function TrackList({ title, tracks, currentId, playing, onPlay, onLike, isLiked, hideLike = false, onDownload, downloading, empty }) {
   if (!tracks.length) return <p className="px-2 py-6 text-center text-xs text-white/30">{empty}</p>;
   return (
     <div>
@@ -60,4 +61,6 @@ export default function TrackList({ title, tracks, currentId, playing, onPlay, o
       </div>
     </div>
   );
-}
+});
+
+export default TrackList;

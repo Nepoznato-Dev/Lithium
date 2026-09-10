@@ -6,14 +6,29 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response, Redirect};
 use serde::Deserialize;
 use serde_json::Value;
-use reqwest::Client;
 use regex::Regex;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use std::sync::LazyLock;
 
 use crate::url_guard;
 
 const HEADERS_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 const MAX_QUERY_LENGTH: usize = 500;
+
+static RE_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<[^>]+>").unwrap());
+static RE_WS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
+static RE_DDG_RESULT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>(.*?)(?=<a[^>]+class="result__a"|</body>)"#).unwrap());
+static RE_SCRIPT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>").unwrap());
+static RE_TITLE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)<title[^>]*>(.*?)</title>").unwrap());
+static RE_CSP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(?i)<meta[^>]+http-equiv=["'](?:content-security-policy|x-frame-options|refresh)["'][^>]*>"#).unwrap());
+static RE_HEAD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)(<head[^>]*>)").unwrap());
+
+static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .unwrap()
+});
 
 #[derive(Deserialize)]
 pub struct SearchIn {
@@ -36,18 +51,15 @@ pub struct ProxyQ { pub url: String }
 
 fn clean_html(input: &str) -> String {
     // Strip tags
-    let re_tag = Regex::new(r"<[^>]+>").unwrap();
-    let no_tags = re_tag.replace_all(input, " ");
+    let no_tags = RE_TAG.replace_all(input, " ");
     // Unescape HTML entities (basic)
     let s = no_tags.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&nbsp;", " ");
     // Collapse whitespace
-    let re_ws = Regex::new(r"\s+").unwrap();
-    re_ws.replace_all(&s, " ").trim().to_string()
+    RE_WS.replace_all(&s, " ").trim().to_string()
 }
 
 fn clean_text(input: &str) -> String {
-    let re_ws = Regex::new(r"\s+").unwrap();
-    re_ws.replace_all(input, " ").trim().to_string()
+    RE_WS.replace_all(input, " ").trim().to_string()
 }
 
 fn extract_youtube_video_id(url: &str) -> Option<String> {
@@ -104,17 +116,16 @@ pub async fn search(Json(body): Json<SearchIn>) -> Result<Json<Value>, (StatusCo
     let limit = body.limit;
 
     // Try DuckDuckGo HTML search
-    let client = Client::builder().timeout(std::time::Duration::from_secs(10)).build().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let encoded = utf8_percent_encode(&query, NON_ALPHANUMERIC).to_string();
-    let resp = client.get(format!("https://html.duckduckgo.com/html/?q={}", encoded))
+    let resp = HTTP_CLIENT.get(format!("https://html.duckduckgo.com/html/?q={}", encoded))
+        .timeout(std::time::Duration::from_secs(10))
         .header("User-Agent", HEADERS_UA)
         .send().await
         .map_err(|e| (StatusCode::BAD_GATEWAY, format!("DuckDuckGo search failed: {}", e)))?;
     let text = resp.text().await.map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
 
-    let re = Regex::new(r#"<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>(.*?)(?=<a[^>]+class="result__a"|</body>)"#).unwrap();
     let mut parsed_results = Vec::new();
-    for cap in re.captures_iter(&text) {
+    for cap in RE_DDG_RESULT.captures_iter(&text) {
         let raw_url = cap.get(1).map(|m| m.as_str()).unwrap_or("");
         let title = cap.get(2).map(|m| m.as_str()).unwrap_or("");
         let snippet = cap.get(3).map(|m| m.as_str()).unwrap_or("");
@@ -134,17 +145,13 @@ pub async fn search(Json(body): Json<SearchIn>) -> Result<Json<Value>, (StatusCo
 }
 
 pub async fn scrape(Json(body): Json<ScrapeIn>) -> Result<Json<Value>, (StatusCode, String)> {
-    let client = Client::builder().timeout(std::time::Duration::from_secs(15)).build().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let resp = url_guard::safe_get(&client, &body.url, 5).await
+    let resp = url_guard::safe_get(&HTTP_CLIENT, &body.url, 5).await
         .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Page fetch failed: {}", e)))?;
     let text = resp.text().await.map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
 
-    let re_script = Regex::new(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>").unwrap();
-    let stripped = re_script.replace_all(&text, " ");
+    let stripped = RE_SCRIPT.replace_all(&text, " ");
     let content = clean_html(&stripped).chars().take(body.max_chars).collect::<String>();
-    let title = Regex::new(r"(?is)<title[^>]*>(.*?)</title>")
-        .ok()
-        .and_then(|re| re.captures(&text))
+    let title = RE_TITLE.captures(&text)
         .and_then(|c| c.get(1))
         .map(|m| clean_text(m.as_str()))
         .unwrap_or_else(|| body.url.clone());
@@ -166,12 +173,7 @@ pub async fn proxy(
         return (StatusCode::BAD_REQUEST, e).into_response();
     }
 
-    let client = match Client::builder().timeout(std::time::Duration::from_secs(30)).build() {
-        Ok(c) => c,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
-    };
-
-    let mut req_builder = client.request(request.method().clone(), &params.url)
+    let mut req_builder = HTTP_CLIENT.request(request.method().clone(), &params.url)
         .header("User-Agent", HEADERS_UA);
 
     // Forward relevant headers
@@ -205,13 +207,12 @@ pub async fn proxy(
     if is_html {
         let html = String::from_utf8_lossy(&body_bytes);
         // Strip CSP meta tags
-        let re_csp = Regex::new(r#"(?i)<meta[^>]+http-equiv=["'](?:content-security-policy|x-frame-options|refresh)["'][^>]*>"#).unwrap();
+        let re_csp = &*RE_CSP;
         let html = re_csp.replace_all(&html, "");
         // Inject <base> tag
         let inject = format!("<base href=\"{}\">", params.url);
         let html = if html.contains("<head>") || html.contains("<HEAD>") {
-            let re = Regex::new(r"(?i)(<head[^>]*>)").unwrap();
-            re.replace(&html, |caps: &regex::Captures| format!("{}{}", &caps[0], inject)).to_string()
+            RE_HEAD.replace(&html, |caps: &regex::Captures| format!("{}{}", &caps[0], inject)).to_string()
         } else {
             format!("{}{}", inject, html)
         };

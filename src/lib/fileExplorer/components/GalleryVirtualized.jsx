@@ -3,7 +3,7 @@
  * Uses ResizeObserver for accurate column count and IntersectionObserver
  * for lazy thumbnail loading to prevent I/O storms.
  */
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { getThumbUrl, getCachedThumbUrl } from '../thumbCache.js';
 import { preview } from '../state/signals.jsx';
 
@@ -26,6 +26,12 @@ export default function GalleryVirtualized({ allImages, openItem, onItemContext 
     return cached;
   });
 
+  // Refs for stable scroll handler — avoids recreating listener on every resize/image change
+  const colsRef = useRef(cols);
+  colsRef.current = cols;
+  const imagesLenRef = useRef(allImages.length);
+  imagesLenRef.current = allImages.length;
+
   // Measure actual column count
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -43,27 +49,41 @@ export default function GalleryVirtualized({ allImages, openItem, onItemContext 
 
   const totalRows = Math.ceil(allImages.length / cols);
 
-  const handleScroll = useCallback(() => {
+  // Single stable scroll+resize effect with RAF throttle — same pattern as FileGrid.
+  // Reads dynamic values from refs so the listener never needs to be re-registered.
+  useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const scrollTop = container.scrollTop;
-    const viewportHeight = container.clientHeight;
-    const startRow = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN_ROWS);
-    const endRow = Math.min(totalRows, Math.ceil((scrollTop + viewportHeight) / ITEM_HEIGHT) + OVERSCAN_ROWS);
-    const start = startRow * cols;
-    const end = Math.min(allImages.length, endRow * cols);
-    setVisibleRange(prev => {
-      if (prev.start === start && prev.end === end) return prev;
-      return { start, end };
-    });
-  }, [allImages.length, cols, totalRows]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+    let rafId = 0;
+    const compute = () => {
+      const len = imagesLenRef.current;
+      const c = colsRef.current;
+      const rows = Math.ceil(len / c);
+      const scrollTop = container.scrollTop;
+      const viewportHeight = container.clientHeight;
+      const startRow = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN_ROWS);
+      const endRow = Math.min(rows, Math.ceil((scrollTop + viewportHeight) / ITEM_HEIGHT) + OVERSCAN_ROWS);
+      const start = startRow * c;
+      const end = Math.min(len, endRow * c);
+      setVisibleRange(prev => {
+        if (prev.start === start && prev.end === end) return prev;
+        return { start, end };
+      });
+    };
+    const onScroll = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => { rafId = 0; compute(); });
+    };
+    compute();
+    container.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(compute);
+    ro.observe(container);
+    return () => {
+      cancelAnimationFrame(rafId);
+      container.removeEventListener('scroll', onScroll);
+      ro.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     setVisibleRange({ start: 0, end: Math.min(30, allImages.length) });
@@ -76,17 +96,24 @@ export default function GalleryVirtualized({ allImages, openItem, onItemContext 
     setLoadedImages(cached);
   }, [allImages.length]);
 
-  // Load thumbnails for visible images only — uses shared cache
+  // Load thumbnails for visible images — batches all loads into a single setState
+  // to avoid creating a new spread-object per image (which caused GC pressure).
   useEffect(() => {
     const visibleImages = allImages.slice(visibleRange.start, visibleRange.end);
     let active = true;
+    const uncached = visibleImages.filter(e => !loadedImages[e.id]);
+    if (uncached.length === 0) return;
 
-    visibleImages.forEach(entry => {
-      if (loadedImages[entry.id]) return; // already loaded (or cached)
-      getThumbUrl(entry).then(url => {
-        if (active && url) {
-          setLoadedImages(prev => ({ ...prev, [entry.id]: url }));
-        }
+    Promise.all(
+      uncached.map(entry => getThumbUrl(entry).then(url => url ? [entry.id, url] : null))
+    ).then(results => {
+      if (!active) return;
+      const batch = results.filter(Boolean);
+      if (batch.length === 0) return;
+      setLoadedImages(prev => {
+        const next = { ...prev };
+        for (const [id, url] of batch) next[id] = url;
+        return next;
       });
     });
 

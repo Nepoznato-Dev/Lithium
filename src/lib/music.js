@@ -192,7 +192,8 @@ export function soloistEntityInfo(item) {
  *  Local audio — format detection + IndexedDB blob persistence.
  * ================================================================ */
 
-import { idbGet, idbPut, idbDelete } from './storage/indexedDB';
+import { idbGet } from './storage/indexedDB';
+import { putBlob, deleteBlob } from './storage/liStorage';
 
 export const SUPPORTED_AUDIO_EXTENSIONS = ['mp3', 'mp4', 'm4a', 'wav', 'flac', 'ogg', 'aac', 'opus', 'webm'];
 
@@ -206,29 +207,35 @@ const AUDIO_BLOB_PREFIX = 'local-audio:';
 
 /** Persist a local audio Blob in IndexedDB so it survives page reloads. */
 export function saveLocalAudioBlob(id, blob) {
-  return idbPut('blobs', AUDIO_BLOB_PREFIX + id, blob);
+  return putBlob('audio', AUDIO_BLOB_PREFIX + id, blob);
 }
 
 /** Retrieve a previously stored audio Blob from IndexedDB. */
 export function getLocalAudioBlob(id) {
-  return idbGet('blobs', AUDIO_BLOB_PREFIX + id);
+  return idbGet('blobs', AUDIO_BLOB_PREFIX + id).then(r => {
+    if (!r) return null;
+    return r.data !== undefined ? r.data : r;
+  });
 }
 
 /** Remove a stored audio Blob from IndexedDB. */
 export function deleteLocalAudioBlob(id) {
-  return idbDelete('blobs', AUDIO_BLOB_PREFIX + id);
+  return deleteBlob('audio', AUDIO_BLOB_PREFIX + id);
 }
 
 const PICTURE_PREFIX = 'local-picture:';
 
 /** Persist an extracted album-art blob in IndexedDB. */
 export function saveLocalPicture(id, blob) {
-  return idbPut('blobs', PICTURE_PREFIX + id, blob);
+  return putBlob('picture', PICTURE_PREFIX + id, blob);
 }
 
 /** Retrieve a stored album-art blob from IndexedDB. */
 export function getLocalPicture(id) {
-  return idbGet('blobs', PICTURE_PREFIX + id);
+  return idbGet('blobs', PICTURE_PREFIX + id).then(r => {
+    if (!r) return null;
+    return r.data !== undefined ? r.data : r;
+  });
 }
 
 /* ================================================================
@@ -280,7 +287,17 @@ function ensure() {
       endedListeners.forEach(fn => fn(getState()));
     }
   });
-  audio.addEventListener('timeupdate', () => { state.progress = audio.currentTime || 0; emit(); });
+  // Throttle timeupdate to ~10fps instead of 60fps to prevent re-render cascade
+  let _throttledTimeUpdate = null;
+  audio.addEventListener('timeupdate', () => {
+    state.progress = audio.currentTime || 0;
+    if (!_throttledTimeUpdate) {
+      _throttledTimeUpdate = requestAnimationFrame(() => {
+        _throttledTimeUpdate = null;
+        emit();
+      });
+    }
+  });
   audio.addEventListener('loadedmetadata', () => { state.duration = audio.duration || 0; emit(); });
   audio.addEventListener('error', () => { state.playing = false; emit(); errorListeners.forEach(fn => fn(getState())); });
   return audio;

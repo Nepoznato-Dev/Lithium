@@ -32,7 +32,10 @@ export function addDownload(filename, url, totalBytes) {
     status: 'downloading',
     startTime: Date.now(),
   };
-  downloads.value = [item, ...downloads.value];
+  // Cap at 200 downloads to prevent unbounded memory growth
+  const current = downloads.value;
+  const next = [item, ...current];
+  downloads.value = next.length > 200 ? next.slice(0, 200) : next;
   return item.id;
 }
 

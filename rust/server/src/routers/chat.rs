@@ -50,13 +50,14 @@ pub async fn chat(Json(body): Json<ChatIn>) -> Result<Json<ChatOut>, (StatusCode
     let mut resolved_model: Option<(String, String, String, String, i64, f64, i64, i64)> = None;
 
     if let Some(ref mid) = body.model_id {
-        let row = db::with_conn(|conn| {
-            conn.query_row("SELECT * FROM models WHERE id = ?1", [mid], |r| {
+        let mid_owned = mid.clone();
+        let row = db::with_conn(move |conn| {
+            conn.query_row("SELECT * FROM models WHERE id = ?1", [&mid_owned], |r| {
                 Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?,
                     r.get::<_, String>(3)?, r.get::<_, i64>(4)?, r.get::<_, f64>(5)?,
                     r.get::<_, i64>(6)?, r.get::<_, i64>(7)?))
             }).ok()
-        });
+        }).await;
         let row = row.ok_or((StatusCode::NOT_FOUND, format!("model '{}' not found", mid)))?;
         provider = Some(row.2.clone());
         model_name = Some(row.3.clone());
@@ -70,7 +71,7 @@ pub async fn chat(Json(body): Json<ChatIn>) -> Result<Json<ChatOut>, (StatusCode
                     r.get::<_, String>(3)?, r.get::<_, i64>(4)?, r.get::<_, f64>(5)?,
                     r.get::<_, i64>(6)?, r.get::<_, i64>(7)?))
             }).ok()
-        });
+        }).await;
         if let Some(row) = row {
             provider = Some(row.2.clone());
             model_name = Some(row.3.clone());
@@ -84,8 +85,10 @@ pub async fn chat(Json(body): Json<ChatIn>) -> Result<Json<ChatOut>, (StatusCode
     }
     let model_name = model_name.ok_or((StatusCode::BAD_REQUEST, format!("no model known for provider '{}'", provider)))?;
 
-    let key = body.keys.as_ref().and_then(|k| k.get(&provider).cloned())
-        .or_else(|| stored_key(&provider));
+    let key = match body.keys.as_ref().and_then(|k| k.get(&provider).cloned()) {
+        Some(k) => Some(k),
+        None => stored_key(&provider).await,
+    };
 
     let content = providers::dispatch(&provider, &model_name, &body.messages, key.as_deref(), body.temperature)
         .await

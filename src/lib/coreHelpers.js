@@ -12,6 +12,9 @@
 const _MODULE_NAMES = ['filesystem', 'snapshot_codec', 'lz4', 'xxh3'];
 const _BOOT_MODULES = ['filesystem', 'snapshot_codec'];
 
+const _enc = new TextEncoder();
+const _dec = new TextDecoder();
+
 const _modules = {};
 let _bootPromise = null;
 let _bootReady = false;
@@ -25,8 +28,13 @@ async function _loadModule(name) {
     try {
       const response = await fetch(new URL(`../wasm/${name}.wasm`, import.meta.url));
       if (!response.ok) throw new Error(`wasm fetch ${response.status}`);
-      const bytes = await response.arrayBuffer();
-      const { instance } = await WebAssembly.instantiate(bytes, {});
+      let instance;
+      if (typeof WebAssembly.instantiateStreaming === 'function') {
+        ({ instance } = await WebAssembly.instantiateStreaming(response, {}));
+      } else {
+        const bytes = await response.arrayBuffer();
+        ({ instance } = await WebAssembly.instantiate(bytes, {}));
+      }
       _modules[name] = instance.exports;
       const fnCount = Object.keys(_modules[name]).filter(k => typeof _modules[name][k] === 'function').length;
       if (import.meta.env.DEV) console.log(`[lithium-core] ${name}.wasm loaded — ${fnCount} native functions`);
@@ -90,7 +98,9 @@ export const safe = (fn) => {
 };
 
 /** Write bytes into a module's memory and return the pointer.
- *  Grows linear memory automatically when the allocator cannot fit the data. */
+ *  Grows linear memory automatically when the allocator cannot fit the data.
+ *  IMPORTANT: The caller is responsible for calling `dealloc(ptr, size)` on the
+ *  returned pointer when it is no longer needed. */
 export function toWasm(u8, mod) {
   const exp = _modules[mod];
   const needed = u8.length;
@@ -119,6 +129,14 @@ export function toWasm(u8, mod) {
   return ptr;
 }
 
+/** Deallocate a pointer previously returned by toWasm or alloc. */
+export function dealloc(ptr, size, mod) {
+  const exp = _modules[mod];
+  if (exp && typeof exp.dealloc === 'function') {
+    exp.dealloc(ptr, size);
+  }
+}
+
 /** Read output bytes from a module's out_ptr. */
 export function fromOut(len, mod) {
   const exp = _modules[mod];
@@ -128,7 +146,14 @@ export function fromOut(len, mod) {
 
 /** Encode text → WASM, call fn(bytes, len), decode output as UTF-8 string. */
 export function callStr(fn, text, mod) {
-  const bytes = new TextEncoder().encode(text);
-  const len = fn(toWasm(bytes, mod), bytes.length);
-  return len ? new TextDecoder().decode(fromOut(len, mod)) : null;
+  const bytes = _enc.encode(text);
+  const ptr = toWasm(bytes, mod);
+  const len = fn(ptr, bytes.length);
+  dealloc(ptr, bytes.length, mod);
+  if (!len) return null;
+  const exp = _modules[mod];
+  const outPtr = exp.out_ptr();
+  const result = _dec.decode(mem(mod).slice(outPtr, outPtr + len));
+  if (typeof exp.dealloc === 'function') exp.dealloc(outPtr, len);
+  return result;
 }

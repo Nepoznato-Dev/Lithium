@@ -1,4 +1,5 @@
-import { idbAll, idbDelete, idbGet, idbPut, idbKeys } from './indexedDB';
+import { idbAll, idbGet, idbKeys } from './indexedDB';
+import { putBlob as gwPutBlob, deleteBlob as gwDeleteBlob, del as liDel } from './liStorage';
 import { kvOverflowBytes } from './kvTier';
 
 /**
@@ -54,35 +55,35 @@ export function localStorageUsage() {
   return chars * 2; // UTF-16
 }
 
-/* ---------- IndexedDB tier ---------- */
+/* ---------- IndexedDB tier (writes routed through liStorage gateway) ---------- */
 
 export async function idbUsage() {
   return (await idbGet('kv', 'idbUsage')) || 0;
 }
 
-async function setIdbUsage(value) {
-  await idbPut('kv', 'idbUsage', Math.max(0, value));
-}
-
-/** Store a string payload (text or data: URL) with the 28 GB cap enforced. */
+/**
+ * Store a blob — backward-compatible wrapper.
+ * New code should call liStorage.putBlob(ns, key, data, caller, meta) directly
+ * for proper namespace attribution in the audit log.
+ */
 export async function putBlob(id, data, meta = {}) {
-  const size = data instanceof Blob ? data.size : data.length * 2;
-  const usage = await idbUsage();
-  if (usage + size > IDB_CAP) throw new Error(`IndexedDB limit (${formatBytes(IDB_CAP)}) reached`);
-  await idbPut('blobs', id, { data, size, ...meta, updatedAt: Date.now() });
-  await setIdbUsage(usage + size);
+  return gwPutBlob('file', id, data, 'manager', meta);
 }
 
 export async function getBlob(id) {
   const record = await idbGet('blobs', id);
-  return record?.data ?? null;
+  if (!record) return null;
+  // Gateway-wrapped format: { data, size, ... } — unwrap to the raw payload.
+  // Legacy records store the raw value directly — return as-is.
+  return record.data !== undefined ? record.data : record;
 }
 
+/**
+ * Delete a blob — backward-compatible wrapper.
+ * New code should call liStorage.deleteBlob(ns, key, caller) directly.
+ */
 export async function deleteBlob(id) {
-  const record = await idbGet('blobs', id);
-  if (!record) return;
-  await idbDelete('blobs', id);
-  await setIdbUsage((await idbUsage()) - (record.size || 0));
+  return gwDeleteBlob('file', id, 'manager');
 }
 
 /* ---------- Cache Storage tier (whole-site offline cache, no games) ---------- */
@@ -141,7 +142,7 @@ export async function clearSiteCache() {
   } catch { /* cache api unavailable */ }
   try {
     for (const entry of await cacheEntries()) {
-      await idbDelete('cacheLedger', entry.url);
+      await liDel('cache-ledger', entry.url);
     }
   } catch { /* ledger already empty */ }
 }

@@ -61,8 +61,9 @@ export default function InteractiveGraph({ notes, activeId, mode, onModeChange, 
       }
     }
 
-    // Run force simulation
-    for (let iter = 0; iter < 200; iter++) {
+    // Run force simulation — reduced iterations for large graphs to prevent O(n²) jank
+    const iterations = nodeList.length > 100 ? 50 : nodeList.length > 50 ? 100 : 200;
+    for (let iter = 0; iter < iterations; iter++) {
       for (let a = 0; a < nodeList.length; a++) {
         for (let b = a + 1; b < nodeList.length; b++) {
           const dx = nodeList[b].x - nodeList[a].x;

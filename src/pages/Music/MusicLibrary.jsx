@@ -1,6 +1,7 @@
+import { memo } from 'react';
 import Icon from '../../Components/Icon';
 
-export default function MusicLibrary({ leftOpen, likes, userTracks, currentId, view, play, setView, setLeftOpen, addFile, addUrl }) {
+const MusicLibrary = memo(function MusicLibrary({ leftOpen, likes, userTracks, currentId, view, play, setView, setLeftOpen, addFile, addUrl }) {
   if (!leftOpen) return null;
   const chips = [
     { id: 'liked-songs', label: 'Liked Songs', count: likes.tracks.length, gradClass: 'music-lib-card-liked', icon: 'Heart' },
@@ -51,4 +52,6 @@ export default function MusicLibrary({ leftOpen, likes, userTracks, currentId, v
       </div>
     </aside>
   );
-}
+});
+
+export default MusicLibrary;

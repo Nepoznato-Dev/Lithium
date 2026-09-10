@@ -8,9 +8,9 @@ import Icon from '../../../Components/Icon';
 import { PngIcon } from './common/PngIcon.jsx';
 import ContextMenu from '../../../Components/Desktop/ContextMenu';
 import {
-  childrenOf, createEntry, duplicateSubtreeDeep, getEntry, isTrashed,
+  childrenOf, createEntry, getEntry, isTrashed,
   migrateTree, moveEntry, pathOf, purgeTrash, readEntryContent,
-  removeEntryDeep, restoreEntry, storeEntryContent, subtreeFolderIds,
+  removeEntryDeep, restoreEntry, storeEntryContent,
   trashEntry, TRASH_ID, trashedItems, updateEntry,
 } from '../../fileSystem.js';
 import {
@@ -18,7 +18,8 @@ import {
   deleteItem as cloudDeleteItem, downloadBlob, listChildren,
   renameItem as cloudRename, uploadFile,
 } from '../../cloudDrives.js';
-import { storage, getSnapshotStats, putBlob, getBlob } from '../../storage';
+import { storage, getSnapshotStats, getBlob } from '../../storage';
+import { putBlob } from '../../storage/liStorage';
 import { invalidateBreakdown } from '../../storage/storageBreakdown.js';
 import { startAppSweeper } from '../../storage/appStateSerializer.js';
 import { registerBlobDownload } from '../../downloads.js';
@@ -28,7 +29,7 @@ import {
 import {
   exportFolderTar, importTarToFolder,
 } from '../../storage/tarArchive.js';
-import { getDefaultApp, FILE_ASSOCIATIONS } from '../../fileSystem/fileAssociations.js';
+import { getDefaultApp } from '../../fileSystem/fileAssociations.js';
 import { notify } from '../../../lib/desktop/notify.js';
 
 import {
@@ -124,19 +125,11 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
   // Invalidate breakdown cache on every tree mutation
   useEffect(() => { invalidateBreakdown(); }, [tree]);
 
-  // Storage snapshot — live-refresh after every tree mutation and while the panel is open
-  const snapTimer = useRef(null);
+  // Storage snapshot — computed on-demand when the StoragePanel opens.
+  // The panel manages its own periodic refresh internally (every 4s).
   const refreshSnapshot = useCallback(async () => {
     snapshot.value = { ...(await (await import('../../storage/manager.js')).storageSnapshot()), fs: getSnapshotStats() };
   }, []);
-  // Debounced refresh after any tree change (file ops, compress, delete, import, etc.)
-  useEffect(() => {
-    clearTimeout(snapTimer.current);
-    snapTimer.current = setTimeout(refreshSnapshot, 600);
-    return () => clearTimeout(snapTimer.current);
-  }, [tree, refreshSnapshot]);
-  // Note: periodic refresh is now handled internally by StoragePanel to avoid
-  // cascading re-renders through ExplorerShell every 4 seconds.
 
   // Cloud refresh
   const refreshCloud = useCallback(async (config, id) => {
@@ -232,9 +225,13 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
         editor.value = local;
         draft.value = await readEntryContent(local);
       } else if (entry.type === 'image') {
+        const oldUrl = preview.value?.url;
         preview.value = { name: entry.name, url: await readEntryContent(entry), kind: 'image' };
+        if (oldUrl && typeof oldUrl === 'string' && oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
       } else if (entry.type === 'video') {
+        const oldUrl = preview.value?.url;
         preview.value = { name: entry.name, url: await readEntryContent(local), kind: 'video' };
+        if (oldUrl && typeof oldUrl === 'string' && oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
       } else {
         const content = await readEntryContent(local);
         const isBlob = content instanceof Blob;
@@ -249,9 +246,13 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
     try {
       const blob = await downloadBlob(drive, entry);
       if (entry.type === 'image') {
+        const oldUrl = preview.value?.url;
         preview.value = { name: entry.name, url: URL.createObjectURL(blob), kind: 'image' };
+        if (oldUrl && typeof oldUrl === 'string' && oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
       } else if (entry.type === 'video') {
+        const oldUrl = preview.value?.url;
         preview.value = { name: entry.name, url: URL.createObjectURL(blob), kind: 'video' };
+        if (oldUrl && typeof oldUrl === 'string' && oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
       } else if (entry.type === 'text') {
         preview.value = { name: entry.name, url: null, kind: 'text', text: await blob.text() };
       } else {
@@ -348,7 +349,7 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
       : await exportFolderZip(tree, entry.id);
     const arr = createEntry(tree, { name: archiveName, type: 'file', parentId: entry.parentId, content: '' });
     const newEntry = arr[arr.length - 1];
-    await putBlob(newEntry.id, blob, { name: archiveName });
+    await putBlob('upload', newEntry.id, blob, undefined, { name: archiveName });
     const stored = { ...newEntry, content: null, idb: true, size: blob.size };
     commit([...arr.slice(0, -1), stored]);
   }, [tree, drive, commit]);
@@ -434,6 +435,10 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
     refreshCloud, goDrive, updateConfigs, openReconnect,
   });
 
+  const togglePin = useCallback((id) => {
+    pins.value = pins.value.includes(id) ? pins.value.filter(p => p !== id) : [...pins.value, id];
+  }, []);
+
   // Keyboard shortcuts (Ctrl+C, Ctrl+V, Del, F2, etc.)
   useExplorerShortcuts({
     tree,
@@ -442,7 +447,7 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
     ctx: {
       drive, folderId, clipboard, openItem, dialog, viewMode,
       pins,
-      togglePin: (id) => { pins.value = pins.value.includes(id) ? pins.value.filter(p => p !== id) : [...pins.value, id]; },
+      togglePin,
       notify,
       archiveDialog, handleDownload, handleImportArchive,
       handleCompressZip, handleCompressTar, handleCompressArchive,
@@ -500,9 +505,20 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
     return obj;
   }, [drive, runAction]);
 
-  const togglePin = useCallback((id) => {
-    pins.value = pins.value.includes(id) ? pins.value.filter(p => p !== id) : [...pins.value, id];
+  // Clear drag state on unmount — prevents stale draggingId if user navigates away mid-drag
+  useEffect(() => {
+    return () => { draggingId.value = null; };
   }, []);
+
+  // Prune drag/drop caches when tree shrinks (entries deleted) to prevent unbounded growth
+  useEffect(() => {
+    const ids = new Set(tree.map(e => e.id));
+    for (const key of dragCacheRef.current.keys()) { if (!ids.has(key)) dragCacheRef.current.delete(key); }
+    for (const key of dropCacheRef.current.keys()) { if (!ids.has(key)) dropCacheRef.current.delete(key); }
+  }, [tree]);
+
+  const setStorageOpen = useCallback((v) => { storageOpen.value = v; }, []);
+  const setConnectOpen = useCallback((v) => { connectOpen.value = v; }, []);
 
   const isInTrash = !drive && nav.value.driveId === 'local' && folderId === TRASH_ID;
   const isTrashSubfolder = !drive && folderId !== TRASH_ID && (() => {
@@ -543,8 +559,8 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
             tree={tree} configs={configs} updateConfigs={updateConfigs}
             openMenu={onItemContext} goDrive={goDrive} togglePin={togglePin}
             dropTarget={dropTarget}
-            setStorageOpen={(v) => storageOpen.value = v}
-            setConnectOpen={(v) => connectOpen.value = v}
+            setStorageOpen={setStorageOpen}
+            setConnectOpen={setConnectOpen}
           />
         )}
         <div className="flex min-w-0 flex-1 flex-col">

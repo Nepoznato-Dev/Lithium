@@ -1,5 +1,6 @@
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
-import { putBlob, getBlob } from './manager';
+import { getBlob } from './manager';
+import { putBlob } from './liStorage';
 
 /**
  * ZIP archive engine — full backup & restore using fflate.
@@ -136,7 +137,7 @@ export async function restoreBackupZip(zipBlob, { onProgress, replace = false } 
     const id = path.slice(BLOBS_DIR.length);
     blobIds.add(id);
     try {
-      await putBlob(id, new Blob([bytes]), { name: 'backup-restore' });
+      await putBlob('archive', id, new Blob([bytes]), undefined, { name: 'backup-restore' });
       blobCount++;
     } catch { /* quota */ }
     onProgress?.({ phase: 'blobs', done: blobCount, total: 0 });
@@ -243,7 +244,7 @@ export async function importZipToFolder(tree, parentId, zipBlob, { onProgress, n
     } else if (bytes.length <= MAX_BINARY) {
       // Binary file — store in IndexedDB.
       const id = makeId();
-      await putBlob(id, new Blob([bytes]), { name });
+      await putBlob('archive', id, new Blob([bytes]), undefined, { name });
       next = [...next, { id, name, type: 'file', parentId: parentDirId, content: null, idb: true, size: bytes.length, createdAt: now, updatedAt: now }];
     }
     count++;

@@ -8,6 +8,16 @@ import { promisify } from 'node:util';
 
 const resolve = promisify(dns.resolve);
 
+const dnsCache = new Map();
+const DNS_TTL = 60000; // 1 minute
+async function cachedResolve(hostname) {
+  const cached = dnsCache.get(hostname);
+  if (cached && Date.now() - cached.at < DNS_TTL) return cached.ips;
+  const ips = await resolve(hostname);
+  dnsCache.set(hostname, { ips, at: Date.now() });
+  return ips;
+}
+
 const PRIVATE_RANGES = [
   /^10\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./,
   /^127\./, /^0\./, /^169\.254\./,
@@ -45,7 +55,7 @@ export async function publicUrl(value) {
 
   // DNS resolution check
   try {
-    const addresses = await resolve(hostname);
+    const addresses = await cachedResolve(hostname);
     for (const addr of addresses) {
       if (isPrivateIp(addr)) {
         throw new Error('Private or non-public URL destinations are not allowed');
@@ -69,6 +79,7 @@ export async function safeGet(url, { headers = {}, maxRedirects = 5 } = {}) {
     const res = await fetch(current, {
       headers,
       redirect: 'manual',
+      signal: AbortSignal.timeout(10000),
     });
     if (res.status >= 300 && res.status < 400 && res.headers.has('location')) {
       const location = res.headers.get('location');

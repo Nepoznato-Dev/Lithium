@@ -1,8 +1,9 @@
+import { memo } from 'react';
 import Icon from '../../Components/Icon';
 import { formatTime } from './musicUtils';
 import { togglePlay, seekTo, setEngineVolume, stepTrack } from '../../lib/music';
 
-export default function MusicPlayer({ engine, currentLiked, toggleLikeTrack }) {
+const MusicPlayer = memo(function MusicPlayer({ engine, currentLiked, toggleLikeTrack }) {
   return (
     <footer className="music-player-bar relative flex items-center gap-4 border-t-0 bg-[#16161c] px-4 py-2.5">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/25 to-transparent" aria-hidden="true" />
@@ -38,4 +39,6 @@ export default function MusicPlayer({ engine, currentLiked, toggleLikeTrack }) {
       </div>
     </footer>
   );
-}
+});
+
+export default MusicPlayer;

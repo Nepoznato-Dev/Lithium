@@ -17,6 +17,21 @@ OPENAI_COMPAT = {
 OLLAMA_BASE = 'http://localhost:11434'
 TIMEOUT = httpx.Timeout(120.0, connect=10.0)
 
+# Pre-compiled regex patterns for _sanitize
+RE_KEY_PARAM = re.compile(r'[?&]key=[^\s&\'"]+') 
+RE_BEARER = re.compile(r'Bearer\s+[^\s\'"]+') 
+RE_API_KEY = re.compile(r'(x-api-key["\s:]+)[^\s\'"]+', re.I)
+
+# Shared httpx client — reuses connection pool across requests
+_shared_client: httpx.AsyncClient | None = None
+
+
+def get_client() -> httpx.AsyncClient:
+    global _shared_client
+    if _shared_client is None or _shared_client.is_closed:
+        _shared_client = httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True)
+    return _shared_client
+
 
 async def dispatch(provider, model_name, messages, key=None, temperature=0.7):
     """Run a chat completion. Returns the assistant text."""
@@ -37,9 +52,9 @@ async def dispatch(provider, model_name, messages, key=None, temperature=0.7):
 
 async def ollama_reachable():
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(f'{OLLAMA_BASE}/api/tags')
-            return response.status_code == 200
+        client = get_client()
+        response = await client.get(f'{OLLAMA_BASE}/api/tags', timeout=2.0)
+        return response.status_code == 200
     except httpx.HTTPError:
         return False
 
@@ -59,24 +74,21 @@ def _raise_for(provider, response):
 
 def _sanitize(text: str) -> str:
     """Remove potential secrets from error text before raising/logging."""
-    # Strip ?key=... query parameters
-    text = re.sub(r'[?&]key=[^\s&\'"]+', '?key=***', text)
-    # Strip Bearer tokens
-    text = re.sub(r'Bearer\s+[^\s\'"]+', 'Bearer ***', text)
-    # Strip x-api-key values
-    text = re.sub(r'(x-api-key["\s:]+)[^\s\'"]+', r'\1***', text, flags=re.I)
+    text = RE_KEY_PARAM.sub('?key=***', text)
+    text = RE_BEARER.sub('Bearer ***', text)
+    text = RE_API_KEY.sub(r'\1***', text)
     return text
 
 
 async def _openai_compat(provider, model_name, messages, key, temperature):
     if not key:
         raise RuntimeError(f'{provider}: no API key stored')
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        response = await client.post(
-            f'{OPENAI_COMPAT[provider]}/chat/completions',
-            headers={'Authorization': f'Bearer {key}'},
-            json={'model': model_name, 'messages': messages, 'temperature': temperature},
-        )
+    client = get_client()
+    response = await client.post(
+        f'{OPENAI_COMPAT[provider]}/chat/completions',
+        headers={'Authorization': f'Bearer {key}'},
+        json={'model': model_name, 'messages': messages, 'temperature': temperature},
+    )
     _raise_for(provider, response)
     return response.json()['choices'][0]['message']['content']
 
@@ -86,12 +98,12 @@ async def _anthropic(model_name, messages, key):
         raise RuntimeError('anthropic: no API key stored')
     system = '\n'.join(m['content'] for m in messages if m['role'] == 'system')
     turns = [m for m in messages if m['role'] != 'system']
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        response = await client.post(
-            'https://api.anthropic.com/v1/messages',
-            headers={'x-api-key': key, 'anthropic-version': '2023-06-01'},
-            json={'model': model_name, 'max_tokens': 1024, 'system': system or None, 'messages': turns},
-        )
+    client = get_client()
+    response = await client.post(
+        'https://api.anthropic.com/v1/messages',
+        headers={'x-api-key': key, 'anthropic-version': '2023-06-01'},
+        json={'model': model_name, 'max_tokens': 1024, 'system': system or None, 'messages': turns},
+    )
     _raise_for('anthropic', response)
     return ''.join(block.get('text', '') for block in response.json().get('content', []))
 
@@ -101,27 +113,27 @@ async def _google(model_name, messages, key):
         raise RuntimeError('google: no API key stored')
     system = '\n'.join(m['content'] for m in messages if m['role'] == 'system')
     turns = [m for m in messages if m['role'] != 'system']
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        response = await client.post(
-            f'https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}',
-            json={
-                'systemInstruction': {'parts': [{'text': system}]} if system else None,
-                'contents': [
-                    {'role': 'model' if m['role'] == 'assistant' else 'user', 'parts': [{'text': m['content']}]}
-                    for m in turns
-                ],
-            },
-        )
+    client = get_client()
+    response = await client.post(
+        f'https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}',
+        json={
+            'systemInstruction': {'parts': [{'text': system}]} if system else None,
+            'contents': [
+                {'role': 'model' if m['role'] == 'assistant' else 'user', 'parts': [{'text': m['content']}]}
+                for m in turns
+            ],
+        },
+    )
     _raise_for('google', response)
     candidates = response.json().get('candidates', [])
     return ''.join(part.get('text', '') for part in candidates[0]['content']['parts']) if candidates else ''
 
 
 async def _ollama(model_name, messages, temperature):
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        response = await client.post(
-            f'{OLLAMA_BASE}/api/chat',
-            json={'model': model_name, 'messages': messages, 'stream': False, 'options': {'temperature': temperature}},
-        )
+    client = get_client()
+    response = await client.post(
+        f'{OLLAMA_BASE}/api/chat',
+        json={'model': model_name, 'messages': messages, 'stream': False, 'options': {'temperature': temperature}},
+    )
     _raise_for('ollama', response)
     return response.json()['message']['content']

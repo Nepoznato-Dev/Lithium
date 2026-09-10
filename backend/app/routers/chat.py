@@ -1,4 +1,5 @@
 # Chat completions — resolve a registered model (or raw provider), then dispatch.
+import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -27,6 +28,16 @@ class ChatIn(BaseModel):
     temperature: float = 0.7
 
 
+def _get_model_by_id(model_id):
+    with db.connect() as conn:
+        return conn.execute('SELECT * FROM models WHERE id = ?', (model_id,)).fetchone()
+
+
+def _get_default_model():
+    with db.connect() as conn:
+        return conn.execute('SELECT * FROM models WHERE is_default = 1 LIMIT 1').fetchone()
+
+
 @router.post('/chat')
 async def chat(body: ChatIn):
     if not body.messages:
@@ -37,8 +48,7 @@ async def chat(body: ChatIn):
     resolved_model = None
 
     if body.model_id:
-        with db.connect() as conn:
-            row = conn.execute('SELECT * FROM models WHERE id = ?', (body.model_id,)).fetchone()
+        row = await asyncio.to_thread(_get_model_by_id, body.model_id)
         if not row:
             raise HTTPException(404, f"model '{body.model_id}' not found")
         provider = row['provider']
@@ -47,8 +57,7 @@ async def chat(body: ChatIn):
 
     if not provider:
         # No model id, no provider → use the default model in the registry.
-        with db.connect() as conn:
-            row = conn.execute('SELECT * FROM models WHERE is_default = 1 LIMIT 1').fetchone()
+        row = await asyncio.to_thread(_get_default_model)
         if not row:
             raise HTTPException(400, 'no model_id/provider given and no default model set')
         provider = row['provider']

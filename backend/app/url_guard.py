@@ -1,4 +1,5 @@
 """Outbound URL validation for backend fetch and proxy endpoints."""
+import asyncio
 import ipaddress
 import socket
 from urllib.parse import urljoin, urlparse
@@ -6,12 +7,17 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 
-def _public_url(value):
+async def _public_url(value):
     parsed = urlparse(value)
     if parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError('only public http(s) URLs are allowed')
     try:
-        addresses = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == 'https' else 80), type=socket.SOCK_STREAM)
+        loop = asyncio.get_running_loop()
+        addresses = await loop.getaddrinfo(
+            parsed.hostname,
+            parsed.port or (443 if parsed.scheme == 'https' else 80),
+            type=socket.SOCK_STREAM,
+        )
     except OSError as err:
         raise ValueError('URL host could not be resolved') from err
     for address in {result[4][0] for result in addresses}:
@@ -23,7 +29,7 @@ def _public_url(value):
 
 async def safe_get(client, url, *, stream=False, max_redirects=5):
     """GET a public URL while validating every redirect destination."""
-    current = _public_url(url)
+    current = await _public_url(url)
     for _ in range(max_redirects + 1):
         request = client.build_request('GET', current)
         response = await client.send(request, stream=stream, follow_redirects=False)
@@ -33,5 +39,5 @@ async def safe_get(client, url, *, stream=False, max_redirects=5):
         if not location:
             return response
         await response.aclose()
-        current = _public_url(urljoin(current, location))
+        current = await _public_url(urljoin(current, location))
     raise ValueError('too many redirects')

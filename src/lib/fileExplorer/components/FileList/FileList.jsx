@@ -3,8 +3,8 @@
  * Extracted from renderFiles() in the monolith.
  */
 import { memo } from 'react';
-import { nav, viewMode, view, selectedItems, cloudItems, cloudLoading, cloudError, authIssue, draggingId } from '../../state/signals.jsx';
-import { childrenOf, getEntry, isTrashed, TRASH_ID } from '../../../fileSystem.js';
+import { nav, viewMode, view, selectedItems, cloudLoading, cloudError, authIssue } from '../../state/signals.jsx';
+import { getEntry, isTrashed, TRASH_ID } from '../../../fileSystem.js';
 import { PROVIDERS } from '../../../cloudDrives.js';
 import FileGrid from './FileGrid.jsx';
 import FileTable from './FileTable.jsx';

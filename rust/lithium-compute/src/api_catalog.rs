@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::LazyLock;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ParamSpec {
@@ -27,7 +28,7 @@ pub struct ApiSpec {
     pub params: Vec<ParamSpec>,
 }
 
-fn build_catalog() -> Vec<ApiSpec> {
+static CATALOG: LazyLock<Vec<ApiSpec>> = LazyLock::new(|| {
     serde_json::from_value(serde_json::json!([
         { "api": "system.get_info", "ns": "system", "desc": "Build version, time and platform details", "callers": ["system","user","widget","model"], "params": [] },
         { "api": "system.open_start_menu", "ns": "system", "desc": "Open the Start menu", "callers": ["system","user","widget","model"], "params": [] },
@@ -65,9 +66,9 @@ fn build_catalog() -> Vec<ApiSpec> {
         { "api": "widgets.list", "ns": "widgets", "desc": "User widgets with enabled state", "callers": ["system","user","widget","model"], "params": [] },
         { "api": "widgets.set_enabled", "ns": "widgets", "desc": "Enable or disable a widget", "callers": ["system","user","model"], "params": [{"name":"id","type":"string","required":true},{"name":"enabled","type":"boolean","required":true}] }
     ])).unwrap()
-}
+});
 
-pub fn catalog() -> Vec<ApiSpec> { build_catalog() }
+pub fn catalog() -> Vec<ApiSpec> { CATALOG.clone() }
 
 // Settings schema for validation
 struct SettingsSchemaEntry { path: &'static str, kind: &'static str, values: Option<&'static [&'static str]>, min: Option<f64>, max: Option<f64> }
@@ -129,8 +130,7 @@ pub type ValidateResult = Result<ValidateOk, ValidateErr>;
 
 pub fn validate(req: &ValidateRequest) -> ValidateResult {
     let caller = if req.caller.is_empty() { "user" } else { &req.caller };
-    let catalog = build_catalog();
-    let spec = catalog.iter().find(|s| s.api == req.api)
+    let spec = CATALOG.iter().find(|s| s.api == req.api)
         .ok_or_else(|| ValidateErr { ok: false, error: format!("unknown api '{}'", req.api) })?;
     if !spec.callers.contains(&caller.to_string()) {
         return Err(ValidateErr { ok: false, error: format!("caller '{}' is not allowed to use {}", caller, req.api) });

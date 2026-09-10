@@ -4,7 +4,7 @@
  */
 import { memo } from 'react';
 import Icon from '../../../../Components/Icon';
-import { selectedItems, draggingId } from '../../state/signals.jsx';
+import { selectedItems } from '../../state/signals.jsx';
 
 /** Pick the best Icon name + colour for an entry. */
 function glyphFor(entry) {
@@ -65,7 +65,6 @@ function EntryGlyph({ entry, size = 16 }) {
 
 const FileRow = memo(function FileRow({ entry, treeRef, drive, openItem, onItemContext, dragProps, dropTarget, formatSize }) {
   const selected = selectedItems.value.has(entry.id);
-  const dragging = draggingId.value;
 
   const handleClick = (event) => {
     event.stopPropagation();

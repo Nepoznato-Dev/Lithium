@@ -7,9 +7,18 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
+use tokio::io::AsyncWriteExt;
+use futures_util::StreamExt;
 
-static DOWNLOADS: std::sync::LazyLock<Mutex<HashMap<String, Value>>> = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3600))
+        .build()
+        .unwrap()
+});
+
+static DOWNLOADS: LazyLock<Mutex<HashMap<String, Value>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn models_dir() -> PathBuf {
     let exe = std::env::current_exe().unwrap_or_default();
@@ -61,8 +70,8 @@ pub fn list_models() -> Vec<Value> {
 
 pub async fn chat(model_id: &str, messages: &Value, temperature: f64) -> Result<String, String> {
     // Forward to Ollama
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120)).build().map_err(|e| e.to_string())?;
-    let resp = client.post("http://localhost:11434/api/chat")
+    let resp = HTTP_CLIENT.post("http://localhost:11434/api/chat")
+        .timeout(std::time::Duration::from_secs(120))
         .json(&serde_json::json!({ "model": model_id, "messages": messages, "stream": false, "options": { "temperature": temperature } }))
         .send().await.map_err(|e| format!("ollama: {}", e))?;
     let body = resp.text().await.map_err(|e| e.to_string())?;
@@ -75,7 +84,24 @@ pub async fn status() -> Json<Value> {
     Json(serde_json::json!({ "ollama": reachable }))
 }
 
+const DOWNLOAD_TTL_MS: i64 = 10 * 60 * 1000;
+
+fn evict_stale_downloads() {
+    let now = crate::db::chrono_millis();
+    let mut map = DOWNLOADS.lock().unwrap();
+    map.retain(|_, v| {
+        let status = v.get("status").and_then(|s| s.as_str()).unwrap_or("");
+        if status == "done" || status == "error" {
+            let completed_at = v.get("completedAt").and_then(|t| t.as_i64()).unwrap_or(0);
+            now - completed_at < DOWNLOAD_TTL_MS
+        } else {
+            true
+        }
+    });
+}
+
 pub async fn models_list() -> Json<Value> {
+    evict_stale_downloads();
     let downloads = DOWNLOADS.lock().unwrap().values().cloned().collect::<Vec<_>>();
     Json(serde_json::json!({ "models": list_models(), "downloads": downloads }))
 }
@@ -136,13 +162,20 @@ async fn download_job(job_id: &str, url: &str, file_name: &str) {
     ensure_dir();
     let target = models_dir().join(file_name);
     let result = async {
-        let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(3600)).build()?;
-        let resp = client.get(url).send().await?;
+        let resp = HTTP_CLIENT.get(url).send().await?;
         let total = resp.content_length().unwrap_or(0);
         { DOWNLOADS.lock().unwrap().get_mut(job_id).map(|j| j["total"] = total.into()); }
-        let bytes = resp.bytes().await?;
-        std::fs::write(&target, &bytes)?;
-        Ok::<_, Box<dyn std::error::Error + Send + Sync>>(bytes.len())
+        let mut file = tokio::fs::File::create(&target).await?;
+        let mut stream = resp.bytes_stream();
+        let mut received: u64 = 0;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            file.write_all(&chunk).await?;
+            received += chunk.len() as u64;
+            { DOWNLOADS.lock().unwrap().get_mut(job_id).map(|j| j["received"] = received.into()); }
+        }
+        file.flush().await?;
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>(received as usize)
     }.await;
 
     match result {
@@ -159,6 +192,7 @@ async fn download_job(job_id: &str, url: &str, file_name: &str) {
             DOWNLOADS.lock().unwrap().get_mut(job_id).map(|j| {
                 j["status"] = "done".into();
                 j["modelId"] = serde_json::json!(id);
+                j["completedAt"] = serde_json::json!(crate::db::chrono_millis());
             });
         }
         Err(e) => {
@@ -166,6 +200,7 @@ async fn download_job(job_id: &str, url: &str, file_name: &str) {
             DOWNLOADS.lock().unwrap().get_mut(job_id).map(|j| {
                 j["status"] = "error".into();
                 j["error"] = e.to_string()[..e.to_string().len().min(300)].into();
+                j["completedAt"] = serde_json::json!(crate::db::chrono_millis());
             });
         }
     }
@@ -205,8 +240,7 @@ pub async fn proxy(Query(params): Query<ProxyQ>) -> Result<axum::response::Respo
     if host == "api.huggingface.co" {
         url = url.replace("://api.huggingface.co", "://huggingface.co");
     }
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(3600)).build().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let resp = client.get(&url).send().await.map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
+    let resp = HTTP_CLIENT.get(&url).send().await.map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
     let status = resp.status().as_u16();
     let content_length = resp.headers().get("content-length").cloned();
     let bytes = resp.bytes().await.map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;

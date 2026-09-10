@@ -91,7 +91,9 @@ export function updateTab(id, patch) {
 export function navigateTab(id, url, mode = 'normal') {
   tabs.value = tabs.value.map(t => {
     if (t.id !== id) return t;
-    const history = [...t.history.slice(0, t.index + 1), { url, mode }];
+    // Cap per-tab history at 100 entries to prevent unbounded memory growth
+    const trimmed = t.history.slice(Math.max(0, t.index - 99));
+    const history = [...trimmed.slice(0, trimmed.length), { url, mode }];
     return { ...t, history, index: history.length - 1, reloadKey: t.reloadKey + 1, isLoading: true, mode };
   });
 }

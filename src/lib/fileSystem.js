@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { deleteBlob, getBlob, putBlob } from './storage/manager';
+import { getBlob } from './storage/manager';
+import { putBlob, deleteBlob } from './storage/liStorage';
 import { getTree, hydrate, registerSeeder, setTree } from './storage/unifiedStore';
 import { fsOpSync } from './core';
 import { ensureSystemDirs } from './fileSystem/systemDirs';
@@ -175,7 +176,7 @@ export async function duplicateSubtreeDeep(tree, id, parentId, suffix) {
       const entry = getEntry(tree, oldId);
       if (entry?.idb && !entry.blobRef) {
         const blob = await getBlob(oldId);
-        if (blob) await putBlob(newId, blob, { name: entry.name });
+        if (blob) await putBlob('file', newId, blob, undefined, { name: entry.name });
       }
     })
   );
@@ -214,7 +215,7 @@ export function usedBytes(tree) {
 /** Decide where content lives; returns the entry updated accordingly. */
 export async function storeEntryContent(entry, content) {
   if (content && (entry.type === 'image' || entry.type === 'video' || entry.type === 'file' || content.length > INLINE_LIMIT)) {
-    await putBlob(entry.id, content, { name: entry.name });
+    await putBlob('file', entry.id, content, undefined, { name: entry.name });
     return { ...entry, content: null, idb: true, size: content.length * 2 };
   }
   return { ...entry, content: content || '', idb: false, size: (content || '').length * 2 };
@@ -249,7 +250,7 @@ export async function removeEntryDeep(tree, id) {
   const doomed = doomedList(tree, id);
   // Clean up standalone IDB blobs.
   await Promise.all(
-    tree.filter(entry => doomed.has(entry.id) && entry.idb && !entry.blobRef).map(entry => deleteBlob(entry.id))
+    tree.filter(entry => doomed.has(entry.id) && entry.idb && !entry.blobRef).map(entry => deleteBlob('file', entry.id))
   );
   // Clean up cold archives that become empty.
   const coldArchiveIds = new Set();
@@ -262,7 +263,7 @@ export async function removeEntryDeep(tree, id) {
   for (const archiveId of coldArchiveIds) {
     const stillCold = remaining.filter(e => e.cold && e.coldRef?.startsWith(archiveId + '/'));
     if (stillCold.length === 0) {
-      await deleteBlob(`cold:${archiveId}`).catch(() => {});
+      await deleteBlob('cold', `cold:${archiveId}`).catch(() => {});
     }
   }
   return remaining;
@@ -308,7 +309,7 @@ export async function purgeTrash(tree) {
   const doomed = trashedItems(tree);
   if (doomed.length === 0) return tree;
   await Promise.all(
-    doomed.filter(entry => entry.idb && !entry.blobRef).map(entry => deleteBlob(entry.id))
+    doomed.filter(entry => entry.idb && !entry.blobRef).map(entry => deleteBlob('file', entry.id))
   );
   // Clean up cold archives that become empty after trash purge.
   const coldArchiveIds = new Set();
@@ -320,7 +321,7 @@ export async function purgeTrash(tree) {
   for (const archiveId of coldArchiveIds) {
     const stillCold = remaining.filter(e => e.cold && e.coldRef?.startsWith(archiveId + '/'));
     if (stillCold.length === 0) {
-      await deleteBlob(`cold:${archiveId}`).catch(() => {});
+      await deleteBlob('cold', `cold:${archiveId}`).catch(() => {});
     }
   }
   return remaining;

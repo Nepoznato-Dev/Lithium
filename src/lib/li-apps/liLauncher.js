@@ -32,10 +32,21 @@ const DEFAULT_CAPABILITIES = {
 /**
  * Load and validate the launcher.li file.
  * Returns the parsed launcher config with normalised app entries.
+ * Retries on failure so first-load succeeds even when the dev
+ * server is still warming up.
  */
 export async function loadLauncher() {
-  const res = await fetch(LAUNCHER_PATH);
-  if (!res.ok) throw new Error(`Failed to load launcher.li: ${res.status}`);
+  let res;
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    try {
+      res = await fetch(LAUNCHER_PATH);
+      if (res.ok) break;
+    } catch {
+      // Network error — will retry.
+    }
+    if (attempt < 2) await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
+  }
+  if (!res || !res.ok) throw new Error(`Failed to load launcher.li: ${res?.status}`);
   const json = await res.json();
   if (!json || !Array.isArray(json.apps)) {
     throw new Error('launcher.li must contain an "apps" array');

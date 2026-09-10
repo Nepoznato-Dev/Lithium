@@ -1,4 +1,5 @@
-import { idbGet, idbPut, idbDelete, idbKeys } from './indexedDB';
+import { idbGet, idbKeys } from './indexedDB';
+import { put, del } from './liStorage';
 
 /**
  * AppStateSerializer — serialize and unload inactive desktop apps into compact
@@ -111,7 +112,7 @@ export async function unloadApp(appId) {
   const key = KEY_PREFIX + appId;
 
   try {
-    await idbPut(IDB_STORE, key, {
+    await put('app-state', key, {
       data: json,
       size: json.length,
       appId,
@@ -238,7 +239,7 @@ export async function getSerializedAppsSize() {
  */
 export async function deleteSerializedApp(appId) {
   try {
-    await idbDelete(IDB_STORE, KEY_PREFIX + appId);
+    await del('app-state', KEY_PREFIX + appId);
   } catch {}
 }
 

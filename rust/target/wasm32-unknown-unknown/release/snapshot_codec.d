@@ -1,1 +1,0 @@
-C:\Users\PC\Downloads\Lithium\Lithium\rust\target\wasm32-unknown-unknown\release\snapshot_codec.wasm: C:\Users\PC\Downloads\Lithium\Lithium\rust\lithium-abi\src\lib.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\snapshot_codec\src\lib.rs

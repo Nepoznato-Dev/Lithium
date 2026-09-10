@@ -40,13 +40,17 @@ export function SettingsProvider({ children }) {
   }, [settings, updateSetting]);
 
   // Listen for OS theme changes when mode is 'system'
+  // Use a ref to avoid stale closure over settings
+  const settingsRef = React.useRef(settings);
+  settingsRef.current = settings;
+
   useEffect(() => {
-    if (settings.theme.mode !== 'system') return;
+    if (settingsRef.current.theme.mode !== 'system') return;
     const mq = window.matchMedia('(prefers-color-scheme: light)');
-    const handler = () => applySettings(settings);
+    const handler = () => applySettings(settingsRef.current);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
-  }, [settings]);
+  }, []);
 
   const value = useMemo(() => ({ settings, updateSetting, replaceSettings }), [settings, updateSetting, replaceSettings]);
 

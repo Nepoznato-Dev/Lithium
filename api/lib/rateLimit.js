@@ -8,6 +8,7 @@
 
 const WINDOW_MS = 60_000;   // 1 minute
 const MAX_HITS = 30;         // max requests per window per IP
+const MAX_ENTRIES = 10000;   // max tracked IPs before cleanup
 
 const hits = new Map();
 
@@ -26,6 +27,16 @@ export function rateLimit(ip) {
   }
   recent.push(now);
   hits.set(key, recent);
+
+  // Prevent unbounded Map growth
+  if (hits.size > MAX_ENTRIES) {
+    for (const [k, timestamps] of hits) {
+      const valid = timestamps.filter(t => now - t < WINDOW_MS);
+      if (valid.length === 0) hits.delete(k);
+      else hits.set(k, valid);
+    }
+  }
+
   return true;
 }
 

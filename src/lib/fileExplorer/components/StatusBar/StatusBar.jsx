@@ -1,9 +1,9 @@
 /**
  * Status bar — item count, selection info, drive label.
  */
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { selectedItems, view, nav, cloudItems } from '../../state/signals.jsx';
-import { childrenOf, trashedItems, getEntry, TRASH_ID } from '../../../fileSystem.js';
+import { getEntry, TRASH_ID } from '../../../fileSystem.js';
 
 export default memo(function StatusBar({ tree, drive, items }) {
   const folderId = nav.value.stack[nav.value.stack.length - 1]?.id;
@@ -14,12 +14,25 @@ export default memo(function StatusBar({ tree, drive, items }) {
   })();
 
   const selectedCount = selectedItems.value.size;
-  const selectedEntry = selectedCount === 1 ? tree.find(e => selectedItems.value.has(e.id)) : null;
-  const itemCount = view.value === 'files'
-    ? (drive ? cloudItems.value.length : items?.length || 0)
-    : view.value === 'gallery'
-      ? tree.filter(e => e.type === 'image').length
-      : tree.filter(e => e.type !== 'folder').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 12).length;
+
+  // Memoize expensive tree lookups — tree.find and tree.filter scan the
+  // entire flat array on every render.  Caching by [tree, selectedItems.value]
+  // ensures we only recompute when the tree mutates or selection changes.
+  const selectedEntry = useMemo(() => {
+    if (selectedCount !== 1) return null;
+    const id = selectedItems.value.values().next().value;
+    return tree.find(e => e.id === id) || null;
+  }, [tree, selectedCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const itemCount = useMemo(() => {
+    const v = view.value;
+    if (v === 'files') return drive ? cloudItems.value.length : items?.length || 0;
+    if (v === 'gallery') return tree.reduce((n, e) => n + (e.type === 'image' ? 1 : 0), 0);
+    // home — count non-folder entries, capped at 12
+    let n = 0;
+    for (const e of tree) { if (e.type !== 'folder' && ++n >= 12) break; }
+    return n;
+  }, [tree, drive, items?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const viewLabel = view.value === 'files'
     ? `${itemCount} item${itemCount === 1 ? '' : 's'}`

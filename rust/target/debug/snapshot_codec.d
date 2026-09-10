@@ -1,1 +1,0 @@
-C:\Users\PC\Downloads\Lithium\Lithium\rust\target\debug\snapshot_codec.dll: C:\Users\PC\Downloads\Lithium\Lithium\rust\lithium-abi\src\lib.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\snapshot_codec\src\lib.rs
