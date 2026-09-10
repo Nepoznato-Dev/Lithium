@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lithium-appstore",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-28",
+  "observability": {
+    "enabled": true
+  },
+  "r2_buckets": [
+    {
+      "binding": "APPS",
+      "bucket_name": "lithium-apps"
+    }
+  ]
+}

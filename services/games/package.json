@@ -1,0 +1,13 @@
+{
+  "name": "cf-games",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lithium Games — Cloudflare Worker serving HTML5 games with asset binding",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
