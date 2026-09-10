@@ -60,7 +60,9 @@ function measureLocalStorage() {
       const key = localStorage.key(i);
       if (key) total += key.length + (localStorage.getItem(key) || '').length;
     }
-  } catch {}
+  } catch {
+    // Some browser settings block localStorage access; report zero usage.
+  }
   return total * 2;
 }
 
@@ -77,7 +79,9 @@ export function measureLithiumLocalStorage() {
         total += key.length + (localStorage.getItem(key) || '').length;
       }
     }
-  } catch {}
+  } catch {
+    // Some browser settings block localStorage access; treat Lithium storage as empty.
+  }
   return total * 2;
 }
 
@@ -131,7 +135,9 @@ async function measureIndexedDB() {
       const est = await navigator.storage.estimate();
       return est.usage || 0;
     }
-  } catch {}
+  } catch {
+    // Storage estimate can fail in restricted or unsupported browser contexts.
+  }
   return 0;
 }
 
@@ -146,11 +152,15 @@ async function measureOpfs() {
           const file = await dir.getFileHandle(name);
           const f = await file.getFile();
           total += f.size;
-        } catch {}
+        } catch {
+          // Ignore individual file access failures when scanning OPFS entries.
+        }
       }
       return total;
     }
-  } catch {}
+  } catch {
+    // OPFS is optional and may be unavailable in some environments.
+  }
   return 0;
 }
 
@@ -210,7 +220,9 @@ export async function runAutoClear() {
         const { clearHistory } = await import('./historyService');
         clearHistory();
         cleared++;
-      } catch {}
+      } catch {
+        // Ignore cleanup failures when history storage is unavailable.
+      }
     }
 
     if (category === 'notifications') {
@@ -218,7 +230,9 @@ export async function runAutoClear() {
         const { clearHistory } = await import('../desktop/notify');
         clearHistory();
         cleared++;
-      } catch {}
+      } catch {
+        // Notifications may be unavailable in restricted runtime modes.
+      }
     }
   }
 
@@ -235,6 +249,8 @@ let _initialized = false;
 export function initStorageService() {
   if (_initialized) return;
   _initialized = true;
-  runAutoClear().catch(() => {});
+  runAutoClear().catch(() => {
+    // Ignore startup cleanup failures during boot.
+  });
   emit('init');
 }

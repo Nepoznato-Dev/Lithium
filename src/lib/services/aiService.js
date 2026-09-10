@@ -42,7 +42,10 @@ function makeId() {
 }
 
 function loadSessions() {
-  try { return storage.get(SESSIONS_KEY, []); } catch { return []; }
+  try { return storage.get(SESSIONS_KEY, []); } catch {
+    // Storage may be unavailable in restricted browser contexts.
+    return [];
+  }
 }
 
 function persistSessions(sessions) {
@@ -307,5 +310,7 @@ export async function autoSaveSession(sessionId) {
       const next = createEntry(tree, { name: fileName, type: 'text', parentId: SYS_IDS.AI, content });
       saveTree(next);
     }
-  } catch {}
+  } catch {
+    // Ignore file-system export failures; the session can still remain in memory.
+  }
 }

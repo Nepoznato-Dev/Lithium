@@ -119,7 +119,9 @@ function rewriteUrls(doc, baseUrl) {
       try {
         const absolute = new URL(val, baseUrl).href;
         el.setAttribute(attr, absolute);
-      } catch { /* keep original */ }
+      } catch {
+        // Keep the original URL if it cannot be resolved against the provider page.
+      }
     });
   };
 
@@ -153,7 +155,9 @@ function rewriteCssUrls(css, baseUrl) {
     try {
       const absolute = new URL(url, baseUrl).href;
       return `url(${quote}${absolute}${quote})`;
-    } catch { return match; }
+    } catch {
+      return match;
+    }
   });
 }
 
@@ -245,7 +249,9 @@ function injectOverrides(doc, targetUrl, query) {
     if (a) {
       var href = a.getAttribute('href');
       if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
-        try { href = new URL(href, TARGET_URL).href; } catch(e) {}
+        try { href = new URL(href, TARGET_URL).href; } catch (e) {
+          /* Keep the original href if it cannot be normalized. */
+        }
         window.parent.postMessage({ type: 'lithium-navigate', url: href }, '*');
         e.preventDefault();
       }

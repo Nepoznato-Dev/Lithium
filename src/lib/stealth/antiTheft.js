@@ -19,10 +19,16 @@ let _dtInterval = null;
 
 /** Kill the page — used when theft is detected. */
 function kill() {
-  try { window.close(); } catch {}
+  try { window.close(); } catch {
+    // Browser may block programmatic close in some contexts.
+  }
   // Fallback: blank the document so nothing is visible.
-  try { document.documentElement.replaceChildren(); } catch {}
-  try { location.replace('about:blank'); } catch {}
+  try { document.documentElement.replaceChildren(); } catch {
+    // Document may already be unavailable during teardown.
+  }
+  try { location.replace('about:blank'); } catch {
+    // Navigation can be blocked when the page is being torn down.
+  }
 }
 
 // ─── Exported guards ─────────────────────────────────────────────────────────

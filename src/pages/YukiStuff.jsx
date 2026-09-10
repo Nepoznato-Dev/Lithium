@@ -11,7 +11,7 @@ export default function YukiStuff() {
       id: 'customization',
       label: 'Better Customization',
       icon: 'Palette',
-      description: 'Landing pad for Yuki\'s better customization features',
+      description: 'Landing pad for Yuki&apos;s better customization features',
       onClick: () => navigate('/yuki/customization'),
     },
     {
@@ -53,7 +53,7 @@ export default function YukiStuff() {
               <Icon name="Sparkles" className="h-8 w-8" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-white">Yuki's Stuff</h1>
+              <h1 className="text-4xl font-bold text-white">Yuki&apos;s Stuff</h1>
               <p className="text-sm text-white/50 mt-1">All your personalization in one place</p>
             </div>
           </div>
@@ -90,9 +90,9 @@ export default function YukiStuff() {
 
         {/* Info section */}
         <div className="mt-12 rounded-2xl bg-white/5 p-8 backdrop-blur-xl border border-white/10">
-          <h2 className="text-lg font-semibold text-white mb-4">Welcome to Yuki's Stuff</h2>
+          <h2 className="text-lg font-semibold text-white mb-4">Welcome to Yuki&apos;s Stuff</h2>
           <p className="text-sm text-white/60 leading-relaxed mb-4">
-            Yuki's Stuff is your personal customization hub for Lithium. Here you can personalize your experience, explore themes, adjust settings, and make Lithium truly yours.
+            Yuki&apos;s Stuff is your personal customization hub for Lithium. Here you can personalize your experience, explore themes, adjust settings, and make Lithium truly yours.
           </p>
           <p className="text-sm text-white/50">
             Start with <span className="font-medium text-white/70">Better Customization</span> to explore all available options.

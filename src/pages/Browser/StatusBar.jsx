@@ -13,7 +13,12 @@ export default function StatusBar() {
   if (!url) return null;
 
   let display = url;
-  try { display = new URL(url).hostname.replace(/^www\./, '') + new URL(url).pathname; } catch {}
+  try {
+    const parsed = new URL(url);
+    display = parsed.hostname.replace(/^www\./, '') + parsed.pathname;
+  } catch {
+    // Leave the raw URL intact when it is not a valid absolute URL.
+  }
 
   return (
     <div className="pointer-events-none fixed bottom-1 left-1 z-50 max-w-md">
