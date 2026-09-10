@@ -72,7 +72,7 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
       if (!cancelled && restored.length) setUserTracks(prev => [...restored, ...prev]);
     })();
     return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
   useEffect(() => {
     storage.set('music-player-settings', prefs);
     relatedRef.current = related;

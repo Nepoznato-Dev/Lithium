@@ -91,7 +91,7 @@ export default function Omnibox({ inputRef, onNavigate }) {
       // 3. Calculator — simple arithmetic
       try {
         if (/^[\d\s+\-*/().]+$/.test(draft) && /\d/.test(draft)) {
-          // eslint-disable-next-line no-eval
+           
           const calcResult = Function(`"use strict"; return (${draft})`)();
           if (typeof calcResult === 'number' && isFinite(calcResult)) {
             results.push({ type: 'calc', title: `= ${calcResult}`, url: '', value: String(calcResult) });

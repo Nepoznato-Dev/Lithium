@@ -71,7 +71,7 @@ export default function Viewport() {
         })();
       }
     }
-  }, [mode, sp, url, tab.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, sp, url, tab.id]);  
 
   // Handle postMessage navigation from srcdoc iframes and search interactions
   useEffect(() => {
