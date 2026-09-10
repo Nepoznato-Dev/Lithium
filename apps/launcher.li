@@ -1,0 +1,26 @@
+{
+  "version": "1.0.0",
+  "description": "Lithium .li App Launcher — declares which apps exist and what they can do",
+  "apps": [
+    {
+      "id": "hello-world",
+      "enabled": true,
+      "permissions": ["storage", "notifications"],
+      "capabilities": {
+        "showInStart": true,
+        "desktopIcon": true,
+        "searchable": true
+      }
+    },
+    {
+      "id": "drawing-app",
+      "enabled": true,
+      "permissions": ["storage", "notifications", "photos"],
+      "capabilities": {
+        "showInStart": true,
+        "desktopIcon": true,
+        "searchable": true
+      }
+    }
+  ]
+}
