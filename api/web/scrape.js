@@ -56,12 +56,13 @@ export default async function handler(req, res) {
     });
 
     const html = await response.text();
-    const text = clean(html.replace(/<(script|style|noscript)[^>]*>.*?<\/\1>/gi, ' '));
+    const text = clean(html.replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, ' '));
 
     const titleMatch = /<title[^>]*>(.*?)<\/title>/i.exec(html);
     const title = titleMatch ? clean(titleMatch[1]) : url;
 
     if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Cache-Control', 'private, max-age=600');
     return res.status(200).json({
         url: response.url || url,
         title,

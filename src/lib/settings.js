@@ -63,6 +63,7 @@ export const DEFAULT_SETTINGS = {
   privacy: { shieldLevel: 'standard', gpcEnabled: true, stripTrackingParams: true, cosmeticFilters: true, customRules: [] },
   ai: { defaultModel: null, defaultProvider: null, systemPrompt: '', contextPermissions: 'all', memoryEnabled: true },
   profiles: { activeId: 'default', list: [{ id: 'default', name: 'Player', avatar: null }] },
+  storage: { maxUploadMB: 500 },
 };
 
 /** Deep-merge stored settings over defaults so new fields always exist. */
@@ -104,6 +105,7 @@ const _SETTINGS_DEFAULTS = {
   power: { batterySaver: false, autoDimOnLow: true, lowBatteryThreshold: 20 },
   security: { autoLockMinutes: 0 },
   notifications: { enabled: true, sound: true, position: 'top-right', duration: 3 },
+  storage: { maxUploadMB: 500 },
 };
 
 export function loadSettings() {

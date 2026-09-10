@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
-import { existsSync, readFileSync, statSync } from 'fs';
+import { existsSync, statSync } from 'fs';
+import { readFile, stat } from 'fs/promises';
 import { resolve, extname } from 'path';
 import preact from '@preact/preset-vite';
 
@@ -44,6 +45,27 @@ const MIME_TYPES = {
 function liAppsServe() {
   const liAppsRoot = resolve(__dirname, '../lithiumApps/src');
   const liAppsBase = resolve(__dirname, '../lithiumApps');
+
+  /** Async file-serving helper — avoids blocking the event loop
+   *  with synchronous I/O when multiple .li assets are fetched
+   *  concurrently on first load. */
+  async function tryServeFile(filePath, allowedRoot, res, next) {
+    if (!filePath.startsWith(allowedRoot)) return next();
+    try {
+      const s = await stat(filePath);
+      if (s.isFile()) {
+        const ext = extname(filePath);
+        res.setHeader('Content-Type', MIME_TYPES[ext] || 'application/octet-stream');
+        const content = await readFile(filePath);
+        res.end(content);
+        return;
+      }
+    } catch {
+      // File not found — fall through to next middleware.
+    }
+    next();
+  }
+
   return {
     name: 'li-apps-serve',
     configureServer(server) {
@@ -51,38 +73,13 @@ function liAppsServe() {
       server.middlewares.use('/li-apps', (req, res, next) => {
         const urlPath = (req.url || '/').split('?')[0];
         const filePath = resolve(liAppsRoot, '.' + urlPath);
-        // Prevent directory traversal.
-        if (!filePath.startsWith(liAppsRoot)) return next();
-        try {
-          const stat = statSync(filePath);
-          if (stat.isFile()) {
-            const ext = extname(filePath);
-            res.setHeader('Content-Type', MIME_TYPES[ext] || 'application/octet-stream');
-            res.end(readFileSync(filePath));
-            return;
-          }
-        } catch {
-          // File not found — fall through to next middleware.
-        }
-        next();
+        tryServeFile(filePath, liAppsRoot, res, next);
       });
       // Serve launcher.li and other root-level .li files at /li-apps-launcher/
       server.middlewares.use('/li-apps-launcher', (req, res, next) => {
         const urlPath = (req.url || '/').split('?')[0];
         const filePath = resolve(liAppsBase, '.' + urlPath);
-        if (!filePath.startsWith(liAppsBase)) return next();
-        try {
-          const stat = statSync(filePath);
-          if (stat.isFile()) {
-            const ext = extname(filePath);
-            res.setHeader('Content-Type', MIME_TYPES[ext] || 'application/octet-stream');
-            res.end(readFileSync(filePath));
-            return;
-          }
-        } catch {
-          // File not found.
-        }
-        next();
+        tryServeFile(filePath, liAppsBase, res, next);
       });
     },
   };
@@ -130,6 +127,15 @@ export default defineConfig({
     },
     watch: {
       ignored: ['**/public/html-games/**'],
+    },
+  },
+  // Lightning CSS handles all CSS transformation (parsing, autoprefixing,
+  // nesting, color normalization) and production minification.  PostCSS is
+  // retained only for Tailwind v3 directive expansion (@tailwind / @apply).
+  css: {
+    transformer: 'lightningcss',
+    lightningcss: {
+      targets: { chrome: 100, firefox: 100, safari: 15, edge: 100 },
     },
   },
   build: {

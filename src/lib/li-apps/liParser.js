@@ -50,13 +50,24 @@ export function validateManifest(json) {
 
 /**
  * Fetch and parse a manifest from the given app directory path.
+ * Includes retry logic so first-load succeeds even when the dev
+ * server is still warming up.
  * @param {string} appDir  e.g. "/li-apps/hello-world"
  * @returns {Promise<object>} validated manifest descriptor
  */
 export async function loadManifest(appDir) {
   const url = `${appDir.replace(/\/$/, '')}/manifest.json`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to load .li manifest: ${url} (${res.status})`);
+  let res;
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    try {
+      res = await fetch(url);
+      if (res.ok) break;
+    } catch {
+      // Network error — will retry.
+    }
+    if (attempt < 2) await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
+  }
+  if (!res || !res.ok) throw new Error(`Failed to load .li manifest: ${url} (${res?.status})`);
   const json = await res.json();
   const manifest = validateManifest(json);
   // Resolve the entry point to an absolute URL relative to the manifest directory.

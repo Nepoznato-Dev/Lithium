@@ -1,0 +1,11 @@
+[package]
+name = "notify"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium notify WASM"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }

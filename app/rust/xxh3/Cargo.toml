@@ -1,0 +1,12 @@
+[package]
+name = "xxh3"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium xxh3 hashing WASM"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }

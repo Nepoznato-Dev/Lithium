@@ -1,8 +1,9 @@
+import { memo } from 'react';
 import Icon from '../../Components/Icon';
 import { formatTime } from './musicUtils';
 import { soloistPosition } from '../../lib/music';
 
-export default function MusicNowPlaying({ rightOpen, engine, solo, soloCtl, related, relatedStations, currentLiked, isLikedStation, toggleLikeTrack, toggleLikeStation, play, disconnectSoloist }) {
+const MusicNowPlaying = memo(function MusicNowPlaying({ rightOpen, engine, solo, soloCtl, related, relatedStations, currentLiked, isLikedStation, toggleLikeTrack, toggleLikeStation, play, disconnectSoloist }) {
   if (!rightOpen) return null;
   return (
     <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-white/[0.06] bg-[#16161c] p-4">
@@ -128,4 +129,6 @@ export default function MusicNowPlaying({ rightOpen, engine, solo, soloCtl, rela
       )}
     </aside>
   );
-}
+});
+
+export default MusicNowPlaying;

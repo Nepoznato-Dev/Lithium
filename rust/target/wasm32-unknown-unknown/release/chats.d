@@ -1,1 +1,0 @@
-C:\Users\PC\Downloads\Lithium\Lithium\rust\target\wasm32-unknown-unknown\release\chats.wasm: C:\Users\PC\Downloads\Lithium\Lithium\rust\chats\src\..\..\ai\src\chats.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\chats\src\lib.rs C:\Users\PC\Downloads\Lithium\Lithium\rust\lithium-abi\src\lib.rs

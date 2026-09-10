@@ -1,0 +1,11 @@
+[package]
+name = "models"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium AI models WASM"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }

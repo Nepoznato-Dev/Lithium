@@ -78,6 +78,9 @@ export default async function handler(req, res) {
     const headers = {
       'X-Content-Type-Options': 'nosniff',
     };
+    if (!isHtml) {
+      headers['Cache-Control'] = 'public, max-age=3600';
+    }
     if (origin) {
       headers['Access-Control-Allow-Origin'] = origin;
       headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS';

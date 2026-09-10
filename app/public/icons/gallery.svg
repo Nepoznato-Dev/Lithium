@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%">
+  <rect x="6" y="10" width="52" height="44" rx="5" fill="white"/>
+  <circle cx="22" cy="24" r="7" fill="ICON_COLOR" opacity="0.45"/>
+  <circle cx="46" cy="18" r="5" fill="ICON_COLOR" opacity="0.55"/>
+  <path d="M6 44l14-14 8 8 10-12 20 14v10c0 2.8-2.2 5-5 5H11c-2.8 0-5-2.2-5-5V44z" fill="ICON_COLOR" opacity="0.3"/>
+</svg>

@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, memo } from 'react';
 import Icon from '../../../../Components/Icon';
 import { iconUrl } from '../../../iconUrl.js';
 import { getThumbUrl, getCachedThumbUrl } from '../../thumbCache.js';
-import { selectedItems, draggingId } from '../../state/signals.jsx';
+import { selectedItems } from '../../state/signals.jsx';
 
 /** Pick the best Icon name + colour for an entry, matching the pattern used
  *  across Sidebar, CodeStudio, Notes, Downloader, etc. */
@@ -99,10 +99,10 @@ function EntryThumb({ entry, className }) {
 }
 
 const FileItem = memo(function FileItem({ entry, treeRef, drive, openItem, onItemContext, dragProps, dropTarget }) {
-  // Read signals directly — only THIS item re-renders on selection change,
-  // not the entire list. Signal subscriptions are per-component.
+  // Read signal directly — only THIS item re-renders on selection change,
+  // not the entire list. Drag styling is handled at the container level
+  // (FileGrid) via DOM classList to avoid re-rendering every item on drag.
   const selected = selectedItems.value.has(entry.id);
-  const dragging = draggingId.value;
 
   const handleClick = (event) => {
     event.stopPropagation();
@@ -122,7 +122,8 @@ const FileItem = memo(function FileItem({ entry, treeRef, drive, openItem, onIte
 
   return (
     <button
-      className={`flex flex-col items-center gap-2 rounded-lg p-3 text-center transition-colors ${selected ? 'acc-soft acc-ring-soft' : 'hover:bg-[#2a2b31]'} ${dragging && entry.type === 'folder' && dragging !== entry.id ? 'acc-ring-soft' : ''}`}
+      data-entry-id={entry.id}
+      className={`flex flex-col items-center gap-2 rounded-lg p-3 text-center transition-colors ${selected ? 'acc-soft acc-ring-soft' : 'hover:bg-[#2a2b31]'}`}
       onClick={handleClick}
       onContextMenu={event => { event.stopPropagation(); onItemContext(event, entry); }}
       onDoubleClick={() => openItem(entry)}

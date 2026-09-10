@@ -94,7 +94,7 @@ class StyleRewriter {
     // HTMLRewriter delivers <style> content in chunks; we can only do a
     // best-effort replace on each chunk.  Multi-line url() spanning
     // chunks is extremely rare in practice.
-    const rewritten = chunk.replace(
+    const rewritten = chunk.text.replace(
       /url\(\s*(['"]?)(.+?)\1\s*\)/g,
       (_m, q, raw) => {
         const trimmed = raw.trim();
@@ -145,6 +145,7 @@ async function proxyRequest(request, targetUrl, proxyOrigin) {
     method: request.method,
     headers,
     redirect: 'follow',
+    signal: AbortSignal.timeout(15000),
   });
 
   const contentType = upstream.headers.get('Content-Type') || '';
@@ -157,12 +158,14 @@ async function proxyRequest(request, targetUrl, proxyOrigin) {
 
   // Remove any frame-ancestors CSP directive that might be embedded in
   // other header variants.
+  const keysToDelete = [];
   for (const [key] of responseHeaders) {
     if (key.toLowerCase().startsWith('x-content-') ||
         key.toLowerCase() === 'cross-origin-embedder-policy') {
-      responseHeaders.delete(key);
+      keysToDelete.push(key);
     }
   }
+  for (const key of keysToDelete) responseHeaders.delete(key);
 
   // ---- Permissive CORS ----
   responseHeaders.set('Access-Control-Allow-Origin', '*');
@@ -186,6 +189,14 @@ async function proxyRequest(request, targetUrl, proxyOrigin) {
       // <style> url() rewriting
       new StyleRewriter(proxyOrigin),
     ];
+
+    // Set base URL for all rewriters that need it
+    for (const rw of rewriters) {
+      if (typeof rw.setBase === 'function') rw.setBase(targetUrl);
+    }
+
+    const videoRewriter = new UrlRewriter(['src', 'poster'], proxyOrigin);
+    videoRewriter.setBase(targetUrl);
 
     let rewriter = new HTMLRewriter();
     // <head> injection: patch history API so SPA navigations go through proxy
@@ -219,13 +230,14 @@ async function proxyRequest(request, targetUrl, proxyOrigin) {
       .on('iframe', rewriters[2])
       .on('embed', rewriters[2])
       .on('audio', rewriters[2])
-      .on('video', new UrlRewriter(['src', 'poster'], proxyOrigin))
+      .on('video', videoRewriter)
       .on('source', rewriters[2])
       .on('object', rewriters[4])
       .on('meta', rewriters[5])
       .on('style', rewriters[6]);
 
-    return rewriter.transform(upstream);
+    const cleaned = new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+    return rewriter.transform(cleaned);
   }
 
   // ---- CSS: rewrite url() references ----
@@ -285,7 +297,7 @@ export default {
       });
     }
 
-    const targetUrl = url.pathname.slice(PROXY_PREFIX.length);
+    const targetUrl = url.pathname.slice(PROXY_PREFIX.length) + url.search;
     if (!targetUrl) {
       return new Response('Missing target URL', {
         status: 400,

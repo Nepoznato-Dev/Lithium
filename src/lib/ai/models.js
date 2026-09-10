@@ -137,7 +137,7 @@ export function addCustomModel({ name, url, size = 0, blurb = '' }) {
 export async function importLocalGguf(file, name) {
   const id = `custom-${slugify(name || file.name)}`;
   if (allModels().some(model => model.id === id)) throw new Error('A model with this name already exists');
-  await putBlob(`model:${id}`, file, { name: file.name });
+  await putBlob('model', `model:${id}`, file, undefined, { name: file.name });
   const meta = loadModelMeta();
   meta[id] = { downloaded: true, size: file.size, at: Date.now() };
   saveModelMeta(meta);
@@ -157,7 +157,7 @@ export async function importLocalGguf(file, name) {
 
 /** Remove a custom model: registry entry + downloaded blob + meta. */
 export async function removeCustomModel(id) {
-  await deleteBlob(`model:${id}`).catch(() => {});
+  await deleteBlob('model', `model:${id}`).catch(() => {});
   const meta = loadModelMeta();
   const info = meta[id];
   if (info?.storage === 'opfs') await opfsDelete(info.opfsName || opfsFile(id));
@@ -348,7 +348,7 @@ export async function downloadModel(id, { onProgress, signal } = {}) {
       onProgress?.({ received, total });
     }
     const blob = new Blob(chunks, { type: 'application/octet-stream' });
-    await putBlob(`model:${id}`, blob, { name: model.url.split('/').pop() });
+    await putBlob('model', `model:${id}`, blob, undefined, { name: model.url.split('/').pop() });
     size = blob.size;
     storageKind = 'idb';
   }
@@ -359,7 +359,7 @@ export async function downloadModel(id, { onProgress, signal } = {}) {
 }
 
 export async function deleteModel(id) {
-  await deleteBlob(`model:${id}`).catch(() => {});
+  await deleteBlob('model', `model:${id}`).catch(() => {});
   const meta = loadModelMeta();
   const info = meta[id];
   if (info?.storage === 'opfs') await opfsDelete(info.opfsName || opfsFile(id));
