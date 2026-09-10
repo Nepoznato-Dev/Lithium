@@ -55,7 +55,7 @@ export default function YukiAbout() {
               <Icon name="Sparkles" className="h-10 w-10" />
             </div>
           </div>
-          <h1 className="text-4xl font-bold text-white mb-4">About Yuki's Stuff</h1>
+          <h1 className="text-4xl font-bold text-white mb-4">About Yuki&apos;s Stuff</h1>
           <p className="text-lg text-white/60 max-w-2xl mx-auto">
             Your personal customization hub for Lithium. Make it yours.
           </p>
@@ -80,9 +80,9 @@ export default function YukiAbout() {
         {/* Details */}
         <div className="space-y-6">
           <div className="rounded-2xl bg-white/5 p-8 backdrop-blur-xl border border-white/10">
-            <h2 className="text-xl font-semibold text-white mb-4">What is Yuki's Stuff?</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">What is Yuki&apos;s Stuff?</h2>
             <p className="text-white/60 leading-relaxed mb-4">
-              Yuki's Stuff is a comprehensive customization platform built into Lithium. It provides you with tools to personalize your digital workspace, adjust settings to your liking, and explore beautiful themes designed specifically for Lithium.
+              Yuki&apos;s Stuff is a comprehensive customization platform built into Lithium. It provides you with tools to personalize your digital workspace, adjust settings to your liking, and explore beautiful themes designed specifically for Lithium.
             </p>
             <p className="text-white/60 leading-relaxed">
               Everything you create or customize is stored locally on your device. Your privacy is paramount, and we ensure that all your personal settings remain under your control.
@@ -93,7 +93,7 @@ export default function YukiAbout() {
             <h2 className="text-xl font-semibold text-white mb-4">Version & Credits</h2>
             <div className="space-y-3 text-sm text-white/60">
               <div className="flex justify-between">
-                <span>Yuki's Stuff</span>
+                <span>Yuki&apos;s Stuff</span>
                 <span className="text-white/40">v1.0</span>
               </div>
               <div className="flex justify-between">
@@ -115,7 +115,7 @@ export default function YukiAbout() {
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 font-semibold text-white transition-transform hover:scale-105"
           >
             <Icon name="Home" className="h-5 w-5" />
-            Back to Yuki's Stuff
+            Back to Yuki&apos;s Stuff
           </button>
         </div>
       </div>

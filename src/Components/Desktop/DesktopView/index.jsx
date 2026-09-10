@@ -20,6 +20,7 @@ const NotificationCenter = lazy(() => import('./NotificationCenter'));
 const QuickActionsPanel = lazy(() => import('./QuickActionsPanel'));
 const WeatherFlyout = lazy(() => import('./WeatherFlyout'));
 const TaskView = lazy(() => import('../TaskView'));
+const Browser = lazy(() => import('../../../pages/Browser'));
 
 // useSystemMetrics is re-exported for backward compat.
 export { useSystemMetrics } from '../DesktopTickers';
@@ -39,7 +40,7 @@ export default function DesktopView() {
     taskbarSettingsOpen, setTaskbarSettingsOpen, taskbarPrefs, setTaskbarPrefs,
     perfOpen, setPerfOpen,
     fsTree, setFsTree, fsTrashedCount,
-    shutdown, setShutdown, recentApps, customGroups, pinnedTaskbar,
+    shutdown, setShutdown, recentApps, customGroups, pinnedTaskbar, setPinnedTaskbar,
     soundLevel, setSoundLevel, wallpaper, customWallpaper, avatar,
     toasts, appGridView, setAppGridView, appCategory, setAppCategory,
     hoveredApp, setHoveredApp, pinnedOrder, setPinnedOrder,

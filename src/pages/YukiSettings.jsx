@@ -90,7 +90,7 @@ export default function YukiSettings() {
               About
             </h2>
             <div className="space-y-2 text-sm text-white/60">
-              <p>Yuki's Stuff - Personal Customization Hub</p>
+              <p>Yuki&apos;s Stuff - Personal Customization Hub</p>
               <p>Part of Lithium - A lightweight web desktop</p>
               <p className="text-white/40 text-xs mt-4">Created for a personalized experience</p>
             </div>

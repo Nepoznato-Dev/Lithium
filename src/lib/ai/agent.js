@@ -68,7 +68,9 @@ export function extractApiCalls(text) {
       } else if (parsed && parsed.api) {
         calls.push({ api: parsed.api, params: parsed.params || {} });
       }
-    } catch {}
+    } catch {
+      // Ignore malformed tool blocks and continue parsing the rest of the message.
+    }
   }
   return calls;
 }

@@ -208,7 +208,7 @@ export default function AppStudioApp() {
             <div className="as-empty">
               <Icon name="Code" size={24} />
               <p>No apps yet</p>
-              <p className="as-empty-hint">Click "New" to create one, or ask the AI to build an app for you.</p>
+              <p className="as-empty-hint">Click &quot;New&quot; to create one, or ask the AI to build an app for you.</p>
             </div>
           )}
           {apps.map(entry => (

@@ -169,13 +169,17 @@ function injectOverrides(doc, targetUrl) {
 
   try {
     Object.defineProperty(window, 'location', { value: fakeLocation, writable: false });
-  } catch(e) {}
+  } catch (e) {
+    /* Ignore environments that prevent overriding location. */
+  }
 
   // Also patch document.URL and document.documentURI.
   try {
     Object.defineProperty(document, 'URL', { value: TARGET_URL, get: function() { return TARGET_URL; } });
     Object.defineProperty(document, 'documentURI', { value: TARGET_URL, get: function() { return TARGET_URL; } });
-  } catch(e) {}
+  } catch (e) {
+    /* Ignore environments that block document URL spoofing. */
+  }
 
   // --- Fetch override ---
   // Route all fetch() calls through the CORS proxy so API calls work.
@@ -185,7 +189,9 @@ function injectOverrides(doc, targetUrl) {
   window.fetch = function(input, init) {
     var url = (typeof input === 'string') ? input : (input && input.url) || '';
     // Resolve relative URLs against the target page.
-    try { url = new URL(url, TARGET_URL).href; } catch(e) {}
+    try { url = new URL(url, TARGET_URL).href; } catch (e) {
+      /* Leave invalid relative URLs as-is so the original fetch still attempts to resolve them. */
+    }
     // Route through backend proxy, fallback to allorigins.
     var proxyUrl = PROXY_BASE + encodeURIComponent(url);
     return origFetch.call(this, proxyUrl, init).catch(function() {
@@ -197,7 +203,9 @@ function injectOverrides(doc, targetUrl) {
   var origOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function(method, url) {
     if (typeof url === 'string') {
-      try { url = new URL(url, TARGET_URL).href; } catch(e) {}
+      try { url = new URL(url, TARGET_URL).href; } catch (e) {
+        /* Ignore invalid relative URLs when proxying XHR requests. */
+      }
       arguments[1] = PROXY_BASE + encodeURIComponent(url);
     }
     return origOpen.apply(this, arguments);
@@ -211,7 +219,9 @@ function injectOverrides(doc, targetUrl) {
     if (a) {
       var href = a.getAttribute('href');
       if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
-        try { href = new URL(href, TARGET_URL).href; } catch(e) {}
+        try { href = new URL(href, TARGET_URL).href; } catch (e) {
+          /* Keep the original href if it cannot be normalized. */
+        }
         window.parent.postMessage({ type: 'lithium-navigate', url: href }, '*');
         e.preventDefault();
       }

@@ -309,7 +309,9 @@ export default function useDesktopState() {
           const app = apps.find(a => a.id === appId);
           if (app) launchRef.current(appId);
         }
-      } catch {}
+      } catch {
+        // Workspace restore is best-effort and may fail if the saved layout is incomplete.
+      }
     };
     window.addEventListener('lithium:restore-workspace', onRestoreWorkspace);
     startEnabledWidgets();

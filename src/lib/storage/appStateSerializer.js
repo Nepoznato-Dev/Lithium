@@ -186,6 +186,7 @@ export function getAppStateMetrics() {
       try {
         estimatedSize = JSON.stringify(entry.state).length * 2;
       } catch {
+        // Some app state can include circular references that cannot be stringified.
         estimatedSize = 0;
       }
       totalLoadedSize += estimatedSize;
@@ -239,7 +240,9 @@ export async function getSerializedAppsSize() {
 export async function deleteSerializedApp(appId) {
   try {
     await idbDelete(IDB_STORE, KEY_PREFIX + appId);
-  } catch {}
+  } catch {
+    // Deletion is best-effort; if the store is unavailable, nothing else needs to happen.
+  }
 }
 
 /**
@@ -257,7 +260,9 @@ export function startAppSweeper() {
   if (initialized) return;
   initialized = true;
   sweepTimer = setInterval(() => {
-    sweepIdleApps().catch(() => {});
+    sweepIdleApps().catch(() => {
+      // Keep the sweeper resilient if background serialization fails.
+    });
   }, SWEEP_INTERVAL);
 }
 

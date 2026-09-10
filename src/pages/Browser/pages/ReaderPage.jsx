@@ -90,7 +90,9 @@ export default function ReaderPage() {
       const next = createEntry(tree, { name: fileName, type: 'text', parentId: SYS_IDS.ARTICLES, content: md });
       saveTree(next);
       window.dispatchEvent(new CustomEvent('lithium:notify', { detail: { title: 'Article saved', body: `Saved to /Documents/Articles/${fileName}`, type: 'success' } }));
-    } catch {}
+    } catch {
+      // Ignore save failures when the app cannot write to the articles folder.
+    }
   };
 
   return (
