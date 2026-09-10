@@ -13,7 +13,7 @@ export default function ConflictDialog({ existingName, onReplace, onRename, onSk
           Name conflict
         </h3>
         <p className="mb-4 text-xs leading-relaxed text-white/70">
-          An item named "<span className="font-medium text-white">{existingName}</span>" already exists in this location.
+          An item named &quot;<span className="font-medium text-white">{existingName}</span>&quot; already exists in this location.
         </p>
         <div className="flex flex-wrap justify-end gap-2">
           {onSkip && <button className="btn-ghost px-3 py-1.5 text-xs" onClick={onSkip}>Skip</button>}

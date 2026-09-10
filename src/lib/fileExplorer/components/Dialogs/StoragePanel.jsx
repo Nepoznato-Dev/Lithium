@@ -110,14 +110,18 @@ export default function StoragePanel({ snapshot: initialSnapshot, onRefresh, onC
     computeBreakdown(tree).then(result => {
       setBreakdown(result);
       setBreakdownLoading(false);
-    }).catch(() => setBreakdownLoading(false));
+    }).catch(() => {
+      setBreakdownLoading(false);
+    });
   }, [activeTab, breakdown, tree]);
 
   // Load app metrics when tab changes
   useEffect(() => {
     if (activeTab !== 'appstates') return;
     setAppMetrics(getAppStateMetrics());
-    getSerializedAppsSize().then(setSerializedSize).catch(() => {});
+    getSerializedAppsSize().then(setSerializedSize).catch(() => {
+      // Ignore storage metric failures for the app-state panel.
+    });
   }, [activeTab]);
 
   // Measure treemap container
@@ -137,7 +141,9 @@ export default function StoragePanel({ snapshot: initialSnapshot, onRefresh, onC
     try {
       const blob = await createBackupZip(tree);
       downloadZipBlob(blob, `lithium-full-backup-${Date.now()}.zip`);
-    } catch {}
+    } catch {
+      // Backup errors are surfaced to the user via the existing UI flow.
+    }
     setBackupBusy(false);
   }, [tree]);
 
@@ -155,7 +161,9 @@ export default function StoragePanel({ snapshot: initialSnapshot, onRefresh, onC
         const result = await restoreBackupZip(file, { replace: true });
         commit(result.tree);
         refreshLocal();
-      } catch {}
+      } catch {
+        // Restore failures are surfaced to the user in the file dialog flow.
+      }
       setRestoreBusy(false);
     };
     input.click();
@@ -166,8 +174,12 @@ export default function StoragePanel({ snapshot: initialSnapshot, onRefresh, onC
     try {
       await sweepIdleApps();
       setAppMetrics(getAppStateMetrics());
-      getSerializedAppsSize().then(setSerializedSize).catch(() => {});
-    } catch {}
+      getSerializedAppsSize().then(setSerializedSize).catch(() => {
+        // Ignore sweep metric failures after the cleanup itself succeeds.
+      });
+    } catch {
+      // App-state sweeps are best-effort and should not block the UI.
+    }
     setSweeping(false);
   }, []);
 

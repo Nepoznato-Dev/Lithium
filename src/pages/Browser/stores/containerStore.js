@@ -25,6 +25,7 @@ function loadContainers() {
     const builtins = DEFAULT_CONTAINERS.filter(c => !customIds.has(c.id));
     return [...builtins, ...custom.map(c => ({ ...c, isDefault: false }))];
   } catch {
+    // Ignore malformed saved data and fall back to defaults.
     return [...DEFAULT_CONTAINERS];
   }
 }
@@ -33,7 +34,9 @@ function saveContainers(containers) {
   try {
     const custom = containers.filter(c => !c.isDefault);
     localStorage.setItem(CONTAINERS_KEY, JSON.stringify(custom));
-  } catch {}
+  } catch {
+    // Ignore storage write failures (private mode / quota errors).
+  }
 }
 
 /** All containers (built-in + custom). */

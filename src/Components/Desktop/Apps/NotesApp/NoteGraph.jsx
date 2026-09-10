@@ -218,7 +218,7 @@ export default function InteractiveGraph({ notes, activeId, mode, onModeChange, 
       setIsPanning(true);
       panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
     }
-  }, [screenToWorld, findNodeAt, pan]); // eslint-disable-line
+  }, [screenToWorld, findNodeAt, pan]);  
 
   const onMouseMove = useCallback(e => {
     const rect = containerRef.current.getBoundingClientRect();

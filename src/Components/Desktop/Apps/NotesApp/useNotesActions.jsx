@@ -235,7 +235,7 @@ export default function useNotesActions(s, areaRef, gutterRef) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }); // eslint-disable-line
+  });  
 
   useEffect(() => {
     const onOpenNote = event => openNote(event.detail);
