@@ -51,7 +51,9 @@ export default function Viewport() {
   useEffect(() => {
     if (mode === 'search' && !sp && url) {
       let query = '';
-      try { query = new URL(url).searchParams.get('q') || ''; } catch {}
+      try { query = new URL(url).searchParams.get('q') || ''; } catch {
+        // Ignore malformed search URLs and let the tab keep its existing state.
+      }
       if (query) {
         const pKey = activeSearchProvider.value;
         updateTab(tab.id, { searchData: { html: null, query, provider: '', providerKey: pKey, searchUrl: url, loading: true } });
@@ -71,7 +73,7 @@ export default function Viewport() {
         })();
       }
     }
-  }, [mode, sp, url, tab.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, sp, url, tab.id]);  
 
   // Handle postMessage navigation from srcdoc iframes and search interactions
   useEffect(() => {
@@ -338,13 +340,17 @@ export default function Viewport() {
                     setCaptchaDetected(true);
                     return;
                   }
-                } catch {}
+                } catch {
+                  // Ignore cross-origin access errors while checking for CAPTCHA frames.
+                }
                 setCaptchaDetected(false);
                 // Extract real page title and favicon (like a real browser)
                 try {
                   const doc = iframeRef.current?.contentDocument;
                   if (doc?.title) setTabTitle(tab.id, doc.title);
-                } catch {}
+                } catch {
+                  // Ignore cross-origin access errors while reading the iframe title.
+                }
                 // Always derive a clean title from URL as fallback
                 const h = hostname(url);
                 if (h && h !== 'new tab') {
@@ -354,7 +360,9 @@ export default function Viewport() {
                 try {
                   const origin = new URL(url).origin;
                   updateTab(tab.id, { favicon: `https://www.google.com/s2/favicons?domain=${origin}&sz=32` });
-                } catch {}
+                } catch {
+                  // Ignore invalid URLs when deriving a favicon origin.
+                }
                 // Article detection for reader mode trigger (C4)
                 try {
                   const doc = iframeRef.current?.contentDocument;

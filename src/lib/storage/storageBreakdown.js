@@ -215,7 +215,9 @@ export async function computeBreakdown(tree) {
         else if (key.startsWith('opfs:')) opfsCount++;
         else idbBlobCount++;
       }
-    } catch {}
+    } catch {
+      // IndexedDB blob metadata may be unavailable while the browser is locked down.
+    }
 
     const result = {
       totalSize,

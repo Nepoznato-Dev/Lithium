@@ -99,13 +99,13 @@ export default function ShieldsPanel() {
       <div className="flex items-center gap-4 border-b border-white/[0.06] px-4 py-4">
         <div className="relative">
           <svg width="68" height="68" viewBox="0 0 68 68">
-            <circle cx="34" cy="34" r={radius} fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="5" />
+            <circle cx="34" cy="34" r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="5" />
             <circle
               cx="34" cy="34" r={radius} fill="none"
-              stroke="#FB542B" stroke-width="5"
-              stroke-linecap="round"
-              stroke-dasharray={circumference}
-              stroke-dashoffset={dashOffset}
+              stroke="#FB542B" strokeWidth="5"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
               transform="rotate(-90 34 34)"
               style={{ transition: 'stroke-dashoffset 0.5s ease' }}
             />

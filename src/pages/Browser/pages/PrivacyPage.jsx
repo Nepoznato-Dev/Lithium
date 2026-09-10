@@ -49,14 +49,18 @@ function RuleEditor() {
             const content = typeof entry.content === 'string' ? entry.content : '';
             const parsed = JSON.parse(content);
             return Array.isArray(parsed) ? parsed : (parsed[config.key] || []);
-          } catch { return []; }
+          } catch {
+            return [];
+          }
         };
         setCustomRules({
           tracking: loadFromFile('tracking'),
           cosmetic: loadFromFile('cosmetic'),
           blocklist: loadFromFile('blocklist'),
         });
-      } catch {}
+      } catch {
+        // Ignore file-system issues while loading custom privacy rules.
+      }
     })();
   }, []);
 
@@ -91,7 +95,9 @@ function RuleEditor() {
       saveTree(tree);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {}
+    } catch {
+      // Ignore filesystem write failures for custom rule saves.
+    }
   };
 
   const currentRules = customRules[activeTab] || [];

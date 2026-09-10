@@ -90,7 +90,9 @@ export default function ReaderPage() {
       const next = createEntry(tree, { name: fileName, type: 'text', parentId: SYS_IDS.ARTICLES, content: md });
       saveTree(next);
       window.dispatchEvent(new CustomEvent('lithium:notify', { detail: { title: 'Article saved', body: `Saved to /Documents/Articles/${fileName}`, type: 'success' } }));
-    } catch {}
+    } catch {
+      // Ignore save failures when the app cannot write to the articles folder.
+    }
   };
 
   return (
@@ -147,7 +149,7 @@ export default function ReaderPage() {
               {article.author && <div style={{ fontSize: fontSize * 0.8, color: t.muted, marginBottom: 24 }}>By {article.author}</div>}
               <div dangerouslySetInnerHTML={{ __html: article.content }} />
               <div style={{ marginTop: 40, paddingTop: 16, borderTop: '1px solid rgba(128,128,128,0.2)', fontSize: fontSize * 0.75, color: t.muted }}>
-                Source: <a href={article.sourceUrl} style={{ color: t.accent }} target="_blank" rel="noopener">{article.sourceUrl}</a>
+                Source: <a href={article.sourceUrl} style={{ color: t.accent }} target="_blank" rel="noopener noreferrer">{article.sourceUrl}</a>
               </div>
             </article>
           ) : !loading && !error ? (

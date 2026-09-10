@@ -20,7 +20,9 @@ function getStats() {
         timeSaved: ps.timeSaved || 0,
       };
     }
-  } catch {}
+  } catch {
+    // Fall back to the in-memory shields stats if the privacy service is unavailable.
+  }
   // Fallback to shieldsStore stats
   const s = globalStats.value;
   return {
