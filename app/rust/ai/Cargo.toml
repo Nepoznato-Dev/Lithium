@@ -1,0 +1,11 @@
+[package]
+name = "ai"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium AI WASM: inference runtime, models, agent, chats, soloist, widget"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }

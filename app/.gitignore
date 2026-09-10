@@ -1,0 +1,28 @@
+# Dependencies and build
+node_modules/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+backend/lithium.db
+backend/data/
+backend/.encryption_key
+
+# Rust build artifacts (all crates)
+rust/**/target/
+rust/target/
+
+# Cloudflare Workers
+.wrangler/
+
+# IDE
+.vscode/
+.idea/
+
+.vercel
+.env*

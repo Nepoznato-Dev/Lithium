@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%">
+  <circle cx="32" cy="32" r="24" fill="white"/>
+  <circle cx="32" cy="32" r="19" fill="none" stroke="ICON_COLOR" stroke-width="1.5" opacity="0.35"/>
+  <circle cx="32" cy="12" r="2.5" fill="ICON_COLOR" opacity="0.5"/>
+  <circle cx="52" cy="32" r="2.5" fill="ICON_COLOR" opacity="0.5"/>
+  <circle cx="32" cy="52" r="2.5" fill="ICON_COLOR" opacity="0.5"/>
+  <circle cx="12" cy="32" r="2.5" fill="ICON_COLOR" opacity="0.5"/>
+  <path d="M32 18v14l10 6" fill="none" stroke="ICON_COLOR" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.75"/>
+  <circle cx="32" cy="32" r="3" fill="ICON_COLOR" opacity="0.8"/>
+</svg>

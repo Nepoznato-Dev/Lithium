@@ -1,0 +1,11 @@
+[package]
+name = "filesystem"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium filesystem WASM: fs, explorer"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }

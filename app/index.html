@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Lithium — a lightweight, offline-first web desktop for games, music, browsing, files, AI, and quick tools." />
+    <meta name="theme-color" content="#0a0a0f" />
+    <title>Lithium</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%230a0a0f'/><text x='50' y='72' font-size='72' text-anchor='middle' fill='%2322d3ee' font-family='system-ui,sans-serif' font-weight='700'>Li</text></svg>" />
+    <style>html { background: #0a0a0f; }</style>
+    <!-- Apply saved theme before first paint to prevent flash -->
+    <script>try{var s=JSON.parse(localStorage.getItem('lithium:settings')||'{}');var m=s.theme&&s.theme.mode||'dark';if(m==='system')m=matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';document.documentElement.dataset.theme=m;document.documentElement.style.colorScheme=m;if(m==='light'){document.querySelector('style').textContent='html{background:#fafafa}'}}catch(e){}</script>
+    <!-- Anti-theft: block cross-origin iframing before any module loads -->
+    <script>try{if(window.top!==window&&window.top.location.hostname!==location.hostname)window.location.replace('about:blank')}catch(e){window.location.replace('about:blank')}</script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

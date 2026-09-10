@@ -1,0 +1,19 @@
+[package]
+name = "lithium-core"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium native core: LZ4 compression, xxh3 integrity, binary FS snapshot codec (wasm)"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lz4_flex = { version = "0.11", default-features = false, features = ["safe-encode", "safe-decode"] }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
+codegen-units = 1
+strip = true

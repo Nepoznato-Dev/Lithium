@@ -1,0 +1,96 @@
+/**
+ * NavigationBar — Brave-style toolbar.
+ * Layout: [back] [fwd] [reload] [shields] [──── omnibox ────] [star]
+ * Clean, compact buttons with the omnibox as the visual centerpiece.
+ * Secondary actions (Reader, External Link) moved to the menu.
+ */
+import { activeTab, currentUrl, goBack, goForward, reloadTab, navigateTab } from './stores/tabStore';
+import { isBookmarked, toggleBookmark } from './stores/bookmarksStore';
+import { addHistoryEntry } from './stores/historyStore';
+import { simulateBlocking } from './stores/shieldsStore';
+import { articleDetected } from './stores/browserStore';
+import { navigateInternal } from './stores/browserStore';
+import Omnibox from './Omnibox';
+import ShieldsButton from './ShieldsButton';
+import Icon from '../../Components/Icon';
+
+function hostname(url) {
+  if (!url) return '';
+  let s = url;
+  const schemeIdx = s.indexOf('://');
+  if (schemeIdx >= 0) s = s.slice(schemeIdx + 3);
+  s = s.split(/[/?#]/)[0];
+  if (s.startsWith('www.')) s = s.slice(4);
+  s = s.split(':')[0];
+  return s;
+}
+
+export default function NavigationBar({ omniboxRef }) {
+  const tab = activeTab.value;
+  const url = currentUrl.value;
+  const bookmarked = url ? isBookmarked(url) : false;
+  const hasArticle = articleDetected.value;
+
+  const handleNavigate = (newUrl) => {
+    navigateTab(tab.id, newUrl);
+    addHistoryEntry(hostname(newUrl), newUrl);
+    simulateBlocking();
+    articleDetected.value = false; // reset on navigation
+  };
+
+  const handleReload = () => reloadTab(tab.id);
+  const handleBack = () => goBack(tab.id);
+  const handleForward = () => goForward(tab.id);
+
+  const handleBookmarkToggle = () => {
+    if (url) toggleBookmark(hostname(url), url);
+  };
+
+  const handleReaderMode = () => {
+    if (!url) return;
+    navigateInternal(`#/reader?url=${encodeURIComponent(url)}`);
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-1.5">
+      {/* Nav cluster */}
+      <button className="browser-nav-btn" onClick={handleBack} disabled={tab.index <= 0} aria-label="Back" title="Back (Alt+←)">
+        <Icon name="ArrowLeft" className="h-4 w-4" />
+      </button>
+      <button className="browser-nav-btn" onClick={handleForward} disabled={tab.index >= tab.history.length - 1} aria-label="Forward" title="Forward (Alt+→)">
+        <Icon name="ArrowRight" className="h-4 w-4" />
+      </button>
+      <button className="browser-nav-btn" onClick={handleReload} disabled={!url} aria-label="Reload" title="Reload (Ctrl+R)">
+        <Icon name="RotateCw" className="h-3.5 w-3.5" />
+      </button>
+
+      {/* Shields — left of omnibox like Brave */}
+      <ShieldsButton />
+
+      {/* Omnibox */}
+      <Omnibox inputRef={omniboxRef} onNavigate={handleNavigate} />
+
+      {/* Right-side actions */}
+      {/* Reader mode button — visible when article detected (C4) */}
+      {hasArticle && (
+        <button
+          className="browser-nav-btn text-cyan-300"
+          onClick={handleReaderMode}
+          aria-label="Open in Reader mode"
+          title="Open in Reader mode"
+        >
+          <Icon name="BookOpen" className="h-4 w-4" />
+        </button>
+      )}
+      <button
+        className={`browser-nav-btn ${bookmarked ? 'text-yellow-400' : ''}`}
+        onClick={handleBookmarkToggle}
+        disabled={!url}
+        aria-label="Bookmark this page"
+        title={bookmarked ? 'Remove bookmark' : 'Bookmark this page'}
+      >
+        <Icon name="Star" className={`h-4 w-4 ${bookmarked ? 'fill-current' : ''}`} />
+      </button>
+    </div>
+  );
+}

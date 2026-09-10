@@ -1,0 +1,11 @@
+[package]
+name = "snapshot_codec"
+version = "0.1.0"
+edition = "2021"
+description = "Lithium snapshot codec WASM"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+lithium-abi = { path = "../lithium-abi" }

@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "lithium-abi",
+    "filesystem", "snapshot_codec", "lz4", "xxh3",
+    "lithium-compute",
+    "server",
+    # Active WASM crates (cdylib):
+    "core", "lithium-core",
+    "agent", "ai", "api", "browser", "chats",
+    "device", "kv", "lock", "markdown", "memory",
+    "models", "notify", "runtime", "settings",
+    "shell", "snap", "soloist", "storage", "tar",
+    "weather", "widget",
+]
+resolver = "2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
+codegen-units = 1
+strip = true
