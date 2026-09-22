@@ -81,14 +81,15 @@ export default function Music({ windowed = false, closeSelf, minimizeSelf, maxim
       if (!cancelled && restored.length) setUserTracks(prev => [...restored, ...prev]);
     })();
     return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Revoke blob URLs on unmount to prevent memory leaks
   const _blobUrls = useRef(new Set());
   useEffect(() => {
+    const urls = _blobUrls.current;
     return () => {
-      for (const url of _blobUrls.current) URL.revokeObjectURL(url);
-      _blobUrls.current.clear();
+      for (const url of urls) URL.revokeObjectURL(url);
+      urls.clear();
     };
   }, []);
 

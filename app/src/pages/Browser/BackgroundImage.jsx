@@ -26,7 +26,7 @@ export default function BackgroundImage() {
     img.onload = () => setLoaded(true);
     img.onerror = () => setFailed(true);
     img.src = bg.src;
-  }, [idx]);
+  }, [idx, bg.src]);
 
   const fallbackColor = bg?.color || '#1a1a2e';
 

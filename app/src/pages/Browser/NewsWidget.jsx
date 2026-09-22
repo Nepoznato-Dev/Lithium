@@ -5,7 +5,7 @@
  */
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { navigateTab, activeTab } from './stores/tabStore';
-import { clearAllModes, setViewportMode } from './stores/browserStore';
+import { clearAllModes } from './stores/browserStore';
 
 // Curated tech/science news feed (static for now, can be replaced with RSS later)
 const NEWS_FEED = [

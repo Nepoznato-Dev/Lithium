@@ -1,0 +1,852 @@
+/* Lithium mobile (iOS-style) shell.
+ *
+ * Layout-only layer: it reuses the same theme tokens the desktop shell is built
+ * from (--accent, --glass-bg, --glass-blur, data-theme / data-transparency),
+ * so colours, fonts, glass and the wallpaper carry over unchanged. Only the
+ * arrangement — status bar, home-screen pages, full-screen apps, dock and home
+ * indicator — is phone-shaped. */
+
+.mx-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #fff;
+  font-size: 15px;
+  animation: mx-shell-enter 0.45s ease-out;
+  /* Respect device cutouts / home affordances without hard-coding them. */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+@keyframes mx-shell-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Wallpaper dimmer layers sit above the background, below the content. */
+.mx-dim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Status bar (top) ─────────────────────────────────────────────── */
+.mx-statusbar {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  padding: 0 18px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.mx-statusbar .mx-time { font-variant-numeric: tabular-nums; }
+.mx-status-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mx-signal { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; }
+.mx-signal i {
+  display: block;
+  width: 3px;
+  background: currentColor;
+  border-radius: 1px;
+  opacity: 0.45;
+}
+.mx-signal i.on { opacity: 1; }
+.mx-signal i:nth-child(1) { height: 4px; }
+.mx-signal i:nth-child(2) { height: 6px; }
+.mx-signal i:nth-child(3) { height: 8px; }
+.mx-signal i:nth-child(4) { height: 11px; }
+
+.mx-battery {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.mx-battery-body {
+  width: 24px;
+  height: 12px;
+  border: 1.4px solid currentColor;
+  border-radius: 3.5px;
+  padding: 1.4px;
+  opacity: 0.9;
+}
+.mx-battery-fill {
+  height: 100%;
+  border-radius: 1.5px;
+  background: currentColor;
+  transition: width 0.3s ease;
+}
+.mx-battery-cap {
+  width: 2px;
+  height: 5px;
+  margin-left: 1.5px;
+  border-radius: 0 1px 1px 0;
+  background: currentColor;
+  opacity: 0.9;
+}
+.mx-battery-pct { margin-right: 5px; font-size: 12px; font-weight: 600; }
+
+/* Light theme keeps the status bar legible on pale wallpapers. */
+html[data-theme='light'] .mx-shell { color: rgba(0, 0, 0, 0.86); }
+html[data-theme='light'] .mx-statusbar { color: rgba(0, 0, 0, 0.8); text-shadow: none; }
+
+/* ── Viewport (home + apps live here) ─────────────────────────────── */
+.mx-viewport {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ── Home screen ──────────────────────────────────────────────────── */
+.mx-home {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 14px 0;
+}
+.mx-home[hidden] { display: none; }
+
+.mx-search {
+  flex: 0 0 auto;
+  margin: 8px auto 12px;
+  width: min(320px, 92%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(var(--glass-blur, 12px));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 12px));
+  color: rgba(255, 255, 255, 0.82);
+  padding: 8px 14px;
+  font-size: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+html[data-theme='light'] .mx-search { color: rgba(0, 0, 0, 0.6); background: rgba(0, 0, 0, 0.06); border-color: rgba(0, 0, 0, 0.08); }
+
+.mx-pages {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.mx-pages::-webkit-scrollbar { display: none; }
+
+.mx-page {
+  flex: 0 0 100%;
+  width: 100%;
+  scroll-snap-align: center;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-content: start;
+  gap: 16px 8px;
+  padding: 4px 2px 20px;
+}
+
+.mx-app {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 2px;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.mx-app:active { transform: scale(0.9); }
+.mx-app-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+.mx-app-label {
+  max-width: 72px;
+  font-size: 11px;
+  line-height: 1.15;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+html[data-theme='light'] .mx-app-label { text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6); }
+
+/* Running-app dot under the tile. */
+.mx-app-running { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.85; }
+.mx-app .mx-app-dot-slot { height: 5px; display: flex; align-items: center; justify-content: center; }
+
+.mx-dots {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 0 10px;
+}
+.mx-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.mx-dot.active { background: #fff; transform: scale(1.15); }
+html[data-theme='light'] .mx-dot { background: rgba(0, 0, 0, 0.28); }
+html[data-theme='light'] .mx-dot.active { background: rgba(0, 0, 0, 0.75); }
+
+/* ── Dock ─────────────────────────────────────────────────────────── */
+.mx-dock {
+  flex: 0 0 auto;
+  margin: 0 auto 8px;
+  width: min(420px, calc(100% - 8px));
+  display: flex;
+  justify-content: space-around;
+  gap: 6px;
+  padding: 12px 10px;
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.13);
+  backdrop-filter: blur(calc(var(--glass-blur, 14px) + 6px)) saturate(1.4);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur, 14px) + 6px)) saturate(1.4);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+}
+html[data-theme='light'] .mx-dock { background: rgba(255, 255, 255, 0.5); border-color: rgba(0, 0, 0, 0.06); }
+html[data-transparency='false'] .mx-dock,
+html.lithium-low-end .mx-dock { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(28, 28, 34, 0.86); }
+
+/* ── Full-screen app frame ────────────────────────────────────────── */
+.mx-frame {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--win-bg, rgba(15, 17, 23, 0.98));
+  color: var(--ui-text, #fff);
+  animation: mx-app-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mx-frame.active { display: flex; }
+
+@keyframes mx-app-in {
+  from { opacity: 0.4; transform: scale(1.06); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.mx-frame-content { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+/* Match the desktop frosted-window behaviour so app surfaces look identical. */
+html[data-transparency='true'] .mx-frame-content { background: transparent; }
+
+/* On a phone, maximize/restore chrome is meaningless — keep minimize (→ home)
+   and close only. (The macOS layout supplies its own traffic lights.) */
+.mx-shell:not(.mac) .win-controls .win-ctrl-btn:nth-child(2) { display: none; }
+
+/* ── App switcher ─────────────────────────────────────────────────── */
+.mx-switcher {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: rgba(6, 8, 16, 0.5);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  animation: mx-fade-in 0.2s ease-out;
+}
+
+@keyframes mx-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.mx-switcher-track {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 4px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  width: 100%;
+}
+.mx-switcher-track::-webkit-scrollbar { display: none; }
+
+.mx-card {
+  position: relative;
+  flex: 0 0 74%;
+  max-width: 320px;
+  height: min(66vh, 520px);
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 22px;
+  background: var(--ui-card, rgba(30, 33, 40, 0.9));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  color: inherit;
+  cursor: pointer;
+}
+.mx-card-empty { opacity: 0.85; }
+.mx-card-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mx-card-close:hover { background: rgba(255, 255, 255, 0.24); }
+.mx-card-title { font-size: 13px; font-weight: 600; }
+
+.mx-switcher-hint {
+  position: absolute;
+  bottom: 22px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── Home indicator (bottom) ──────────────────────────────────────── */
+.mx-homebar {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 28px;
+  /* This strip drives the system gestures — let it own the swipe, not the page. */
+  touch-action: none;
+}
+.mx-homebar-pill {
+  width: 128px;
+  height: 5px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  padding: 0;
+}
+html[data-theme='light'] .mx-homebar-pill { background: rgba(0, 0, 0, 0.55); }
+.mx-overview-btn {
+  position: absolute;
+  right: 26px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mx-overview-btn:active { transform: scale(0.92); }
+
+/* ── Spotlight-style search overlay ───────────────────────────────── */
+.mx-spot {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px 0;
+  background: rgba(6, 8, 16, 0.62);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  animation: mx-fade-in 0.18s ease-out;
+}
+.mx-spot-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.14);
+  padding: 10px 12px;
+  color: #fff;
+}
+.mx-spot-field input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 15px;
+}
+.mx-spot-field input::placeholder { color: rgba(255, 255, 255, 0.5); }
+.mx-spot-cancel { border: 0; background: transparent; color: var(--accent, #22d3ee); font-size: 14px; font-weight: 600; cursor: pointer; }
+.mx-spot-results { flex: 1; margin-top: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.mx-spot-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #fff;
+  padding: 9px 8px;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+.mx-spot-row:hover, .mx-spot-row:active { background: rgba(255, 255, 255, 0.1); }
+.mx-spot-row small { display: block; color: rgba(255, 255, 255, 0.5); font-size: 12px; }
+
+/* ── Toasts (shared look with the desktop) ────────────────────────── */
+.mx-toasts {
+  position: absolute;
+  top: 36px;
+  left: 12px;
+  right: 12px;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.mx-toast {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  background: var(--glass-bg, rgba(24, 24, 30, 0.9));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.34);
+  padding: 11px 14px;
+  color: #fff;
+  animation: mx-toast-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mx-toast-title { font-size: 14px; font-weight: 700; }
+.mx-toast-body { font-size: 12.5px; color: rgba(255, 255, 255, 0.72); margin-top: 3px; }
+
+@keyframes mx-toast-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ══ macOS layout ═══════════════════════════════════════════════════ *
+ * Same shell, same state — when the touch shell runs on a desktop-sized
+ * screen it presents itself macOS-style: menu bar, floating draggable windows
+ * with traffic lights, Launchpad and an always-visible Dock. Everything here
+ * is layout + chrome; colours still come from the shared theme tokens.        */
+
+.mx-shell.mac {
+  font-size: 13px;
+  cursor: default;
+}
+/* The Dock replaces the home indicator strip.
+   The strip stays mounted (display:none) so the gesture binding never goes stale. */
+.mx-shell.mac .mx-homebar { display: none; }
+
+/* Windows are laid out inside the box between the menu bar and the Dock, so
+   clip it — otherwise a window taller than the box pokes out from under the
+   Launchpad / Mission Control overlays that live in the same box. */
+.mx-shell.mac .mx-viewport { overflow: hidden; }
+
+/* The Dock owns the bottom edge here, so the PWA install prompt — which is
+   mounted outside the shell and centres itself on the bottom — is lifted
+   clear of it instead of covering the app icons. */
+body:has(.mx-shell.mac) .mx-install-banner { bottom: 84px; }
+
+/* ── Menu bar ─────────────────────────────────────────────────────── */
+.mx-menubar {
+  position: relative;
+  z-index: 6;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  color: #fff;
+  background: rgba(16, 17, 23, 0.42);
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+html[data-theme='light'] .mx-menubar {
+  color: rgba(0, 0, 0, 0.82);
+  background: rgba(250, 250, 252, 0.66);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+  text-shadow: none;
+}
+html[data-transparency='false'] .mx-menubar,
+html.lithium-low-end .mx-menubar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(22, 23, 29, 0.96);
+}
+
+.mx-menubar-left,
+.mx-menubar-right { display: flex; align-items: center; min-width: 0; }
+.mx-menubar-right { gap: 9px; flex: 0 0 auto; }
+.mx-menubar-app { font-weight: 700; padding-left: 6px; }
+.mx-menubar-date { opacity: 0.85; }
+.mx-menubar-time { font-variant-numeric: tabular-nums; }
+
+.mx-menu { position: relative; display: flex; }
+.mx-menu-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 21px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+.mx-menu-title.bold { font-weight: 700; }
+.mx-menu-title:hover,
+.mx-menu-title.open { background: rgba(255, 255, 255, 0.2); }
+html[data-theme='light'] .mx-menu-title:hover,
+html[data-theme='light'] .mx-menu-title.open { background: rgba(0, 0, 0, 0.09); }
+.mx-menu-img { height: 15px; width: 15px; display: block; border-radius: 3.5px; }
+
+.mx-menu-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 80;
+  min-width: 236px;
+  padding: 5px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: var(--glass-bg, rgba(28, 29, 36, 0.88));
+  backdrop-filter: blur(28px) saturate(1.6);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.46);
+  color: #fff;
+  animation: mx-menu-in 0.12s ease-out;
+}
+html[data-theme='light'] .mx-menu-pop {
+  background: rgba(251, 251, 253, 0.92);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.85);
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.24);
+}
+@keyframes mx-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.mx-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.mx-menu-item:hover:not(:disabled) { background: var(--accent, #22d3ee); color: #06222a; }
+.mx-menu-item:disabled { opacity: 0.38; }
+.mx-menu-item-key { opacity: 0.6; font-size: 11.5px; }
+.mx-menu-sep { display: block; height: 1px; margin: 4px 8px; background: currentColor; opacity: 0.14; }
+
+.mx-menu-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 21px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: default;
+}
+.mx-menu-icon-btn:hover { background: rgba(255, 255, 255, 0.2); }
+html[data-theme='light'] .mx-menu-icon-btn:hover { background: rgba(0, 0, 0, 0.09); }
+
+/* ── macOS windows ────────────────────────────────────────────────── */
+.mac .mx-win {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: var(--win-bg, rgba(15, 17, 23, 0.98));
+  color: var(--ui-text, #fff);
+  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(0, 0, 0, 0.45);
+  animation: mx-win-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Below the Launchpad / Mission Control / Spotlight layers. */
+  z-index: 1;
+}
+.mac .mx-win.minimized { display: none; }
+.mac .mx-win:not(.active) { box-shadow: 0 12px 30px rgba(0, 0, 0, 0.36); }
+.mac .mx-win.dragging { transition: none; will-change: left, top; }
+.mac .mx-win.resizing { transition: none; will-change: width, height; }
+
+/* Corner grabber: no visible chrome, just like macOS, but the cursor tells you
+   the edge is live. Sits above the app body so it wins the pointer. */
+.mx-win-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  z-index: 3;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.mac .mx-win.maximized .mx-win-resize,
+.mac .mx-win.minimized .mx-win-resize { display: none; }
+
+@keyframes mx-win-in {
+  from { opacity: 0.5; transform: scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The window bar replaces each app's own WinControls. */
+.mac .mx-win .win-controls { display: none; }
+
+.mx-win-bar {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  touch-action: none;
+}
+.mx-win.maximized .mx-win-bar { cursor: default; }
+.mx-win:not(.maximized) .mx-win-bar { cursor: grab; }
+.mx-win.dragging .mx-win-bar { cursor: grabbing; }
+
+.mx-win-lights { position: relative; z-index: 1; display: flex; align-items: center; gap: 8px; }
+.mx-light {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.22);
+  border-radius: 50%;
+  background: #5b5d67;
+  cursor: default;
+  transition: filter 0.14s ease;
+}
+.mx-light.close { background: #ff5f57; }
+.mx-light.min { background: #febc2e; }
+.mx-light.zoom { background: #28c840; }
+.mx-light:hover { filter: brightness(0.9); }
+.mx-win:not(.active) .mx-light { border-color: transparent; background: #4d4f58; }
+
+.mx-win-title {
+  position: absolute;
+  left: 78px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.9;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.mx-win:not(.active) .mx-win-title { opacity: 0.5; }
+
+.mx-win-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--win-bg, rgba(15, 17, 23, 0.98));
+}
+html[data-transparency='true'] .mx-win-body { background: transparent; }
+
+/* ── Dock ─────────────────────────────────────────────────────────── */
+.mx-macdock {
+  position: relative;
+  z-index: 6;
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  padding: 2px 12px 9px;
+}
+.mx-macdock-inner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 6px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: 19px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(26px) saturate(1.6);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+.mx-macdock-inner::-webkit-scrollbar { display: none; }
+html[data-theme='light'] .mx-macdock-inner {
+  background: rgba(255, 255, 255, 0.56);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+html[data-transparency='false'] .mx-macdock-inner,
+html.lithium-low-end .mx-macdock-inner {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(26, 27, 33, 0.94);
+}
+
+.mac .mx-app.compact { gap: 2px; }
+.mac .mx-app.compact .mx-app-label { display: none; }
+.mac .mx-app.compact .mx-app-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mac .mx-app.compact:hover .mx-app-icon { transform: translateY(-7px) scale(1.14); }
+.mac .mx-app.compact:active { transform: none; }
+.mac .mx-app.compact:active .mx-app-icon { transform: scale(0.94); }
+
+.mx-macdock-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 38px;
+  margin: 0 4px;
+  background: rgba(255, 255, 255, 0.22);
+}
+html[data-theme='light'] .mx-macdock-sep { background: rgba(0, 0, 0, 0.16); }
+
+.mx-macdock-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  cursor: default;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+.mx-macdock-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.22); transform: translateY(-3px); }
+.mx-macdock-btn.active { background: var(--accent, #22d3ee); color: #06222a; border-color: transparent; }
+.mx-macdock-btn:disabled { opacity: 0.35; }
+html[data-theme='light'] .mx-macdock-btn { border-color: rgba(0, 0, 0, 0.08); background: rgba(0, 0, 0, 0.06); }
+
+/* ── Launchpad (the springboard, macOS-styled) ────────────────────── */
+.mac .mx-home {
+  z-index: 30;
+  padding: 26px 40px 0;
+  background: rgba(8, 10, 18, 0.34);
+  backdrop-filter: blur(30px) saturate(1.3);
+  -webkit-backdrop-filter: blur(30px) saturate(1.3);
+}
+html[data-theme='light'] .mac .mx-home { background: rgba(240, 242, 248, 0.5); }
+.mac .mx-search { width: min(340px, 62%); margin: 2px auto 20px; }
+.mac .mx-page {
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 26px 14px;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-bottom: 26px;
+}
+.mac .mx-app-icon { width: 66px; height: 66px; border-radius: 18px; }
+.mac .mx-app-label { max-width: 104px; font-size: 12px; }
+
+/* ── Spotlight panel, Mission Control, toasts ─────────────────────── */
+.mac .mx-spot { z-index: 45; align-items: center; padding: 11vh 16px 0; }
+.mac .mx-spot-field {
+  width: min(620px, 94%);
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+.mac .mx-spot-results {
+  width: min(620px, 94%);
+  margin-top: 10px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(14, 16, 24, 0.55);
+}
+.mac .mx-spot-row { font-size: 14px; }
+
+.mac .mx-switcher { z-index: 44; padding: 34px 28px 64px; }
+.mac .mx-switcher-track { flex-wrap: wrap; justify-content: center; align-content: center; gap: 22px; }
+.mac .mx-card {
+  flex: 0 0 auto;
+  width: 300px;
+  max-width: 32vw;
+  height: min(44vh, 320px);
+  border-radius: 14px;
+}
+
+.mac .mx-toasts { top: 38px; z-index: 60; }
+
+/* Reduced motion: drop entrance animations, keep layout. */
+@media (prefers-reduced-motion: reduce) {
+  .mx-shell, .mx-frame, .mx-switcher, .mx-toast, .mx-spot { animation: none; }
+  .mx-app:active { transform: none; }
+  .mx-win, .mx-menu-pop { animation: none; }
+  .mac .mx-app.compact:hover .mx-app-icon,
+  .mx-macdock-btn:hover { transform: none; }
+}

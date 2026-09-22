@@ -16,6 +16,7 @@ const UNINITIALIZED = Symbol('useMemoCompare.uninitialized');
 
 export function useMemoCompare(factory, deps, comparator) {
   const prevRef = useRef(UNINITIALIZED);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are caller-managed via the deps argument
   const currentValue = useMemo(factory, deps);
 
   if (prevRef.current !== UNINITIALIZED && comparator(prevRef.current, currentValue)) {

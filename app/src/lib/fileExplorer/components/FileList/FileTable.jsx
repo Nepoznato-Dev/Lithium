@@ -2,12 +2,20 @@
  * Details/list view — virtualized table with sortable columns.
  * Only renders rows visible in the viewport (+ overscan) so large
  * folders stay smooth instead of creating thousands of DOM nodes.
+ *
+ * Parallel Solid implementation for low-end mode: see FileGrid.jsx for why the
+ * virtualized row layer is the port candidate, and `src/lib/island.jsx` for the
+ * mount contract.
  */
 import { useState, useEffect, useRef, useLayoutEffect, memo } from 'react';
+import Island, { useLowEnd } from '../../../island.jsx';
+import { selectedItems, draggingId } from '../../state/signals.jsx';
 import FileRow from './FileRow.jsx';
 
 const ROW_HEIGHT = 36;
 const OVERSCAN = 8;
+
+const loadTableIsland = () => import('../../../../islands/FileTableIsland.jsx');
 
 function formatSize(bytes) {
   if (!bytes) return '0 B';
@@ -16,7 +24,7 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-const FileTable = memo(function FileTable({ treeRef, drive, items, openItem, onItemContext, dragProps, dropTarget }) {
+const FileTablePreact = memo(function FileTable({ treeRef, drive, items, openItem, onItemContext, dragProps, dropTarget }) {
   const scrollRef = useRef(null);
   const [range, setRange] = useState({ start: 0, end: 50 });
   const itemsLenRef = useRef(items.length);
@@ -92,4 +100,14 @@ const FileTable = memo(function FileTable({ treeRef, drive, items, openItem, onI
   );
 });
 
-export default FileTable;
+function FileTable(props) {
+  const lowEnd = useLowEnd();
+  if (!lowEnd) return <FileTablePreact {...props} />;
+  return (
+    <Island load={loadTableIsland} state={{ ...props, selectedItems, draggingId }}>
+      <FileTablePreact {...props} />
+    </Island>
+  );
+}
+
+export default memo(FileTable);

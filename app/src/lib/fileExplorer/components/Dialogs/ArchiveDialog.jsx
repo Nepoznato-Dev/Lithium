@@ -68,7 +68,7 @@ export default function ArchiveDialog({ mode, entries, tree, commit, parentId, o
           allResults.push({ tree: newTree, name: archiveName, size: blob.size });
 
           // Update tree reference for next iteration
-          tree = newTree;
+          tree = newTree; // eslint-disable-line react-hooks/exhaustive-deps
         }
 
         if (allResults.length > 0) {

@@ -105,8 +105,6 @@ export function startEnabledWidgets() {
   // Stop widgets whose files were deleted; drop stale enabled ids.
   window.addEventListener('lithium:fs-changed', () => {
     const entries = widgetEntries();
-    const validIds = entries.map(entry => entry.id);
-    const runningIds = [...running.keys()];
     const validSet = new Set(entries.map(entry => entry.id));
     const stale = [...running.keys()].filter(id => !validSet.has(id));
     for (const id of stale) {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
 import Icon from '../../../Icon';
-import { childrenOf, createEntry, getEntry, isTrashed, removeEntryDeep, restoreEntry, trashEntry, updateEntry, TRASH_ID } from '../../../../lib/fileSystem';
+import { childrenOf, createEntry, getEntry, loadTree, isTrashed, removeEntryDeep, restoreEntry, trashEntry, updateEntry, TRASH_ID } from '../../../../lib/fileSystem';
 import { applyHeading, renderMarkdown } from '../../../../lib/markdown';
 import { storage } from '../../../../lib/storage';
 import { useContextMenu } from '../../ContextMenu';
@@ -21,26 +21,26 @@ function isInsideVault(tree, entry) {
 
 /** All handler functions, editor helpers, keyboard shortcuts, context menus,
  *  command palette, search, and the recursive tree renderer for NotesApp. */
-export default function useNotesActions(s, areaRef, gutterRef) {
+export default function useNotesActions(s, areaRef, gutterRef, initialEntryId, openRequest) {
   const {
-    tree, commit, tabs, setTabs, activeId, setActiveId, mode, setMode,
-    inlineEdit, setInlineEdit, sidebarOpen, setSidebarOpen,
-    switcherOpen, setSwitcherOpen, switcherQuery, setSwitcherQuery,
+    tree, commit, setTabs, activeId, setActiveId, mode, setMode,
+    layout, setLayout, saveDraft,
+    inlineEdit, setInlineEdit, setSidebarOpen,
+    setSwitcherOpen, switcherQuery,
     openFolders, setOpenFolders, spellCheck, setSpellCheck,
-    notesSettings, graphOpen, setGraphOpen, graphMode, setGraphMode,
-    outlineOpen, setOutlineOpen, backlinksOpen, setBacklinksOpen,
-    tagsOpen, setTagsOpen, cmdPaletteOpen, setCmdPaletteOpen,
-    cmdQuery, setCmdQuery, searchOpen, setSearchOpen,
-    searchQuery, setSearchQuery, starred, setStarred,
-    templateMenuOpen, setTemplateMenuOpen,
-    allNotes, vaultNotes, active, draft, setDraft,
-    frontmatter, previewHtml, headings,
+    notesSettings, setSettingsOpen, setGraphOpen, setGraphMode,
+    setOutlineOpen, setBacklinksOpen, setTagsOpen, setCmdPaletteOpen,
+    cmdQuery, setSearchOpen, searchQuery, starred, setStarred,
+    setTemplateMenuOpen, allNotes, vaultNotes, active, draft, setDraft,
   } = s;
 
   const [menu, openMenu, closeMenu] = useContextMenu();
 
   /* --- Core handlers --- */
   const openNote = id => {
+    const entry = getEntry(loadTree(), id);
+    if (!entry || entry.type === 'folder' || isTrashed(entry)) return;
+    commitInlineEdit();
     setTabs(prev => (prev.includes(id) ? prev : [...prev, id]));
     setActiveId(id);
     setSwitcherOpen(false);
@@ -48,6 +48,8 @@ export default function useNotesActions(s, areaRef, gutterRef) {
   };
 
   const closeTab = id => {
+    if (id === activeId) commitInlineEdit();
+    void saveDraft(id);
     setTabs(prev => {
       const next = prev.filter(t => t !== id);
       if (activeId === id) setActiveId(next[next.length - 1] || null);
@@ -62,12 +64,19 @@ export default function useNotesActions(s, areaRef, gutterRef) {
     const after = draftLines.slice(inlineEdit.endLine + 1).join('\n');
     setDraft(before + (before ? '\n' : '') + inlineEdit.text + (after ? '\n' + after : ''));
     setInlineEdit(null);
-  }, [inlineEdit, draft]);
+  }, [inlineEdit, draft, setDraft, setInlineEdit]);
+
+  const changeLayout = next => {
+    commitInlineEdit();
+    setLayout(next);
+    setSettingsOpen(false);
+  };
 
   const uniqueName = (base, parentId = VAULT_ID) => {
-    let name = `${base}.md`;
+    const extension = layout === 'notepad' ? 'txt' : 'md';
+    let name = `${base}.${extension}`;
     let n = 2;
-    while (vaultNotes.some(e => e.name === name && (e.parentId === parentId || isInsideVault(tree, e)))) { name = `${base} ${n}.md`; n += 1; }
+    while (vaultNotes.some(e => e.name === name && (e.parentId === parentId || isInsideVault(tree, e)))) { name = `${base} ${n}.${extension}`; n += 1; }
     return name;
   };
 
@@ -200,7 +209,7 @@ export default function useNotesActions(s, areaRef, gutterRef) {
       requestAnimationFrame(() => area.setSelectionRange(pos + 2, pos + 2));
       return;
     }
-    if (event.key !== 'Enter' || !notesSettings.smartLists) return;
+    if (event.key !== 'Enter' || layout === 'notepad' || !notesSettings.smartLists) return;
     const area = event.currentTarget;
     const { selectionStart } = area;
     const lineStart = draft.lastIndexOf('\n', selectionStart - 1) + 1;
@@ -221,30 +230,39 @@ export default function useNotesActions(s, areaRef, gutterRef) {
   };
 
   /* --- Keyboard shortcuts --- */
-  useEffect(() => {
-    const onKey = event => {
+  const onAppKey = event => {
       const ctrl = event.ctrlKey || event.metaKey;
       if (ctrl && event.key.toLowerCase() === 'n') { event.preventDefault(); createNote(); }
       if (ctrl && event.key.toLowerCase() === 'o') { event.preventDefault(); setSwitcherOpen(true); }
       if (ctrl && event.key.toLowerCase() === 'p') { event.preventDefault(); setCmdPaletteOpen(true); }
-      if (ctrl && event.key.toLowerCase() === 'e') { event.preventDefault(); setMode(m => (m === 'edit' ? 'preview' : m === 'preview' ? 'split' : m === 'split' ? 'live' : 'edit')); setInlineEdit(null); }
-      if (ctrl && event.key.toLowerCase() === 'g') { event.preventDefault(); setGraphOpen(v => !v); }
+      if (ctrl && event.key.toLowerCase() === 'e') { event.preventDefault(); commitInlineEdit(); setMode(m => (m === 'edit' ? 'preview' : layout === 'notepad' ? 'edit' : m === 'preview' ? 'split' : m === 'split' ? 'live' : 'edit')); }
+      if (ctrl && event.key.toLowerCase() === 'g' && layout === 'notes') { event.preventDefault(); setGraphOpen(v => !v); }
       if (ctrl && event.shiftKey && event.key.toLowerCase() === 'd') { event.preventDefault(); createDailyNote(); }
       if (ctrl && event.key.toLowerCase() === 'f') { event.preventDefault(); setSearchOpen(true); }
-      if (ctrl && event.key.toLowerCase() === 's') { event.preventDefault(); /* auto-saved */ }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }); // eslint-disable-line
+      if (ctrl && event.key.toLowerCase() === 's') { event.preventDefault(); commitInlineEdit(); void saveDraft(); }
+      if (ctrl && event.key.toLowerCase() === 'w') { event.preventDefault(); closeTab(activeId); }
+  };
 
   useEffect(() => {
-    const onOpenNote = event => openNote(event.detail);
+    if (initialEntryId) openNote(initialEntryId);
+  }, [initialEntryId, openRequest]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const onOpenNote = event => openNote(event.detail?.id || event.detail);
+    const onOpenEntry = event => {
+      const { appId, fileEntry } = event.detail || {};
+      if (appId === 'notepad' || appId === 'notes') openNote(fileEntry?.id);
+    };
     window.addEventListener('lithium:open-note', onOpenNote);
-    return () => window.removeEventListener('lithium:open-note', onOpenNote);
-  }, []); // eslint-disable-line
+    window.addEventListener('lithium:open-file-entry', onOpenEntry);
+    return () => {
+      window.removeEventListener('lithium:open-note', onOpenNote);
+      window.removeEventListener('lithium:open-file-entry', onOpenEntry);
+    };
+  });
 
   /* --- Command palette --- */
-  const commands = useMemo(() => [
+  const commands = [
     { id: 'new-note', label: 'New note', icon: 'Plus', shortcut: 'Ctrl+N', action: () => createNote() },
     { id: 'daily-note', label: "Open today's daily note", icon: 'Calendar', shortcut: 'Ctrl+Shift+D', action: () => createDailyNote() },
     { id: 'go-to-file', label: 'Go to file…', icon: 'Search', shortcut: 'Ctrl+O', action: () => { setCmdPaletteOpen(false); setSwitcherOpen(true); } },
@@ -263,8 +281,10 @@ export default function useNotesActions(s, areaRef, gutterRef) {
     { id: 'star-note', label: active ? (starred.includes(active.id) ? 'Unstar note' : 'Star note') : 'Star note', icon: 'Star', action: () => { if (active) toggleStar(active.id); } },
     { id: 'insert-template', label: 'Insert template…', icon: 'FilePlus', action: () => { setCmdPaletteOpen(false); setTemplateMenuOpen(true); } },
     { id: 'spell-check', label: `Spell check: ${spellCheck ? 'ON' : 'OFF'}`, icon: 'SpellCheck', action: () => setSpellCheck(v => !v) },
-    { id: 'settings', label: 'Open Notes settings', icon: 'SlidersHorizontal', action: () => s.setSettingsOpen(true) },
-  ], [active, starred, spellCheck]); // eslint-disable-line
+    { id: 'settings', label: 'Open Notes settings', icon: 'SlidersHorizontal', action: () => setSettingsOpen(true) },
+    { id: 'layout-notes', label: 'Use Notes layout', icon: 'PanelLeft', action: () => { changeLayout('notes'); setCmdPaletteOpen(false); } },
+    { id: 'layout-notepad', label: 'Use Notepad layout', icon: 'FileText', action: () => { changeLayout('notepad'); setCmdPaletteOpen(false); } },
+  ];
 
   const cmdResults = cmdQuery.trim()
     ? commands.filter(c => c.label.toLowerCase().includes(cmdQuery.trim().toLowerCase()))
@@ -292,8 +312,8 @@ export default function useNotesActions(s, areaRef, gutterRef) {
   }, [searchQuery, vaultNotes]);
 
   const switcherResults = switcherQuery.trim()
-    ? vaultNotes.filter(e => noteName(e).toLowerCase().includes(switcherQuery.trim().toLowerCase()))
-    : vaultNotes;
+    ? allNotes.filter(e => noteName(e).toLowerCase().includes(switcherQuery.trim().toLowerCase()))
+    : allNotes;
 
   /* --- Context menus --- */
   const trashedFolders = useMemo(() => new Set(tree.filter(i => i.type === 'folder' && i.parentId === TRASH_ID).map(i => i.id)), [tree]);
@@ -347,7 +367,7 @@ export default function useNotesActions(s, areaRef, gutterRef) {
             </React.Fragment>
           );
         }
-        if (isHidden(entry.name) || !/\.(md|txt)$/i.test(entry.name)) return null;
+        if (isHidden(entry.name) || !/\.(md|txt|log)$/i.test(entry.name)) return null;
         const isStarred = starred.includes(entry.id);
         return (
           <button key={entry.id} className={`notes-row ${activeId === entry.id ? 'active' : ''}`} onClick={() => openNote(entry.id)} onContextMenu={e => openMenu(e, noteMenu(entry))}>
@@ -395,7 +415,7 @@ export default function useNotesActions(s, areaRef, gutterRef) {
 
   return {
     menu, openMenu, closeMenu,
-    openNote, closeTab, commitInlineEdit,
+    openNote, closeTab, commitInlineEdit, changeLayout, onAppKey,
     createNote, createDailyNote, insertTemplate, toggleStar,
     createFolder, renameEntry, deleteEntry, restore, deletePermanent,
     openWiki, exportNote,

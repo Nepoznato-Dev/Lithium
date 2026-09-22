@@ -4,7 +4,7 @@
  */
 import { addTab, closeTab, activeTabId, tabs, goBack, goForward, reloadTab, setActiveTab } from '../stores/tabStore';
 import { toggleFindBar, navigateInternal } from '../stores/browserStore';
-import { toggleBookmark, isBookmarked } from '../stores/bookmarksStore';
+import { toggleBookmark } from '../stores/bookmarksStore';
 import { currentUrl } from '../stores/tabStore';
 
 /**
@@ -16,7 +16,7 @@ export function installKeyboardShortcuts(omniboxFocusRef) {
     const ctrl = e.ctrlKey || e.metaKey;
     const shift = e.shiftKey;
     const tag = e.target.tagName;
-    const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable;
+    const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable; // eslint-disable-line no-unused-vars
 
     // Ctrl+T — new tab
     if (ctrl && e.key === 't') {

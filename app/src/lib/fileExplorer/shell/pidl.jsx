@@ -3,7 +3,6 @@
  * Provides path resolution and drive identification.
  */
 import { pathOf, getEntry } from '../../fileSystem.js';
-import { explorerOpSync } from '../../core.js';
 
 /** Check if a PIDL belongs to a cloud drive (starts with 'cloud-'). */
 export function isCloudPidl(id) {

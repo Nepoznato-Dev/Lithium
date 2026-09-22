@@ -3,31 +3,40 @@
  * and backend health checking. Keeps all fetch logic out of components.
  */
 import { getBackendUrl } from '../../../lib/searchProxy';
+import { getServerUrls, setActiveUrl } from '../../../lib/backendApi';
 import { rebuildPage } from '../../../lib/pageRebuilder';
 import { fullRender } from '../../../lib/fullRenderer';
 import { renderSearchResults } from '../../../lib/searchResultsRenderer';
 import { getUaForHost } from '../stores/shieldsStore';
 
-/** Check if the backend proxy is reachable.
+/** Check if any backend server is reachable.
+ *  Tries each configured server URL in order.
  *  Any HTTP response (even 5xx) means the backend process is running.
  *  Only a network-level failure (catch) means the backend is down. */
 export async function checkBackendHealth() {
-  const base = getBackendUrl();
-  // Try the lightweight health endpoint first
-  try {
-    const res = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(4000) });
-    return true; // any response = backend is running
-  } catch { /* health endpoint unreachable — try proxy endpoint */ }
-  // Fallback: try the proxy endpoint (older backends may not have /api/health)
-  try {
-    const res = await fetch(
-      `${base}/api/web/proxy?url=${encodeURIComponent('https://example.com')}`,
-      { signal: AbortSignal.timeout(4000) }
-    );
-    return true; // any response = backend is running
-  } catch {
-    return false; // network error = backend is truly down
+  const serverUrls = getServerUrls();
+
+  // Try each server URL in order
+  for (const baseUrl of serverUrls) {
+    // Try the lightweight health endpoint first
+    try {
+      await fetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(4000) });
+      setActiveUrl(baseUrl); // Cache the working URL
+      return true; // any response = backend is running
+    } catch { /* health endpoint unreachable — try proxy endpoint */ }
+
+    // Fallback: try the proxy endpoint (older backends may not have /api/health)
+    try {
+      await fetch(
+        `${baseUrl}/api/web/proxy?url=${encodeURIComponent('https://example.com')}`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      setActiveUrl(baseUrl); // Cache the working URL
+      return true; // any response = backend is running
+    } catch { /* this server is down — try next */ }
   }
+
+  return false; // all servers are truly down
 }
 
 /**
@@ -64,7 +73,7 @@ function extractYouTubeVideoId(url) {
     if (hostname.includes('youtube.com') && parsed.pathname.includes('/shorts/')) {
       return parsed.pathname.split('/shorts/')[1]?.split('/')[0]?.split('?')[0];
     }
-  } catch {}
+  } catch { /* invalid URL */ }
   return null;
 }
 
@@ -95,7 +104,7 @@ export function buildProxyUrl(url, proxyOrigin, backendUp) {
     const host = new URL(url).hostname.replace(/^www\./, '');
     const ua = getUaForHost(host);
     if (ua) uaParam = `&ua=${encodeURIComponent(ua)}`;
-  } catch {}
+  } catch { /* no UA override */ }
   
   // Build proxy URL
   const base = proxyOrigin || (backendUp ? getBackendUrl() : '');

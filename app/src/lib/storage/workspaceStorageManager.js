@@ -35,7 +35,7 @@ let db = null;
 let cache = {};
 let dirtyKeys = new Set();
 let flushTimer = null;
-let cpTimer = null;
+let cpTimer = null; // eslint-disable-line no-unused-vars
 let ready = false;
 
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────

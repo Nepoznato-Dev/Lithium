@@ -81,7 +81,6 @@ export default function CodeStudioApp({ windowed = false, closeSelf, minimizeSel
             active={s.active}
             onStageWrite={s.stageWrite}
             onExplore={path => {
-              const segs = path.split('/').filter(Boolean);
               // lightweight path → entry lookup via the tree
               const found = s.tree.find(e => {
                 const p = [];

@@ -4,15 +4,17 @@ import { storage } from '../storage/localStorage';
 import { BUILD_VERSION } from '../settings';
 import { loadTree, saveTree, getEntry, childrenOf, createEntry, updateEntry, removeEntryDeep, readEntryContent, storeEntryContent, moveEntry, canMoveInto } from '../fileSystem';
 import { hydrate } from '../storage/unifiedStore';
-import { deleteMemory, loadMemory, readMemory, writeMemory } from './agent';
+import { deleteMemory, loadMemory, readMemory, writeMemory, addNotebook, deleteNotebook, addNotebookEntry, deleteNotebookEntry, loadNotebooks } from './agent';
 import { loadWeatherCache } from '../deviceContext';
-import { AI_PROVIDERS, loadKeys } from './providers';
-import { MODEL_CATALOG, loadModelMeta, getTier, setTier } from './models';
+import { AI_PROVIDERS, DEFAULT_PROVIDER, LOCAL_PROVIDER, getSelectedModel, setSelectedModel, loadKeys, modelsForProvider } from './providers';
+import { allModels, loadModelMeta } from './models';
+import { liCredits } from '../backendApi';
 import { loadDriveConfigs, testConnection } from '../cloudDrives';
 import { listWidgets, setWidgetEnabled } from '../desktop/widgetRuntime';
 import { hasWasm, fsOpSync } from '../core';
 import { registerCodeApis } from '../codeApi';
 import { addDynamicApp, removeDynamicApp, getDynamicApps } from '../li-apps/liDynamicApps';
+import { ContextMenuRegistry } from '../desktop/contextMenuRegistry';
 
 /**
  * Built-in API handlers. UI-level handlers (apps.*, settings.*,
@@ -21,6 +23,14 @@ import { addDynamicApp, removeDynamicApp, getDynamicApps } from '../li-apps/liDy
  */
 
 const dispatch = detail => window.dispatchEvent(new CustomEvent('lithium:api-command', { detail }));
+
+/** Notebooks are addressed by id or by name, whichever the caller knows. */
+function findNotebook(idOrName) {
+  const key = String(idOrName || '').trim();
+  const notebook = loadNotebooks().find(nb => nb.id === key || nb.name === key);
+  if (!notebook) throw new Error(`no knowledge notebook '${key || '(empty)'}'`);
+  return notebook;
+}
 
 let registered = false;
 
@@ -156,21 +166,66 @@ export function registerBuiltinHandlers() {
     const keys = loadKeys();
     return Object.entries(AI_PROVIDERS).map(([id, provider]) => ({
       id, label: provider.label, hasKey: Boolean(keys[id]), needsKey: provider.needsKey,
+      hosted: Boolean(provider.hosted), local: Boolean(provider.local),
+      model: getSelectedModel(id),
     }));
   });
 
-  registerHandler('ai.get_tier', () => getTier());
-  registerHandler('ai.set_tier', ({ tier }) => {
-    setTier(tier);
-    return tier;
+  /** Cloud providers report their curated list; `local` reports GGUFs on disk. */
+  registerHandler('ai.list_models', ({ provider = DEFAULT_PROVIDER }) => {
+    if (provider === LOCAL_PROVIDER) {
+      const meta = loadModelMeta();
+      return allModels().map(model => ({
+        id: model.id, name: model.name, params: model.params, size: model.size,
+        downloaded: Boolean(meta[model.id]?.downloaded),
+      }));
+    }
+    return modelsForProvider(provider).map(entry => ({ ...entry }));
   });
 
-  registerHandler('models.list', () => {
-    const meta = loadModelMeta();
-    return MODEL_CATALOG.map(model => ({
-      id: model.id, name: model.name, tier: model.tier, size: model.size,
-      downloaded: Boolean(meta[model.id]),
-    }));
+  registerHandler('ai.set_model', ({ provider, model }) => {
+    if (!AI_PROVIDERS[provider]) throw new Error(`unknown provider '${provider}'`);
+    setSelectedModel(provider, model);
+    return { provider, model };
+  });
+
+  registerHandler('ai.credits', async () => {
+    const data = await liCredits();
+    return { authenticated: data.authenticated, metered: data.metered, ...data.balance };
+  });
+
+  /* ---------- knowledge (notebooks, injected into the model context) ---------- */
+
+  registerHandler('knowledge.list', () => loadNotebooks().map(notebook => ({
+    id: notebook.id, name: notebook.name,
+    entries: (notebook.entries || []).length, createdAt: notebook.createdAt,
+  })));
+
+  registerHandler('knowledge.read', ({ notebook }) => findNotebook(notebook));
+
+  registerHandler('knowledge.create', ({ name }) => {
+    const clean = String(name || '').trim();
+    if (!clean) throw new Error('notebook name must not be empty');
+    const created = addNotebook(clean);
+    return { id: created.id, name: created.name };
+  });
+
+  registerHandler('knowledge.add_entry', ({ notebook, title, content = '' }) => {
+    const target = findNotebook(notebook);
+    addNotebookEntry(target.id, { title: String(title || '').trim(), content });
+    return { notebook: target.id, title };
+  });
+
+  registerHandler('knowledge.delete_entry', ({ notebook, entry }) => {
+    const target = findNotebook(notebook);
+    deleteNotebookEntry(target.id, entry);
+    return true;
+  });
+
+  registerHandler('knowledge.delete', ({ notebook }) => {
+    const target = findNotebook(notebook);
+    deleteNotebook(target.id);
+    return true;
   });
 
   /* ---------- cloud (external APIs) ---------- */
@@ -243,4 +298,50 @@ export function registerBuiltinHandlers() {
       updatedAt: entry.updatedAt,
     }))
   );
+
+  /* ---------- context_menu ---------- */
+
+  registerHandler('context_menu.list_scopes', () =>
+    ContextMenuRegistry.scopes().map(scope => ({
+      scope,
+      entries: ContextMenuRegistry.entriesForScope(scope).length,
+      hasOverride: ContextMenuRegistry.hasOverride(scope),
+    }))
+  );
+
+  registerHandler('context_menu.list_entries', ({ scope }) => {
+    const all = ContextMenuRegistry.all();
+    if (!scope) return all.map(e => ({ id: e.id, label: typeof e.label === 'function' ? '(dynamic)' : e.label, scope: e.scope, icon: typeof e.icon === 'function' ? '(dynamic)' : e.icon, group: e.group, order: e.order, source: e.source }));
+    return ContextMenuRegistry.entriesForScope(scope).map(e => ({ id: e.id, label: typeof e.label === 'function' ? '(dynamic)' : e.label, scope: e.scope, icon: typeof e.icon === 'function' ? '(dynamic)' : e.icon, group: e.group, order: e.order, source: e.source }));
+  });
+
+  registerHandler('context_menu.list_overrides', () =>
+    ContextMenuRegistry.allOverrides().map(o => ({
+      scope: o.scope,
+      id: o.id,
+      itemCount: Array.isArray(o.items) ? o.items.length : 0,
+      hasBuilder: typeof o.builder === 'function',
+      source: o.source,
+    }))
+  );
+
+  registerHandler('context_menu.unregister', ({ id }) => {
+    if (!id) throw new Error('missing id');
+    const existed = ContextMenuRegistry.has(id);
+    ContextMenuRegistry.unregister(id);
+    return { id, removed: existed };
+  });
+
+  registerHandler('context_menu.remove_override', ({ scope }) => {
+    if (!scope) throw new Error('missing scope');
+    const existed = ContextMenuRegistry.hasOverride(scope);
+    ContextMenuRegistry.removeOverride(scope);
+    return { scope, removed: existed };
+  });
+
+  registerHandler('context_menu.unregister_all', ({ sourceType, sourceId }) => {
+    if (!sourceType || !sourceId) throw new Error('missing sourceType or sourceId');
+    ContextMenuRegistry.unregisterAll(sourceType, sourceId);
+    return { sourceType, sourceId, removed: true };
+  });
 }

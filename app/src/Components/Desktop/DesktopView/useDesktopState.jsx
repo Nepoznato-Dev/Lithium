@@ -1,17 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Icon from '../../Icon';
 import { AppIcon } from '../DesktopApps';
 import { useDesktopWindows } from '../DesktopWindowManager';
 import { useContextMenu } from '../ContextMenu';
 import { storage } from '../../../lib/storage';
-import { notify, subscribeToNotifications, subscribeToHistory } from '../../../lib/desktop/notify';
+import { subscribeToNotifications, subscribeToHistory } from '../../../lib/desktop/notify';
 import { emitEvent, registerHandler } from '../../../lib/ai/apiManager';
 import { registerBuiltinHandlers } from '../../../lib/ai/apiBuiltins';
 import { startEnabledWidgets } from '../../../lib/desktop/widgetRuntime';
 import { syncDownloads, watchDownloads } from '../../../lib/downloads';
 import { useFileSystem, trashedItems } from '../../../lib/fileSystem';
 import { useSettings } from '../../SettingsContext';
-import { WALLPAPERS, useDebouncedSave, inVault } from './wallpapers';
+import { useDebouncedSave, inVault } from './wallpapers';
 import { weatherEmoji, unitSymbol, weatherDescription } from '../../../lib/deviceContext';
 import useDeviceDetection from './useDeviceDetection';
 import useWeather from './useWeather';
@@ -19,6 +18,7 @@ import useKeyboardShortcuts from './useKeyboardShortcuts';
 import useContextMenus from './useContextMenus';
 import { discoverAppsFromLauncher } from '../../../lib/li-apps/liLauncher';
 import { getInstalledApps, registerApp } from '../../../lib/li-apps/liRegistry';
+import { setDesktopApps } from '../../../lib/desktopApps';
 
 /* Lazy app components — imported here so the apps array can live inside the hook. */
 const FileManagerApp = React.lazy(() => import('../Apps/FileManagerApp'));
@@ -27,7 +27,7 @@ const CalendarClockApp = React.lazy(() => import('../Apps/CalendarClockApp'));
 const NotesApp = React.lazy(() => import('../Apps/NotesApp'));
 const ModelHubApp = React.lazy(() => import('../Apps/ModelHubApp'));
 const ApiManagerApp = React.lazy(() => import('../Apps/ApiManagerApp'));
-const DownloaderApp = React.lazy(() => import('../Apps/DownloaderApp'));
+const StoreApp = React.lazy(() => import('../Apps/StoreApp'));
 const CodeStudioApp = React.lazy(() => import('../Apps/CodeStudioApp'));
 const TaskManagerApp = React.lazy(() => import('../Apps/TaskManagerApp'));
 const Games = React.lazy(() => import('../../../pages/Games'));
@@ -38,19 +38,23 @@ const CalculatorPage = React.lazy(() => import('../../../pages/Calculator'));
 const SettingsPage = React.lazy(() => import('../../../pages/Settings'));
 const OnboardingApp = React.lazy(() => import('../Apps/OnboardingApp'));
 const LiAppHost = React.lazy(() => import('../Apps/LiAppHost'));
-const AppStudioApp = React.lazy(() => import('../Apps/AppStudioApp'));
+const TerminalApp = React.lazy(() => import('../Apps/TerminalApp'));
+const PaintApp = React.lazy(() => import('../Apps/PaintApp'));
 
 // StrictMode double-mount guard for the one-shot 'boot' widget event.
 let bootEmitted = false;
+const canonicalAppId = id => id === 'notes' ? 'notepad' : id;
+const canonicalAppIds = ids => [...new Set(ids.map(canonicalAppId))];
 
 /** Master state hook for the Desktop shell.  Returns every piece of state,
  *  derived value, and handler the JSX renderer needs. */
 export default function useDesktopState() {
-  const { windows, openWindow, updateWindow, focusWindow, closeWindow, closeApp, focusApp } = useDesktopWindows();
+  const { windows, openWindow, updateWindow, focusWindow, closeWindow, closeApp, focusApp, restoreSession } = useDesktopWindows();
   const { settings, updateSetting } = useSettings();
 
   /* --- .li app discovery (via launcher.li + dynamic apps) --- */
   const [liApps, setLiApps] = useState([]);
+  const [appsReady, setAppsReady] = useState(false);
 
   const refreshLiApps = useCallback(async () => {
     try {
@@ -73,6 +77,9 @@ export default function useDesktopState() {
         if (!cancelled) setLiApps(discovered.length ? discovered : installed);
       } catch {
         // Launcher failure is non-fatal — built-in apps still work.
+        if (!cancelled) setLiApps(getInstalledApps());
+      } finally {
+        if (!cancelled) setAppsReady(true);
       }
     })();
     return () => { cancelled = true; };
@@ -94,16 +101,18 @@ export default function useDesktopState() {
     { id: 'clock', name: 'Clock', icon: 'Clock', iconFile: 'clock', color: '#22c55e', width: 560, height: 620, component: <CalendarClockApp />, desc: 'Clock, calendar & pomodoro', category: 'productivity' },
     { id: 'files', name: 'File Explorer', icon: 'Folder', iconFile: 'files', color: '#f59e0b', width: 880, height: 560, component: <FileManagerApp />, desc: 'Browse and manage files', category: 'productivity' },
     { id: 'photos', name: 'Gallery', icon: 'Image', iconFile: 'gallery', color: '#f472b6', width: 860, height: 600, component: <PhotosApp />, desc: 'View photos and images', category: 'media' },
-    { id: 'notepad', name: 'Notes', icon: 'FileText', iconFile: 'notes', color: '#8b5cf6', width: 900, height: 600, component: <NotesApp />, desc: 'Markdown note-taking', category: 'productivity' },
-    { id: 'downloader', name: 'Downloader', icon: 'ArrowDownToLine', iconFile: 'downloader', color: '#38bdf8', width: 880, height: 640, component: <DownloaderApp />, desc: 'Download files and models', category: 'tools' },
+    { id: 'notepad', name: 'Notes', icon: 'FileText', iconFile: 'notes', color: '#8b5cf6', width: 900, height: 600, component: <NotesApp />, desc: 'Notes and Notepad layouts for text and Markdown', category: 'productivity' },
+    { id: 'store', name: 'Store', icon: 'ArrowDownToLine', iconFile: 'downloader', color: '#38bdf8', width: 880, height: 640, component: <StoreApp />, desc: 'Download files, models, and more', category: 'tools' },
     { id: 'code-studio', name: 'Code Studio', icon: 'Code', iconFile: 'code-studio', color: '#4ade80', width: 1150, height: 720, component: <CodeStudioApp />, desc: 'Write and run code', category: 'productivity' },
-    { id: 'app-studio', name: 'App Studio', icon: 'Blocks', color: '#a78bfa', width: 1050, height: 680, component: <AppStudioApp />, desc: 'Create and edit .li apps', category: 'productivity' },
     { id: 'ai-hub', name: 'Cortex', icon: 'BrainCircuit', iconFile: 'cortex', color: '#06b6d4', width: 980, height: 700, component: <ModelHubApp />, desc: 'AI models and chat', category: 'tools' },
     { id: 'api-manager', name: 'API Manager', icon: 'Plug2', iconFile: 'api-manager', color: '#f59e0b', width: 960, height: 660, component: <ApiManagerApp />, desc: 'Manage API connections', category: 'tools' },
 
     { id: 'onboarding', name: 'Setup Wizard', icon: 'Sparkles', color: '#22d3ee', width: 640, height: 520, component: <OnboardingApp />, desc: 'First-run setup wizard', category: 'system', desktopIcon: false, showInStart: false },
     { id: 'task-manager', name: 'Task Manager', icon: 'Activity', iconFile: 'task-manager', color: '#f59e0b', width: 640, height: 520, component: <TaskManagerApp />, desc: 'Monitor running processes', category: 'system', desktopIcon: false },
+    { id: 'terminal', name: 'Terminal', icon: 'Terminal', color: '#22d3ee', width: 800, height: 520, component: <TerminalApp />, desc: 'Command-line interface', category: 'tools', desktopIcon: false },
+    { id: 'paint', name: 'Paint', icon: 'PenTool', color: '#ec4899', width: 900, height: 640, component: <PaintApp />, desc: 'Drawing and painting', category: 'productivity' },
     { id: 'settings', name: 'Settings', icon: 'Settings', iconFile: 'settings', color: '#64748b', width: 900, height: 700, component: <SettingsPage />, desc: 'System preferences', category: 'system', showInStart: false, desktopIcon: false },
+    { id: 'recycle-bin', name: 'Recycle Bin', icon: 'Trash2', iconFile: 'trash-2', color: '#64748b', desc: 'View and restore deleted files', category: 'system', showInStart: false, desktopIcon: true, isSystemIcon: true },
   ], []);
 
   const apps = useMemo(() => {
@@ -129,7 +138,21 @@ export default function useDesktopState() {
     return [...builtinApps, ...liEntries];
   }, [builtinApps, liApps]);
 
-  const getApp = useCallback(id => apps.find(app => app.id === id), [apps]);
+  const getApp = useCallback(id => apps.find(app => app.id === canonicalAppId(id)), [apps]);
+
+  /* Keep the shared desktop-apps registry in sync so File Explorer can
+   * render virtual .li shortcut entries inside the Desktop folder. */
+  useEffect(() => { setDesktopApps(apps); }, [apps]);
+
+  useEffect(() => {
+    if (!appsReady) return;
+    restoreSession(apps.map(app => ({
+      id: app.id,
+      title: app.name,
+      icon: <AppIcon icon={app.icon} iconFile={app.iconFile} color={app.color} size={14} />,
+      component: app.component,
+    })));
+  }, [appsReady, apps, restoreSession]);
 
   /* --- Sub-hooks (self-contained slices) --- */
   const { online, netSpeed, battery, batteryTooltip, networkTooltip } = useDeviceDetection();
@@ -148,28 +171,37 @@ export default function useDesktopState() {
   const [taskbarPrefs, setTaskbarPrefs] = useState(() => storage.get('taskbar-prefs', { buttons: 'both', position: 'bottom', startAlign: 'center' }));
   useEffect(() => storage.set('taskbar-prefs', taskbarPrefs), [taskbarPrefs]);
   const [perfOpen, setPerfOpen] = useState(false);
+  const [hiddenIconsOpen, setHiddenIconsOpen] = useState(false);
+  const [hiddenTrayItems, setHiddenTrayItems] = useState(() => storage.get('hidden-tray-items', []));
+  useEffect(() => storage.set('hidden-tray-items', hiddenTrayItems), [hiddenTrayItems]);
+  const addToHiddenTray = useCallback((item) => {
+    setHiddenTrayItems(prev => prev.some(i => i.id === item.id) ? prev : [...prev, item]);
+  }, []);
+  const removeFromHiddenTray = useCallback((id) => {
+    setHiddenTrayItems(prev => prev.filter(i => i.id !== id));
+  }, []);
   const [fsTree, setFsTree] = useFileSystem();
   const fsTrashedCount = trashedItems(fsTree).length;
   const [shutdown, setShutdown] = useState(false);
-  const [recentApps, setRecentApps] = useState(() => storage.get('desktop-recent-apps', []));
-  const [customGroups, setCustomGroups] = useState(() => storage.get('desktop-custom-groups', []));
-  const [pinnedTaskbar, setPinnedTaskbar] = useState(() => storage.get('desktop-pinned-taskbar', []));
+  const [recentApps, setRecentApps] = useState(() => canonicalAppIds(storage.get('desktop-recent-apps', [])));
+  const [customGroups] = useState(() => storage.get('desktop-custom-groups', []));
+  const [pinnedTaskbar, setPinnedTaskbar] = useState(() => canonicalAppIds(storage.get('desktop-pinned-taskbar', [])));
   const [soundLevel, setSoundLevel] = useState(() => storage.get('desktop-sound-level', 50));
   const [wallpaper, setWallpaper] = useState(() => storage.get('desktop-wallpaper', 'nexus-default'));
   const [customWallpaper, setCustomWallpaper] = useState(() => storage.get('desktop-wallpaper-custom', null));
   const [avatar, setAvatar] = useState(() => storage.get('profile-avatar', null));
   const [toasts, setToasts] = useState([]);
-  const [appGridView, setAppGridView] = useState('grid');
-  const [appCategory, setAppCategory] = useState('all');
+  const [appGridView, setAppGridView] = useState(() => storage.get('desktop-app-view', 'grid'));
+  const [appCategory, setAppCategory] = useState(() => storage.get('desktop-app-category', 'all'));
   const [hoveredApp, setHoveredApp] = useState(null);
-  const [pinnedOrder, setPinnedOrder] = useState(() => storage.get('desktop-pinned-order', null));
+  const [pinnedOrder, setPinnedOrder] = useState(() => { const ids = storage.get('desktop-pinned-order', null); return ids ? canonicalAppIds(ids) : null; });
   const [appFreq, setAppFreq] = useState(() => storage.get('desktop-app-freq', {}));
   const [gridFocus, setGridFocus] = useState(-1);
   const [previewApp, setPreviewApp] = useState(null);
-  const [sortMode, setSortMode] = useState(() => storage.get('desktop-app-sort', 'alpha'));
+  const [sortMode] = useState(() => storage.get('desktop-app-sort', 'alpha'));
   const [dragPinned, setDragPinned] = useState(null);
   const previewTimer = useRef(null);
-  const NEW_APP_IDS = new Set(['code-studio', 'api-manager', 'downloader']);
+  const NEW_APP_IDS = new Set(['code-studio', 'api-manager', 'store']);
   const [notifHistory, setNotifHistory] = useState([]);
   const [notifCenterOpen, setNotifCenterOpen] = useState(false);
   const [taskViewOpen, setTaskViewOpen] = useState(false);
@@ -186,6 +218,7 @@ export default function useDesktopState() {
     setWeatherOpen(false);
     setNotifCenterOpen(false);
     setTaskViewOpen(false);
+    setHiddenIconsOpen(false);
   };
 
   /* --- Keyboard shortcuts (needs closePopups + state) --- */
@@ -227,12 +260,46 @@ export default function useDesktopState() {
   useDebouncedSave('desktop-pinned-order', pinnedOrder);
   useDebouncedSave('desktop-app-freq', appFreq);
   useDebouncedSave('desktop-app-sort', sortMode);
+  useDebouncedSave('desktop-app-view', appGridView);
+  useDebouncedSave('desktop-app-category', appCategory);
 
   /* --- App launching --- */
+  const noteOpenSerial = useRef(0);
   const launchApp = useCallback((app, opts = {}) => {
     const target = typeof app === 'string' ? getApp(app) : app;
     if (!target) return;
-    if (opts.newWindow !== true && windows.some(win => win.id === target.id || win.tabs.some(t => t.appId === target.id))) {
+    /* Recycle Bin: open File Explorer navigated to the trash folder. */
+    if (target.id === 'recycle-bin') {
+      const filesApp = getApp('files');
+      if (!filesApp) return;
+      const existingWin = windows.find(win => win.id === 'files' || win.tabs.some(t => t.appId === 'files'));
+      if (existingWin && opts.newWindow !== true) {
+        focusWindow(existingWin.id);
+      } else {
+        openWindow({
+          id: filesApp.id, title: filesApp.name,
+          icon: <AppIcon icon={filesApp.icon} iconFile={filesApp.iconFile} color={filesApp.color} size={14} />,
+          component: filesApp.component,
+          x: 110, y: 70, width: filesApp.width || 880, height: filesApp.height || 560,
+          newWindow: true,
+        });
+      }
+      setTimeout(() => window.dispatchEvent(new CustomEvent('lithium:open-file', { detail: 'default-trash' })), 150);
+      setRecentApps(prev => ['recycle-bin', ...prev.filter(id => id !== 'recycle-bin')].slice(0, 4));
+      setStartMenuOpen(false);
+      setSearchQuery('');
+      return;
+    }
+    if (target.id === 'notepad' && opts.entryId) {
+      openWindow({
+        id: target.id, title: target.name,
+        icon: <AppIcon icon={target.icon} iconFile={target.iconFile} color={target.color} size={14} />,
+        component: <NotesApp initialEntryId={opts.entryId} openRequest={++noteOpenSerial.current} />,
+        replaceTab: true,
+        newWindow: !windows.some(win => win.tabs.some(tab => tab.appId === target.id)),
+        x: 110, y: 70, width: target.width, height: target.height,
+      });
+    } else if (opts.newWindow !== true && windows.some(win => win.id === target.id || win.tabs.some(t => t.appId === target.id))) {
       focusApp(target.id);
     } else {
       openWindow({
@@ -250,7 +317,7 @@ export default function useDesktopState() {
     setSearchQuery('');
     setGridFocus(-1);
     emitEvent('app.opened', { id: target.id, name: target.name });
-  }, [getApp, openWindow, focusApp, windows]);
+  }, [getApp, openWindow, focusApp, focusWindow, windows]);
 
   /* --- Context menus (needs launchApp) --- */
   const { desktopContextMenu, taskbarContextMenu, pinnedAppContextMenu, windowButtonContextMenu } = useContextMenus({
@@ -266,16 +333,16 @@ export default function useDesktopState() {
     registerBuiltinHandlers();
     registerHandler('apps.list', () => apps.map(app => ({ id: app.id, name: app.name })));
     registerHandler('apps.open', ({ id }) => {
-      if (!apps.some(app => app.id === id)) throw new Error(`unknown app '${id}'`);
+      if (!getApp(id)) throw new Error(`unknown app '${id}'`);
       launchRef.current(id);
     });
     registerHandler('apps.close', ({ id }) => {
-      if (!apps.some(app => app.id === id)) throw new Error(`unknown app '${id}'`);
-      closeApp(id);
+      if (!getApp(id)) throw new Error(`unknown app '${id}'`);
+      closeApp(canonicalAppId(id));
     });
     registerHandler('apps.focus', ({ id }) => {
-      if (!apps.some(app => app.id === id)) throw new Error(`unknown app '${id}'`);
-      focusApp(id);
+      if (!getApp(id)) throw new Error(`unknown app '${id}'`);
+      focusApp(canonicalAppId(id));
     });
     const onCommand = event => {
       const { cmd, level } = event.detail || {};
@@ -289,9 +356,10 @@ export default function useDesktopState() {
     const onLaunchApp = event => {
       const { appId, fileEntry } = event.detail || {};
       if (!appId) return;
-      launchRef.current(appId);
+      const isNotes = canonicalAppId(appId) === 'notepad';
+      launchRef.current(appId, isNotes ? { entryId: fileEntry?.id } : {});
       // Forward the file entry to the app after a short delay for mount
-      if (fileEntry) {
+      if (fileEntry && !isNotes) {
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('lithium:open-file-entry', { detail: { fileEntry, appId } }));
         }, 150);
@@ -309,10 +377,10 @@ export default function useDesktopState() {
         const appIds = getAppsFromLayout(layout);
         // Open each app from the layout
         for (const appId of appIds) {
-          const app = apps.find(a => a.id === appId);
+          const app = getApp(appId);
           if (app) launchRef.current(appId);
         }
-      } catch {}
+      } catch { /* A missing workspace must not prevent app launches. */ }
     };
     window.addEventListener('lithium:restore-workspace', onRestoreWorkspace);
     startEnabledWidgets();
@@ -324,7 +392,7 @@ export default function useDesktopState() {
       window.removeEventListener('lithium:launch-app', onLaunchApp);
       window.removeEventListener('lithium:restore-workspace', onRestoreWorkspace);
     };
-  }, [apps, closeWindow, focusWindow, updateWindow, windows]);
+  }, [apps, closeApp, closeWindow, focusApp, focusWindow, getApp, updateWindow, windows]);
 
   /* --- Desktop signals for widgets --- */
   useEffect(() => { emitEvent(startMenuOpen ? 'startMenu.opened' : 'startMenu.closed'); }, [startMenuOpen]);
@@ -368,13 +436,12 @@ export default function useDesktopState() {
   const startApps = useMemo(() => apps.filter(app => app.showInStart !== false), [apps]);
   const query = searchQuery.trim().toLowerCase();
   const sortedStartApps = useMemo(() => query
-    ? startApps.filter(app => app.name.toLowerCase().includes(query))
+    ? startApps.filter(app => `${app.name} ${app.desc || ''}`.toLowerCase().includes(query))
     : [...startApps].sort((a, b) => a.name.localeCompare(b.name)), [startApps, query]);
   const noteResults = useMemo(() => query ? fsTree.filter(entry => entry.type === 'text' && !entry.name.startsWith('.') && inVault(fsTree, entry) && entry.name.toLowerCase().includes(query)).slice(0, 5) : [], [query, fsTree]);
   const fileResults = useMemo(() => query ? fsTree.filter(entry => entry.type !== 'folder' && !(entry.type === 'text' && inVault(fsTree, entry)) && entry.name.toLowerCase().includes(query)).slice(0, 5) : [], [query, fsTree]);
   const openNoteResult = id => {
-    setStartMenuOpen(false); setSearchQuery(''); launchApp('notepad');
-    setTimeout(() => window.dispatchEvent(new CustomEvent('lithium:open-note', { detail: id })), 120);
+    setStartMenuOpen(false); setSearchQuery(''); launchApp('notepad', { entryId: id });
   };
   const openFileResult = id => {
     setStartMenuOpen(false); setSearchQuery(''); launchApp('files');
@@ -393,7 +460,7 @@ export default function useDesktopState() {
   }, []);
 
   const getAppBadge = useCallback(id => {
-    if (id === 'downloader') {
+    if (id === 'store') {
       const dl = storage.get('lithium-downloads', []);
       const active = dl.filter(d => d.status === 'downloading').length;
       return active > 0 ? active : null;
@@ -486,6 +553,7 @@ export default function useDesktopState() {
     calendarOpen, setCalendarOpen, dynMenu, openDynMenu, closeDynMenu,
     taskbarSettingsOpen, setTaskbarSettingsOpen, taskbarPrefs, setTaskbarPrefs,
     perfOpen, setPerfOpen,
+    hiddenIconsOpen, setHiddenIconsOpen, hiddenTrayItems, addToHiddenTray, removeFromHiddenTray,
     // File system
     fsTree, setFsTree, fsTrashedCount,
     // Desktop state

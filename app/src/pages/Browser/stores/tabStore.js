@@ -2,8 +2,11 @@
  * Tab state — central store for open tabs, active tab, and per-tab navigation.
  * Uses @preact/signals for fine-grained reactivity.
  */
-import { signal, computed } from '@preact/signals';
-import { activeContainer } from './containerStore';
+import { signal, computed, effect } from '@preact/signals';
+import { activeContainer, containers } from './containerStore.js';
+import { storage, scheduleStorageSave } from '../../../lib/storage/localStorage.js';
+
+const SESSION_KEY = 'browser-session:v1';
 
 let tabCounter = 0;
 
@@ -30,11 +33,81 @@ export function createTab(url) {
   return tab;
 }
 
+const safeUrl = value => {
+  if (typeof value !== 'string' || value.length > 8192) return NEWTAB_URL;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:', 'lithium:'].includes(url.protocol) || value === 'about:blank' ? value : NEWTAB_URL;
+  } catch { return NEWTAB_URL; }
+};
+const savedMode = mode => mode === 'search' ? 'search' : 'normal';
+
+/** Persist navigation metadata only, never fetched HTML, forms, or temporary URLs. */
+export function captureTabSession(allTabs, selectedId) {
+  const savedTabs = allTabs.filter(tab => !tab.isPrivate && !tab.incognito).slice(0, 50).map(tab => {
+    const index = Math.max(0, Math.min(Number.isInteger(tab.index) ? tab.index : 0, tab.history.length - 1));
+    const start = Math.max(0, index - 99);
+    return {
+      id: tab.id,
+      title: typeof tab.title === 'string' ? tab.title.slice(0, 300) : 'New tab',
+      isPinned: tab.isPinned === true,
+      isMuted: tab.isMuted === true,
+      containerId: tab.containerId,
+      history: tab.history.slice(start, start + 100).map(entry => ({
+        url: safeUrl(typeof entry === 'string' ? entry : entry?.url),
+        mode: savedMode(entry?.mode),
+      })),
+      index: index - start,
+      mode: savedMode(tab.mode),
+    };
+  });
+  return { version: 1, tabs: savedTabs, activeTabId: savedTabs.some(tab => tab.id === selectedId) ? selectedId : savedTabs[0]?.id };
+}
+
+export function restoreTabSession(value) {
+  const restoredTabs = [];
+  const ids = new Map();
+  if (value?.version === 1 && Array.isArray(value.tabs)) {
+    for (const saved of value.tabs.slice(0, 50)) {
+      if (!saved || !Array.isArray(saved.history) || !saved.history.length || saved.isPrivate || saved.incognito) continue;
+      const tab = createTab();
+      const normalized = captureTabSession([{ ...tab, ...saved }], saved.id).tabs[0];
+      if (!normalized) continue;
+      restoredTabs.push({ ...tab, ...normalized, id: tab.id,
+        containerId: containers.peek().some(container => container.id === saved.containerId) ? saved.containerId : 'default',
+      });
+      ids.set(saved.id, tab.id);
+    }
+  }
+  if (!restoredTabs.length) restoredTabs.push(createTab());
+  return { tabs: restoredTabs, activeTabId: ids.get(value?.activeTabId) || restoredTabs[0].id };
+}
+
+const initialSession = restoreTabSession(storage.get(SESSION_KEY));
+
 /** All open tabs. */
-export const tabs = signal([createTab()]);
+export const tabs = signal(initialSession.tabs);
 
 /** Currently active tab id. */
-export const activeTabId = signal(tabs.value[0].id);
+export const activeTabId = signal(initialSession.activeTabId);
+
+// Stores are module-scoped: initialize and subscribe once, including across app reopen.
+let lastSnapshot = JSON.stringify(captureTabSession(tabs.peek(), activeTabId.peek()));
+const stopSaving = effect(() => {
+  const snapshot = captureTabSession(tabs.value, activeTabId.value);
+  const serialized = JSON.stringify(snapshot);
+  if (serialized === lastSnapshot) return;
+  lastSnapshot = serialized;
+  scheduleStorageSave(SESSION_KEY, snapshot);
+});
+if (import.meta.hot) import.meta.hot.dispose(stopSaving);
+
+export function clearTabSession() {
+  const fresh = createTab();
+  tabs.value = [fresh];
+  activeTabId.value = fresh.id;
+  storage.remove(SESSION_KEY);
+}
 
 /** Computed: the active tab object. */
 export const activeTab = computed(() =>
@@ -92,8 +165,8 @@ export function navigateTab(id, url, mode = 'normal') {
   tabs.value = tabs.value.map(t => {
     if (t.id !== id) return t;
     // Cap per-tab history at 100 entries to prevent unbounded memory growth
-    const trimmed = t.history.slice(Math.max(0, t.index - 99));
-    const history = [...trimmed.slice(0, trimmed.length), { url, mode }];
+    const trimmed = t.history.slice(Math.max(0, t.index - 98), t.index + 1);
+    const history = [...trimmed, { url, mode }];
     return { ...t, history, index: history.length - 1, reloadKey: t.reloadKey + 1, isLoading: true, mode };
   });
 }

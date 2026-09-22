@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFileSystem, isTrashed, trashedItems } from '../../lib/fileSystem';
 import { useSettings } from '../SettingsContext';
 import { notify } from '../../lib/desktop/notify';
-import { search as historySearch, recent as historyRecent } from '../../lib/services/historyService';
 import { listSessions } from '../../lib/services/aiService';
 import { storage } from '../../lib/storage';
 import { isDndEnabled, setDndEnabled } from '../../lib/services/notificationService';
@@ -75,7 +74,7 @@ export default function CommandPalette({ open, onClose, apps, onLaunch, onLock, 
     if (isSlash) {
       const slashCmds = [
         { id: '/summarize', title: '/summarize', subtitle: 'Summarize current context', icon: 'FileText', color: '#a78bfa', action: () => { onClose(); onLaunch(apps.find(a => a.id === 'ai-hub')); } },
-        { id: '/translate', title: '/translate', subtitle: 'Translate selected text', icon: 'Languages', color: '#22d3ee', action: () => { onClose(); onLaunch(apps.find(a => a.id === 'ai-hub')); } },
+        { id: '/translate', title: '/translate', subtitle: 'Translate selected text', icon: 'Globe', color: '#22d3ee', action: () => { onClose(); onLaunch(apps.find(a => a.id === 'ai-hub')); } },
         { id: '/clear', title: '/clear', subtitle: 'Clear recent command history', icon: 'Trash2', color: '#ef4444', action: () => { storage.set(RECENT_KEY, []); setRecentIds([]); } },
         { id: '/dnd', title: '/dnd', subtitle: 'Toggle Do Not Disturb', icon: 'Moon', color: '#f59e0b', action: () => { onClose(); setDndEnabled(!isDndEnabled()); } },
         { id: '/shields', title: '/shields', subtitle: 'Toggle privacy shields', icon: 'Shield', color: '#22d3ee', action: () => { onClose(); update('privacy.shieldLevel', settings.privacy?.shieldLevel === 'off' ? 'standard' : 'off'); } },
@@ -92,7 +91,7 @@ export default function CommandPalette({ open, onClose, apps, onLaunch, onLock, 
         id: `app-${app.id}`,
         kind: 'app',
         title: `Open ${app.name}`,
-        subtitle: 'App',
+        subtitle: app.desc || 'App',
         icon: app.icon,
         iconFile: app.iconFile,
         color: app.color,
@@ -162,7 +161,7 @@ export default function CommandPalette({ open, onClose, apps, onLaunch, onLock, 
         subtitle: 'Note',
         icon: 'FileText',
         color: '#8b5cf6',
-        action: () => { onClose(); onLaunch(apps.find(a => a.id === 'notepad')); setTimeout(() => window.dispatchEvent(new CustomEvent('lithium:open-note', { detail: entry.id })), 120); },
+        action: () => { onClose(); window.dispatchEvent(new CustomEvent('lithium:launch-app', { detail: { appId: 'notepad', fileEntry: entry } })); },
       }));
 
     /* Boost by recency */
@@ -191,6 +190,7 @@ export default function CommandPalette({ open, onClose, apps, onLaunch, onLock, 
       .map(x => x.item);
 
     return filtered.slice(0, 40);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apps, onLaunch, onLock, onEmptyTrash, onOpenSettings, onOpenNotifications, onShowDesktop, onTaskView, onClose, settings, update, tree, query, recentIds]);
 
   /* Keep active in range */

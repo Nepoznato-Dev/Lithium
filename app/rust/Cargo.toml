@@ -3,7 +3,6 @@ members = [
     "lithium-abi",
     "filesystem", "snapshot_codec", "lz4", "xxh3",
     "lithium-compute",
-    "server",
     # Active WASM crates (cdylib):
     "core", "lithium-core",
     "agent", "ai", "api", "browser", "chats",

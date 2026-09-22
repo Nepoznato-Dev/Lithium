@@ -167,7 +167,7 @@ export default function PhotosApp({ windowed = false, closeSelf, minimizeSelf, m
       {media.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-white/35" onContextMenu={event => openMenu(event, [
           { id: 'import', label: 'Import photos', icon: 'Upload', action: () => document.querySelector('input[type="file"][accept*=".png"]')?.click() },
-          { id: 'refresh', label: 'Refresh gallery', icon: 'RefreshCw', action: () => setFilter(f => { setFilter('all'); }) },
+          { id: 'refresh', label: 'Refresh gallery', icon: 'RefreshCw', action: () => setFilter(_f => { setFilter('all'); }) },
         ])}>
           <Icon name="Image" size={48} strokeWidth={1} />
           <p className="text-sm font-medium text-white/45">Nothing here yet</p>
@@ -333,6 +333,7 @@ function Viewer({ entry, index, total, onStep, onDelete, onClose, onSetWallpaper
     resize();
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
   const saveSnapshot = useCallback(() => {
@@ -418,7 +419,7 @@ function Viewer({ entry, index, total, onStep, onDelete, onClose, onSetWallpaper
     if (!canvas || history.length === 0) return;
     const ctx = canvas.getContext('2d');
     const newHistory = [...history];
-    const lastSnapshot = newHistory.pop();
+    const lastSnapshot = newHistory.pop(); // eslint-disable-line no-unused-vars
     setHistory(newHistory);
     // Restore previous state
     if (newHistory.length > 0) {

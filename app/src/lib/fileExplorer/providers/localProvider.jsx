@@ -2,7 +2,7 @@
  * Local provider — wraps fileSystem.js tree operations and routes
  * heavy computation through Rust via explorerOpSync.
  */
-import { fsOpSync, explorerOpSync } from '../../core.js';
+import { explorerOpSync } from '../../core.js';
 import {
   childrenOf, getEntry, createEntry, updateEntry,
   moveEntry as fsMoveEntry, trashEntry, removeEntryDeep,

@@ -21,8 +21,11 @@ import { LI_BRIDGE_CLIENT } from './liBridgeClient';
 import { storage } from '../storage';
 import { notify, dismissNotification, clearHistory, getHistory } from '../desktop/notify';
 import { loadSettings, saveSettings, applySettings, BUILD_VERSION } from '../settings';
-import { loadTree, saveTree, createEntry, storeEntryContent, getEntry, childrenOf, pathOf, readEntryContent, removeEntryDeep, moveEntry, duplicateSubtreeDeep, canMoveInto } from '../fileSystem';
+import { loadTree, saveTree, createEntry, storeEntryContent, childrenOf, readEntryContent, removeEntryDeep, moveEntry, duplicateSubtreeDeep, canMoveInto } from '../fileSystem';
 import { discoverAppsFromLauncher } from './liLauncher';
+import { invokeExtensionApi, getApisVisibleToApp } from '../extensions/extSecurity';
+import { registerAppPage, unregisterAppPage, unregisterAllAppPages } from './appSettingsRegistry';
+import { ContextMenuRegistry } from '../desktop/contextMenuRegistry';
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                           */
@@ -47,6 +50,14 @@ const PERMISSION_MAP = {
   'li:apps-close':       'apps',
   'li:apps-send':        'apps',
   'li:apps-broadcast':   'apps',
+  'li:context-menu-register':        'context-menu',
+  'li:context-menu-register-many':   'context-menu',
+  'li:context-menu-unregister':      'context-menu',
+  'li:context-menu-unregister-all':  'context-menu',
+  'li:context-menu-set-override':    'context-menu',
+  'li:context-menu-remove-override': 'context-menu',
+  'li:context-menu-has-override':    'context-menu',
+  'li:context-menu-list-scopes':     'context-menu',
 };
 
 /** API version exposed to .li apps via li.platform.getAPIVersion(). */
@@ -143,7 +154,7 @@ function resolveParentPath(path) {
 /* ------------------------------------------------------------------ */
 
 /** Per-app event subscriptions: Map<container, Map<eventName, cleanupFn>> */
-const appSubscriptions = new WeakMap();
+const appSubscriptions = new WeakMap(); // eslint-disable-line no-unused-vars
 
 /** System-level event listeners (set up once, broadcast to all apps). */
 let systemListenersReady = false;
@@ -183,7 +194,7 @@ function sendEventToApp(container, eventName, data) {
 
 /** Broadcast a named event to every mounted app. */
 function broadcastEvent(eventName, data) {
-  for (const [container, entry] of mounted.entries()) {
+  for (const [container] of mounted.entries()) {
     sendEventToApp(container, eventName, data);
   }
 }
@@ -192,7 +203,7 @@ function broadcastEvent(eventName, data) {
 /*  Message handler factory                                             */
 /* ------------------------------------------------------------------ */
 
-function createMessageHandler(manifest, iframeEl, onTitleChange) {
+function createMessageHandler(manifest, iframeEl, onTitleChange, container) {
   const appPrefix = `li-app-${manifest.id}:`;
 
   return async function handleMessage(event) {
@@ -753,9 +764,155 @@ function createMessageHandler(manifest, iframeEl, onTitleChange) {
           respond(typeof navigator.share === 'function');
           break;
 
+        /* ---- Extension-provided APIs ----
+           Gated by extSecurity's per-app grant store (user approval), not by
+           the app manifest permissions, so these types are intentionally absent
+           from PERMISSION_MAP. Data-only in/out; the dispatcher enforces rules. */
+        case 'li:ext-api-list':
+          respond(getApisVisibleToApp(manifest.id));
+          break;
+        case 'li:ext-api-call': {
+          const res = await invokeExtensionApi({
+            appId: manifest.id,
+            extId: payload.extId,
+            method: payload.method,
+            params: payload.params,
+          });
+          if (res.ok) respond(res.result);
+          else respondError(res.error);
+          break;
+        }
+
         /* ---- Event subscription ---- */
         case 'li:events-subscribe':
           respond(undefined);
+          break;
+
+        /* ---- App settings page registration ---- */
+        case 'li:settings-register': {
+          const appId = manifest.id;
+          // Store the html/url and appId so the Settings UI can render it.
+          registerAppPage(appId, {
+            id: payload.id,
+            title: payload.title,
+            icon: payload.icon,
+            keywords: payload.keywords,
+            order: payload.order,
+            html: payload.html || '',
+            url: payload.url || '',
+            _appId: appId,
+          });
+          respond({ ok: true });
+          break;
+        }
+        case 'li:settings-unregister': {
+          unregisterAppPage(manifest.id, payload.id);
+          respond({ ok: true });
+          break;
+        }
+        case 'li:settings-get': {
+          const all = await loadSettings();
+          const keys = (payload.key || '').split('.');
+          let val = all;
+          for (const k of keys) { if (val == null) break; val = val[k]; }
+          respond(val);
+          break;
+        }
+        case 'li:settings-set': {
+          const current = await loadSettings();
+          const path = (payload.key || '').split('.');
+          let obj = current;
+          for (let i = 0; i < path.length - 1; i++) {
+            if (obj[path[i]] == null) obj[path[i]] = {};
+            obj = obj[path[i]];
+          }
+          obj[path[path.length - 1]] = payload.value;
+          await saveSettings(current);
+          applySettings(current);
+          window.dispatchEvent(new CustomEvent('lithium:settings-changed', { detail: { key: payload.key, value: payload.value } }));
+          respond({ ok: true });
+          break;
+        }
+
+        /* ---- Context Menu ---- */
+        case 'li:context-menu-register': {
+          const spec = payload;
+          if (!spec || !spec.id) { respondError('contextMenu.register() requires an id'); break; }
+          const fullId = `li-app:${manifest.id}:${spec.id}`;
+          ContextMenuRegistry.register({
+            ...spec,
+            id: fullId,
+            action: spec.action || spec.id,
+            source: { type: 'li-app', id: manifest.id },
+            actionFn: (ctx) => {
+              // Dispatch action event back to this app.
+              sendEventToApp(container, 'contextmenu.action', {
+                actionId: spec.action || spec.id,
+                entryId: fullId,
+                context: ctx || {},
+              });
+            },
+          });
+          respond({ id: fullId });
+          break;
+        }
+        case 'li:context-menu-register-many': {
+          const specs = payload.specs || [];
+          const ids = [];
+          for (const spec of specs) {
+            if (!spec || !spec.id) continue;
+            const fullId = `li-app:${manifest.id}:${spec.id}`;
+            ContextMenuRegistry.register({
+              ...spec,
+              id: fullId,
+              action: spec.action || spec.id,
+              source: { type: 'li-app', id: manifest.id },
+              actionFn: (ctx) => {
+                sendEventToApp(container, 'contextmenu.action', {
+                  actionId: spec.action || spec.id,
+                  entryId: fullId,
+                  context: ctx || {},
+                });
+              },
+            });
+            ids.push(fullId);
+          }
+          respond({ ids });
+          break;
+        }
+        case 'li:context-menu-unregister':
+          ContextMenuRegistry.unregister(`li-app:${manifest.id}:${payload.id}`);
+          respond({ ok: true });
+          break;
+        case 'li:context-menu-unregister-all':
+          ContextMenuRegistry.unregisterAll('li-app', manifest.id);
+          respond({ ok: true });
+          break;
+        case 'li:context-menu-set-override':
+          ContextMenuRegistry.setOverride(payload.scope, {
+            id: `li-app:${manifest.id}:override:${payload.scope}`,
+            items: payload.items || [],
+            source: { type: 'li-app', id: manifest.id },
+          });
+          respond({ ok: true });
+          break;
+        case 'li:context-menu-remove-override': {
+          const override = ContextMenuRegistry.getOverride(payload.scope);
+          if (override?.source?.type === 'li-app' && override?.source?.id === manifest.id) {
+            ContextMenuRegistry.removeOverride(payload.scope);
+          }
+          respond({ ok: true });
+          break;
+        }
+        case 'li:context-menu-has-override':
+          respond(ContextMenuRegistry.hasOverride(payload.scope));
+          break;
+        case 'li:context-menu-list-scopes':
+          respond(ContextMenuRegistry.scopes().map(scope => ({
+            scope,
+            entries: ContextMenuRegistry.entriesForScope(scope).length,
+            hasOverride: ContextMenuRegistry.hasOverride(scope),
+          })));
           break;
 
         default:
@@ -822,7 +979,7 @@ export async function mountApp(container, manifest, onTitleChange) {
   shadow.appendChild(iframe);
 
   // 5. Message handler.
-  const handler = createMessageHandler(manifest, iframe, onTitleChange);
+  const handler = createMessageHandler(manifest, iframe, onTitleChange, container);
   window.addEventListener('message', handler);
 
   // 6. Lifecycle event push — focus/blur/visibility.
@@ -871,10 +1028,36 @@ export function unmountApp(container) {
       try { fn(); } catch { /* ignore */ }
     }
   }
-  // Remove shadow children.
+  // Remove any settings pages this app registered.
+  if (entry.manifest?.id) {
+    unregisterAllAppPages(entry.manifest.id);
+  }
+  // Remove any context menu entries or overrides this app registered.
+  if (entry.manifest?.id) {
+    ContextMenuRegistry.unregisterAll('li-app', entry.manifest.id);
+    for (const scope of ContextMenuRegistry.scopes()) {
+      const override = ContextMenuRegistry.getOverride(scope);
+      if (override?.source?.type === 'li-app' && override?.source?.id === entry.manifest.id) {
+        ContextMenuRegistry.removeOverride(scope);
+      }
+    }
+  }
+  // Fully destroy the iframe — clearing srcdoc releases the execution
+  // context, document, and any Workers/IDB connections inside it.
+  if (entry.iframe) {
+    try {
+      entry.iframe.srcdoc = '';
+      entry.iframe.removeAttribute('srcdoc');
+      entry.iframe.remove();
+    } catch { /* already detached — ignore */ }
+    entry.iframe = null;
+  }
+  // Remove remaining shadow children (styles, etc.).
   const shadow = container.shadowRoot;
   if (shadow) {
     while (shadow.firstChild) shadow.removeChild(shadow.firstChild);
   }
+  entry.cleanups = null;
+  entry.handler = null;
   mounted.delete(container);
 }

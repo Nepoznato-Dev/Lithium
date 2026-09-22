@@ -56,9 +56,9 @@ function RuleEditor() {
           cosmetic: loadFromFile('cosmetic'),
           blocklist: loadFromFile('blocklist'),
         });
-      } catch {}
+      } catch { /* file read failed */ }
     })();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAdd = () => {
     if (!newRule.trim()) return;
@@ -77,7 +77,7 @@ function RuleEditor() {
       const { loadTree, saveTree } = await import('../../../lib/fileSystem');
       let tree = loadTree();
       for (const type of Object.keys(RULE_FILES)) {
-        const config = RULE_FILES[type];
+        const _config = RULE_FILES[type]; // eslint-disable-line no-unused-vars
         const content = JSON.stringify(customRules[type], null, 2);
         const fileName = `custom-${type === 'tracking' ? 'tracking' : type === 'cosmetic' ? 'cosmetic' : 'blocklist'}.json`;
         const existing = tree.find(e => e.name === fileName && e.parentId === 'sys-privacy');
@@ -91,7 +91,7 @@ function RuleEditor() {
       saveTree(tree);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {}
+    } catch { /* save failed */ }
   };
 
   const currentRules = customRules[activeTab] || [];

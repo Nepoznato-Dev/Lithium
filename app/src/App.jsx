@@ -1,11 +1,18 @@
 import React, { Component, lazy, Suspense, useEffect, useState } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes } from './lib/router';
 import Shell from './Components/layout/Shell';
 import { SettingsProvider } from './Components/SettingsContext';
 import Dashboard from './pages/Dashboard';
+import WelcomeScreen from './pages/WelcomeScreen';
 import { hasPin } from './lib/desktop/ui';
+import { initExtensions } from './lib/extensions/extManager';
+import PwaInstallBanner from './Components/PwaInstallBanner';
+import { initSyncBridge } from './lib/fs/localSyncBridge';
+
+const WELCOME_KEY = 'lithium:welcome-done';
 
 const LockScreen = lazy(() => import('./Components/Desktop/LockScreen'));
+const BootAnimation = lazy(() => import('./Components/Desktop/BootAnimation'));
 
 /* Shell routes are lazy so the idle desktop bundle stays small. */
 const Games = React.lazy(() => import('./pages/Games'));
@@ -20,6 +27,7 @@ const YukiCustomization = React.lazy(() => import('./pages/YukiCustomization'));
 const YukiSettings = React.lazy(() => import('./pages/YukiSettings'));
 const YukiThemes = React.lazy(() => import('./pages/YukiThemes'));
 const YukiAbout = React.lazy(() => import('./pages/YukiAbout'));
+const ShareTarget = React.lazy(() => import('./pages/ShareTarget'));
 
 import { DesktopWindowProvider } from './Components/Desktop/DesktopWindowManager';
 
@@ -55,11 +63,9 @@ class ErrorBoundary extends Component {
 }
 
 /** Listens for `lithium:lock-screen` events and the Ctrl+Alt+L hotkey. */
-function LockController({ locked, setLocked }) {
+function LockController({ locked: _locked, setLocked }) {
   useEffect(() => {
     const onLock = () => {
-      // Locking is allowed even when no PIN is set — the lock screen just
-      // hides content until the user clicks Unlock.
       setLocked(true);
     };
     const onKey = event => {
@@ -80,13 +86,42 @@ function LockController({ locked, setLocked }) {
 
 export default function App() {
   const [locked, setLocked] = useState(() => hasPin());
+  const [welcomed, setWelcomed] = useState(() => localStorage.getItem(WELCOME_KEY) === '1');
+  const [booted, setBooted] = useState(() => localStorage.getItem('lithium:boot-seen') === '1' || localStorage.getItem('lithium:boot-disabled') === '1');
+
+  useEffect(() => {
+    initExtensions();
+  }, []);
+
+  useEffect(() => {
+    initSyncBridge();
+  }, []);
+
+  const dismissWelcome = () => {
+    localStorage.setItem(WELCOME_KEY, '1');
+    setWelcomed(true);
+  };
+
+  if (!welcomed) {
+    return (
+      <ErrorBoundary>
+        <WelcomeScreen onDone={dismissWelcome} />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>
+      {!booted && (
+        <Suspense fallback={null}>
+          <BootAnimation onComplete={() => setBooted(true)} />
+        </Suspense>
+      )}
       <SettingsProvider>
         <DesktopWindowProvider>
           <LockController locked={locked} setLocked={setLocked} />
           <Routes>
+            <Route path="/share-target" element={<Suspense fallback={null}><ShareTarget /></Suspense>} />
             <Route path="/" element={<Dashboard />} />
             <Route path="/privacy" element={<Suspense fallback={null}><Privacy /></Suspense>} />
             <Route path="/yuki" element={<Suspense fallback={null}><YukiStuff /></Suspense>} />
@@ -108,6 +143,7 @@ export default function App() {
               <LockScreen onUnlock={() => setLocked(false)} />
             </Suspense>
           )}
+          <PwaInstallBanner />
         </DesktopWindowProvider>
       </SettingsProvider>
     </ErrorBoundary>

@@ -127,6 +127,7 @@ function WidgetsTab({ onCtxMenu }) {
   const [version, setVersion] = useState(0);
   const [editing, setEditing] = useState(null); // { id, name, code }
   const [template, setTemplate] = useState(WIDGET_TEMPLATES[0].id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const widgets = useMemo(() => listWidgets(), [version]);
 
   useEffect(() => {
@@ -239,9 +240,11 @@ function WidgetsTab({ onCtxMenu }) {
 /* ---------- External tab ---------- */
 
 function ExternalTab() {
-  const [version, setVersion] = useState(0);
+  const [version, setVersion] = useState(0); // eslint-disable-line no-unused-vars
   const [testResults, setTestResults] = useState({});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const drives = useMemo(() => loadDriveConfigs(), [version]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const keys = useMemo(() => loadKeys(), [version]);
 
   const test = async config => {
@@ -302,6 +305,7 @@ function AuditTab({ onCtxMenu }) {
       window.removeEventListener('lithium:kv-ready', bump);
     };
   }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const log = useMemo(() => getAudit(), [version]);
 
   return (

@@ -259,6 +259,87 @@ export const LI_BRIDGE_CLIENT = `
       canShare: function () { return request('li:share-can-share'); },
     },
 
+    /* ---- Extension-provided APIs ----
+       Discover and call APIs that extensions expose through the host's
+       extSecurity dispatcher. Cross-boundary calls are user-granted and
+       data-only (no functions / DOM / live refs ever cross here). */
+    ext: {
+      list: function () { return request('li:ext-api-list'); },
+      call: function (extId, method, params) {
+        return request('li:ext-api-call', { extId: extId, method: method, params: params });
+      },
+    },
+
+    /* ---- Settings page registration ----
+       Apps can register a settings page that appears in the Settings app
+       under "App Settings".  The spec accepts metadata + an html string
+       or url that is rendered in a sandboxed iframe. */
+    settings: {
+      registerPage: function (spec) {
+        return request('li:settings-register', {
+          id: spec.id,
+          title: spec.title,
+          icon: spec.icon,
+          keywords: spec.keywords,
+          order: spec.order,
+          html: spec.html,
+          url: spec.url,
+        });
+      },
+      unregisterPage: function (pageId) {
+        return request('li:settings-unregister', { id: pageId });
+      },
+      get: function (key) { return request('li:settings-get', { key: key }); },
+      set: function (key, value) { return request('li:settings-set', { key: key, value: value }); },
+    },
+
+    /* ---- Context Menu ----
+       Apps can register items into the system context menu, or
+       override the default menu for a given scope entirely.
+       When a registered item is clicked, a 'contextmenu.action'
+       event is dispatched to the app with the action id. */
+    contextMenu: {
+      register: function (spec) {
+        return request('li:context-menu-register', {
+          id: spec.id,
+          scope: spec.scope,
+          label: spec.label,
+          icon: spec.icon,
+          iconFile: spec.iconFile,
+          shortcut: spec.shortcut,
+          danger: spec.danger,
+          order: spec.order,
+          group: spec.group,
+          items: spec.items,
+          action: spec.action,
+        });
+      },
+      registerMany: function (specs) {
+        return request('li:context-menu-register-many', { specs: specs });
+      },
+      unregister: function (id) {
+        return request('li:context-menu-unregister', { id: id });
+      },
+      unregisterAll: function () {
+        return request('li:context-menu-unregister-all');
+      },
+      setOverride: function (scope, items) {
+        return request('li:context-menu-set-override', { scope: scope, items: items });
+      },
+      removeOverride: function (scope) {
+        return request('li:context-menu-remove-override', { scope: scope });
+      },
+      hasOverride: function (scope) {
+        return request('li:context-menu-has-override', { scope: scope });
+      },
+      listScopes: function () {
+        return request('li:context-menu-list-scopes');
+      },
+      onAction: function (cb) {
+        return window.li.events.on('contextmenu.action', cb);
+      },
+    },
+
     /* ---- Backward-compatible top-level aliases ---- */
     notify: function (title, body) {
       return request('li:notify', { title: title, body: body });

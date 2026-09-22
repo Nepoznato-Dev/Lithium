@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { applySettings, loadSettings, saveSettings, setAtPath } from '../lib/settings';
+import { applySettings, loadSettings, normalizeSettings, saveSettings, setAtPath } from '../lib/settings';
 import { registerHandler } from '../lib/ai/apiManager';
 
 const SettingsContext = createContext(null);
@@ -17,14 +17,19 @@ export function SettingsProvider({ children }) {
       const updated = setAtPath(prev, path, value);
       saveSettings(updated);
       applySettings(updated);
+      // Dispatch battery saver change event so background services can pause/resume
+      if (path === 'power.batterySaver') {
+        window.dispatchEvent(new CustomEvent('lithium:battery-saver-changed', { detail: { active: Boolean(value) } }));
+      }
       return updated;
     });
   }, []);
 
   const replaceSettings = useCallback(next => {
-    setSettings(next);
-    saveSettings(next);
-    applySettings(next);
+    const normalized = normalizeSettings(next);
+    setSettings(normalized);
+    saveSettings(normalized);
+    applySettings(normalized);
   }, []);
 
   // Expose settings to the API Manager (models, widgets, other apps).

@@ -1,6 +1,6 @@
 /**
  * Search Engine Store — manages built-in + custom search engines,
- * keyword shortcuts (e.g. "yt cats" → YouTube), and engine ordering.
+ * keyword shortcuts (e.g. "g cats" → Google), categories, and engine ordering.
  * Persists custom engines and order to localStorage.
  */
 import { signal } from '@preact/signals';
@@ -9,12 +9,13 @@ import { SEARCH_ENGINES } from '../../../lib/settings';
 const CUSTOM_ENGINES_KEY = 'lithium:custom-engines';
 const ENGINE_ORDER_KEY = 'lithium:engine-order';
 
-/** Built-in engines from settings. */
+/** Built-in engines from settings (with keywords and categories). */
 const BUILTIN = Object.entries(SEARCH_ENGINES).map(([key, eng]) => ({
   id: key,
   label: eng.label,
   url: eng.url,
-  keyword: '',
+  keyword: eng.keyword || '',
+  category: eng.category || 'general',
   builtin: true,
 }));
 
@@ -23,7 +24,7 @@ function loadCustom() {
   try { return JSON.parse(localStorage.getItem(CUSTOM_ENGINES_KEY)) || []; } catch { return []; }
 }
 function saveCustom(engines) {
-  try { localStorage.setItem(CUSTOM_ENGINES_KEY, JSON.stringify(engines)); } catch {}
+  try { localStorage.setItem(CUSTOM_ENGINES_KEY, JSON.stringify(engines)); } catch { /* quota exceeded */ }
 }
 
 /** Load engine order from localStorage. */
@@ -31,7 +32,7 @@ function loadOrder() {
   try { return JSON.parse(localStorage.getItem(ENGINE_ORDER_KEY)) || null; } catch { return null; }
 }
 function saveOrder(order) {
-  try { localStorage.setItem(ENGINE_ORDER_KEY, JSON.stringify(order)); } catch {}
+  try { localStorage.setItem(ENGINE_ORDER_KEY, JSON.stringify(order)); } catch { /* quota exceeded */ }
 }
 
 /** All engines: built-in + custom, in configured order. */
@@ -98,9 +99,9 @@ export function setKeyword(id, keyword) {
     // Store built-in keyword in a separate key
     const kwKey = 'lithium:builtin-keywords';
     let kws = {};
-    try { kws = JSON.parse(localStorage.getItem(kwKey)) || {}; } catch {}
+    try { kws = JSON.parse(localStorage.getItem(kwKey)) || {}; } catch { /* parse error */ }
     if (keyword) { kws[id] = keyword; } else { delete kws[id]; }
-    try { localStorage.setItem(kwKey, JSON.stringify(kws)); } catch {}
+    try { localStorage.setItem(kwKey, JSON.stringify(kws)); } catch { /* quota exceeded */ }
     // Patch the BUILTIN array in memory
     const eng = BUILTIN.find(e => e.id === id);
     if (eng) eng.keyword = keyword;

@@ -4,17 +4,16 @@
  */
 import { useEffect, useCallback, useMemo, useRef } from 'react';
 import { useMemoCompare } from '../hooks/useMemoCompare.js';
-import Icon from '../../../Components/Icon';
 import { PngIcon } from './common/PngIcon.jsx';
 import ContextMenu from '../../../Components/Desktop/ContextMenu';
 import {
   childrenOf, createEntry, getEntry, isTrashed,
   migrateTree, moveEntry, pathOf, purgeTrash, readEntryContent,
   removeEntryDeep, restoreEntry, storeEntryContent,
-  trashEntry, TRASH_ID, trashedItems, updateEntry,
+  trashEntry, trashedItems, updateEntry,
 } from '../../fileSystem.js';
 import {
-  PROVIDERS, CloudAuthError, createFolder as cloudCreateFolder,
+  CloudAuthError, createFolder as cloudCreateFolder,
   deleteItem as cloudDeleteItem, downloadBlob, listChildren,
   renameItem as cloudRename, uploadFile,
 } from '../../cloudDrives.js';
@@ -30,6 +29,7 @@ import {
   exportFolderTar, importTarToFolder,
 } from '../../storage/tarArchive.js';
 import { getDefaultApp } from '../../fileSystem/fileAssociations.js';
+import { getDesktopApps } from '../../desktopApps.js';
 import { notify } from '../../../lib/desktop/notify.js';
 
 import {
@@ -42,6 +42,7 @@ import {
 import TabBar from './TabBar/TabBar.jsx';
 import Sidebar from './Sidebar/Sidebar.jsx';
 import AddressBar from './AddressBar/AddressBar.jsx';
+import Toolbar from './Toolbar/Toolbar.jsx';
 import FileList from './FileList/FileList.jsx';
 import PreviewPane from './PreviewPane/PreviewPane.jsx';
 import StatusBar from './StatusBar/StatusBar.jsx';
@@ -64,21 +65,6 @@ const QUICK_META = {
   Videos: { icon: 'Film', color: '#a78bfa' },
 };
 
-/** Map icon names to PNG filenames in public/icons/ */
-const ICON_PNG_MAP = {
-  Folder: 'files',
-  Image: 'gallery',
-  Film: 'film',
-  Music: 'music-note',
-  FileText: 'notes',
-  Archive: 'archive',
-  BrainCircuit: 'cortex',
-  Code2: 'code-studio',
-  Gamepad2: 'hydrux',
-  Snowflake: 'snowflake',
-  FileJson: 'file-json',
-};
-
 export default function ExplorerShell({ tree, commit, configs, setConfigs, closeSelf, minimizeSelf, maximizeSelf, isMaximized, windowed }) {
   const uploadRef = useRef(null);
   const treeRef = useRef(tree);
@@ -94,7 +80,9 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
     tabs.value = tabs.value.map(t => t.id === activeTabId.value ? { ...t, driveId: nav.value.driveId, stack: nav.value.stack, view: view.value } : t);
   }, [nav.value, view.value]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- signals are external; mutating .value doesn't re-render
   useEffect(() => storage.set('fs-pins', pins.value), [pins.value]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => storage.set('fs-clipboard', clipboard.value), [clipboard.value]);
 
   // Deep links
@@ -149,6 +137,7 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
 
   useEffect(() => {
     if (view.value === 'files' && drive) refreshCloud(drive, folderId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- view.value is an external signal
   }, [view.value, drive, folderId, refreshCloud]);
 
   // Content-stable items: same folder content → same array reference →
@@ -156,7 +145,27 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
   const items = useMemoCompare(
     () => {
       if (view.value !== 'files') return [];
-      return drive ? cloudItems.value : childrenOf(tree, folderId);
+      const base = drive ? cloudItems.value : childrenOf(tree, folderId);
+      /* When viewing the Desktop folder, append virtual .li shortcuts for
+       * every app that shows a desktop icon — mirrors the real desktop. */
+      if (!drive && folderId === 'default-desktop') {
+        const desktopApps = getDesktopApps().filter(a => a.desktopIcon !== false && a.id !== 'recycle-bin');
+        const shortcuts = desktopApps.map(app => ({
+          id: `__shortcut-${app.id}`,
+          name: `${app.name}.li`,
+          type: 'text',
+          parentId: 'default-desktop',
+          shortcut: true,
+          shortcutAppId: app.id,
+          icon: app.icon,
+          iconFile: app.iconFile,
+          color: app.color,
+          createdAt: 0,
+          updatedAt: 0,
+        }));
+        return [...base, ...shortcuts];
+      }
+      return base;
     },
     [view.value, drive, folderId, tree, cloudItems.value],
     (prev, next) => prev.length === next.length && prev.every((e, i) => e === next[i])
@@ -167,7 +176,6 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
 
   // Memoize childrenOf calls to avoid repeated tree filtering
   const rootChildren = useMemo(() => childrenOf(tree, 'root'), [tree]);
-  const currentFolderChildren = useMemo(() => childrenOf(tree, folderId), [tree, folderId]);
 
   // Pre-compute folder children counts for home view (moved out of renderHome to satisfy Rules of Hooks)
   const folderChildrenCounts = useMemo(() => {
@@ -202,6 +210,13 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
 
   // Open item
   const openItem = useCallback(async (entry) => {
+    /* Virtual .li shortcut — launch the associated app. */
+    if (entry.shortcut) {
+      window.dispatchEvent(new CustomEvent('lithium:launch-app', {
+        detail: { appId: entry.shortcutAppId },
+      }));
+      return;
+    }
     if (entry.type === 'folder') {
       selectedItems.value = new Set();
       nav.value = { ...nav.value, stack: [...nav.value.stack, { id: entry.id, name: entry.name }] };
@@ -410,25 +425,9 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
     };
     input.click();
   }, [tree, drive, folderId, commit]);
-
-  const handleImportZip = useCallback(() => {
-    if (drive) return;
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.zip';
-    input.onchange = async (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      try {
-        const result = await importZipToFolder(tree, folderId, file, { nameOverride: file.name.replace(/\.zip$/i, '') });
-        commit(result.tree);
-      } catch (err) { cloudError.value = err.message || 'ZIP import failed'; }
-    };
-    input.click();
-  }, [tree, drive, folderId, commit]);
-
+  
   // Context menu
-  const { menu, closeMenu, onItemContext, onEmptyContext } = useExplorerContextMenu({
+  const { menu, closeMenu, onItemContext, onEmptyContext, executeAction, actionState } = useExplorerContextMenu({
     tree, commit, drive, openItem, handleDelete, handleRestore,
     handleCompressZip, handleCompressTar, handleCompressArchive,
     handleExtractArchive, handleDownload, handleImportArchive,
@@ -467,7 +466,7 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
   const dragCacheRef = useRef(new Map());
   const emptyDragRef = useRef({});
   const dragProps = useCallback((entry) => {
-    if (drive) return emptyDragRef.current;
+    if (drive || entry.shortcut) return emptyDragRef.current;
     let obj = dragCacheRef.current.get(entry.id);
     if (!obj) {
       obj = {
@@ -520,12 +519,6 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
   const setStorageOpen = useCallback((v) => { storageOpen.value = v; }, []);
   const setConnectOpen = useCallback((v) => { connectOpen.value = v; }, []);
 
-  const isInTrash = !drive && nav.value.driveId === 'local' && folderId === TRASH_ID;
-  const isTrashSubfolder = !drive && folderId !== TRASH_ID && (() => {
-    const entry = getEntry(tree, folderId);
-    return entry && (entry.parentId === TRASH_ID || isTrashed(entry));
-  })();
-
   // Home view — extracted to its own component so pins.value reads
   // don't cascade through ExplorerShell (see HomeView below).
   const homeView = (
@@ -565,8 +558,19 @@ export default function ExplorerShell({ tree, commit, configs, setConfigs, close
         )}
         <div className="flex min-w-0 flex-1 flex-col">
           <AddressBar dropTarget={dropTarget} />
+          {/* Upload target for `fs.upload`, which only dispatches the
+              `lithium:explorer-upload` event that the listener above turns into
+              a click on this ref. Without this input that action is a no-op. */}
+          <input ref={uploadRef} type="file" className="hidden" onChange={handleUpload} />
           {view.value === 'home' && homeView}
           {view.value === 'gallery' && renderGallery()}
+          {view.value === 'files' && (
+            <Toolbar
+              tree={tree} drive={drive}
+              onAction={executeAction} actionState={actionState}
+              handleEmptyTrash={handleEmptyTrash}
+            />
+          )}
           {view.value === 'files' && (
             <FileList
               treeRef={treeRef} drive={drive} items={items}
@@ -705,13 +709,9 @@ function HomeView({ rootChildren, folderChildrenCounts, recentFiles, openItem, o
         {recentFiles.map(entry => {
           const iconName = entry.type === 'image' ? 'Image' : entry.type === 'video' ? 'Film' : 'FileText';
           const iconColor = entry.type === 'image' ? '#f472b6' : entry.type === 'video' ? '#a78bfa' : '#60a5fa';
-          const pngName = ICON_PNG_MAP[iconName];
           return (
             <button key={entry.id} className="flex w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left text-xs text-white/75 transition-colors hover:bg-[#222328]" onDoubleClick={() => openItem(entry)} onClick={() => selectedItems.value = new Set([entry.id])} onContextMenu={event => { event.stopPropagation(); onItemContext(event, entry); }}>
-              {pngName
-                ? <img src={`/icons/${pngName}.png`} alt="" style={{ width: 18, height: 18 }} className="object-contain" />
-                : <Icon name={iconName} size={18} color={iconColor} strokeWidth={1.4} />
-              }
+              <PngIcon name={iconName} size={18} color={iconColor} strokeWidth={1.4} />
               <span className="min-w-0 flex-1 truncate">{entry.name}</span>
               <span className="text-white/35 tabular-nums">{new Date(entry.updatedAt).toLocaleDateString()}</span>
             </button>

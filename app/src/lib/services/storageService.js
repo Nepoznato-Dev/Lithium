@@ -60,7 +60,7 @@ function measureLocalStorage() {
       const key = localStorage.key(i);
       if (key) total += key.length + (localStorage.getItem(key) || '').length;
     }
-  } catch {}
+  } catch { /* storage unavailable */ }
   return total * 2;
 }
 
@@ -77,7 +77,7 @@ export function measureLithiumLocalStorage() {
         total += key.length + (localStorage.getItem(key) || '').length;
       }
     }
-  } catch {}
+  } catch { /* storage unavailable */ }
   return total * 2;
 }
 
@@ -131,7 +131,7 @@ async function measureIndexedDB() {
       const est = await navigator.storage.estimate();
       return est.usage || 0;
     }
-  } catch {}
+  } catch { /* not supported */ }
   return 0;
 }
 
@@ -146,11 +146,11 @@ async function measureOpfs() {
           const file = await dir.getFileHandle(name);
           const f = await file.getFile();
           total += f.size;
-        } catch {}
+        } catch { /* skip unreadable */ }
       }
       return total;
     }
-  } catch {}
+  } catch { /* not supported */ }
   return 0;
 }
 
@@ -210,7 +210,7 @@ export async function runAutoClear() {
         const { clearHistory } = await import('./historyService');
         clearHistory();
         cleared++;
-      } catch {}
+      } catch { /* module unavailable */ }
     }
 
     if (category === 'notifications') {
@@ -218,7 +218,7 @@ export async function runAutoClear() {
         const { clearHistory } = await import('../desktop/notify');
         clearHistory();
         cleared++;
-      } catch {}
+      } catch { /* module unavailable */ }
     }
   }
 

@@ -11,10 +11,10 @@ import { ActionRegistry } from '../ActionRegistry';
 import {
   childrenOf, getEntry, isTrashed, moveEntry, duplicateSubtreeDeep,
   subtreeFolderIds, trashEntry, restoreEntry, removeEntryDeep,
-  updateEntry, TRASH_ID,
+  TRASH_ID,
 } from '../../../fileSystem.js';
 import {
-  FsError, FsErrorCode, validateMove, validateTrash,
+  FsError, validateMove, validateTrash,
   resolveDuplicateName, withErrorBoundary,
 } from '../fsValidation.js';
 import { notify } from '../../../../lib/desktop/notify.js';
@@ -31,7 +31,7 @@ function clipboardIds(clip) {
   return [];
 }
 
-const safeNotify = withErrorBoundary(async (fn) => fn(), notify);
+const safeNotify = withErrorBoundary(async (fn) => fn(), notify); // eslint-disable-line no-unused-vars
 
 /* ------------------------------------------------------------------ */
 /*  fs.copy                                                            */
@@ -157,8 +157,8 @@ ActionRegistry.register({
       if (conflict) {
         const newName = resolveDuplicateName(entry.name, siblings);
         const dot = entry.name.lastIndexOf('.');
-        const base = dot > 0 ? entry.name.slice(0, dot) : entry.name;
-        const ext = dot > 0 ? entry.name.slice(dot) : '';
+        const base = dot > 0 ? entry.name.slice(0, dot) : entry.name; // eslint-disable-line no-unused-vars
+        const ext = dot > 0 ? entry.name.slice(dot) : ''; // eslint-disable-line no-unused-vars
         const match = newName.match(/\((\d+)\)/);
         const n = match ? match[1] : '2';
         next = await duplicateSubtreeDeep(next, entry.id, entry.parentId, ` (${n})`);
@@ -239,7 +239,7 @@ ActionRegistry.register({
 ActionRegistry.register({
   id: 'fs.delete',
   category: 'file',
-  label: (entries, ctx) => {
+  label: (entries, _ctx) => {
     if (entries.length === 1 && isTrashed(entries[0])) return 'Delete permanently';
     return entries.length > 1 ? `Delete ${entries.length} items` : 'Delete';
   },

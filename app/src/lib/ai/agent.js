@@ -1,5 +1,4 @@
 import { kvGet, kvSet } from '../storage/kvTier';
-import { storage } from '../storage/localStorage';
 import { emitEvent } from './apiManager';
 
 const _MODE_CATALOG = {
@@ -33,21 +32,6 @@ export const MODE_ORDER = _modeCatalog?.MODE_ORDER || [];
 /** Mode definitions keyed by id. */
 export const MODES = _modeCatalog?.MODES || {};
 
-/* ── Cortex mode persistence ── */
-const CORTEX_MODES = ['agent', 'ask', 'plan', 'review', 'chat'];
-/** Cortex-specific mode order (subset of Code Studio modes). */
-export const CORTEX_MODE_ORDER = CORTEX_MODES;
-
-/** Get the persisted Cortex mode, defaulting to 'agent'. */
-export function getCortexMode() {
-  return storage.get('ai-cortex-mode', 'agent');
-}
-
-/** Persist the selected Cortex mode. */
-export function setCortexMode(mode) {
-  storage.set('ai-cortex-mode', mode);
-}
-
 /* ================================================================
  *  AI block parsers — extract fenced tool blocks from assistant replies.
  * ================================================================ */
@@ -68,7 +52,7 @@ export function extractApiCalls(text) {
       } else if (parsed && parsed.api) {
         calls.push({ api: parsed.api, params: parsed.params || {} });
       }
-    } catch {}
+    } catch { /* ignore parse errors */ }
   }
   return calls;
 }

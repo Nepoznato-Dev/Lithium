@@ -13,6 +13,7 @@
 
 import { storage } from '../storage/localStorage';
 import { notify as rawNotify, getHistory, subscribeToHistory } from '../desktop/notify';
+import { incrementBadge, clearBadge } from '../pwa/badging';
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 const DND_KEY = 'lithium:dnd';
@@ -59,8 +60,12 @@ export function isQuietHours() {
 }
 
 /** Enhanced notify — respects DND and quiet hours.  If suppressed, the
- *  notification is still persisted to history but no toast is shown. */
-export function notify({ title, body, tone, silent, source } = {}) {
+ *  notification is still persisted to history but no toast is shown.
+ *  The PWA badge is always incremented so the user sees the count. */
+export function notify({ title, body, tone, silent, source: _source } = {}) {
+  // Always increment the badge so the PWA icon shows unread count.
+  incrementBadge();
+
   // DND or quiet hours → persist silently
   if (isDndEnabled() || (isQuietHours() && !silent)) {
     // Still record in history but skip the toast by marking read
@@ -68,6 +73,11 @@ export function notify({ title, body, tone, silent, source } = {}) {
     return;
   }
   rawNotify({ title, body, tone: tone || 'info' });
+}
+
+/** Clear the unread badge count. Call when the user opens the notification center. */
+export function clearUnreadCount() {
+  clearBadge();
 }
 
 /** Get notification history grouped by source/date. */

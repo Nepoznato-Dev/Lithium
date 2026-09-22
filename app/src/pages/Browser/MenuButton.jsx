@@ -4,7 +4,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { menuOpen, navigateInternal, rebuildData, fullRenderData } from './stores/browserStore';
 import { activeTab, currentUrl, addTab, navigateTab } from './stores/tabStore';
-import { clearAllModes } from './stores/browserStore';
+import { clearAllModes, setViewportMode } from './stores/browserStore';
 import { rebuildPageContent, fullRenderPage } from './io/network';
 import Icon from '../../Components/Icon';
 

@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import Icon from '../Icon';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppIcon } from './DesktopApps';
-import { useDesktopWindows } from './DesktopWindowManager';
+import { useDesktopActions } from './DesktopWindowManager';
 import ContextMenu, { useContextMenu } from './ContextMenu';
 import { detectSnapZone, snapBounds, snapPreviewStyle } from '../../lib/desktop/ui';
 import { storage } from '../../lib/storage';
@@ -11,18 +10,38 @@ import { storage } from '../../lib/storage';
  *  - No titlebar — each app renders its own inline WinControls.
  *  - Multi-tab windows use the right-click context menu for tab switching.
  * Dragging works on any non-interactive pixel of the top zone.
+ *
+ * Drag and resize never touch window state while the pointer is down: the
+ * frame is moved by writing `style` straight on the element per animation
+ * frame, and the final geometry is committed once on mouseup.  Routing it
+ * through `updateWindow` instead rebuilt the window array 60×/s, which
+ * re-rendered the whole desktop shell plus the dragged app's own subtree.
  */
-export default function DesktopWindow({ item, apps = [] }) {
-  const { updateWindow, focusWindow, closeWindow, addTab, closeTab, setActiveTab } = useDesktopWindows();
+export default React.memo(function DesktopWindow({ item, apps = [] }) {
+  // Actions only: this component renders `item`, never the window list.
+  const { updateWindow, focusWindow, closeWindow, addTab, closeTab, setActiveTab } = useDesktopActions();
   const [menu, openMenu, closeMenu] = useContextMenu();
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
   const [snapZone, setSnapZone] = useState(null);
   const [animClass, setAnimClass] = useState('');
+  const frameRef = useRef(null);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const dragPos = useRef(null);
+  const pointer = useRef({ x: 0, y: 0 });
+  const snapZoneRef = useRef(null);
   const resizeStart = useRef({ x: 0, y: 0, width: 0, height: 0 });
+  const resizeSize = useRef(null);
   const prevMinimized = useRef(item.minimized);
   const closingRef = useRef(false);
+
+  /* Publish a snap preview only when the zone actually changes — calling
+   * setState on every mousemove defeated the rAF throttling entirely. */
+  const publishSnapZone = useCallback(zone => {
+    if (snapZoneRef.current === zone) return;
+    snapZoneRef.current = zone;
+    setSnapZone(zone);
+  }, []);
 
   // Animate minimize/restore transitions
   useEffect(() => {
@@ -42,37 +61,37 @@ export default function DesktopWindow({ item, apps = [] }) {
   }, [item.minimized]);
 
   // Animated close: play exit animation then actually close
-  const animatedClose = () => {
+  const animatedClose = useCallback(() => {
     if (closingRef.current) return;
     closingRef.current = true;
     setAnimClass('closing');
     setTimeout(() => closeWindow(item.id), 200);
-  };
+  }, [closeWindow, item.id]);
 
-  const tabs = item.tabs || [];
+  const tabs = useMemo(() => item.tabs || [], [item.tabs]);
   const active = tabs.find(tab => tab.key === item.activeTab) || tabs[0];
 
   useEffect(() => {
     if (!dragging) return undefined;
     const snapAssist = storage.get('settings', {})?.window?.snapAssist;
+    const start = { x: item.x, y: item.y };
     let rafId = null;
-    let pendingPos = null;
+    const paint = () => {
+      rafId = null;
+      const el = frameRef.current;
+      const pos = dragPos.current;
+      if (!el || !pos) return;
+      el.style.left = `${pos.x}px`;
+      el.style.top = `${pos.y}px`;
+      if (snapAssist) publishSnapZone(detectSnapZone(pointer.current.x, pointer.current.y));
+    };
     const move = event => {
-      if (snapAssist) setSnapZone(detectSnapZone(event.clientX, event.clientY));
-      // Throttle position updates with requestAnimationFrame
-      pendingPos = {
+      pointer.current = { x: event.clientX, y: event.clientY };
+      dragPos.current = {
         x: Math.max(0, Math.min(event.clientX - dragOffset.current.x, window.innerWidth - 100)),
         y: Math.max(0, Math.min(event.clientY - dragOffset.current.y, window.innerHeight - 100)),
       };
-      if (!rafId) {
-        rafId = requestAnimationFrame(() => {
-          if (pendingPos) {
-            updateWindow(item.id, pendingPos);
-            pendingPos = null;
-          }
-          rafId = null;
-        });
-      }
+      if (!rafId) rafId = requestAnimationFrame(paint);
     };
     const stop = event => {
       if (rafId) {
@@ -80,35 +99,38 @@ export default function DesktopWindow({ item, apps = [] }) {
         rafId = null;
       }
       const zone = snapAssist ? detectSnapZone(event.clientX, event.clientY) : null;
+      publishSnapZone(null);
+      setDragging(false);
+      // Single commit for the whole gesture.
       if (zone === 'maximize') updateWindow(item.id, { maximized: true });
       else if (zone) updateWindow(item.id, snapBounds(zone));
-      setSnapZone(null);
-      setDragging(false);
+      else if (dragPos.current && (dragPos.current.x !== start.x || dragPos.current.y !== start.y)) {
+        updateWindow(item.id, dragPos.current);
+      }
+      dragPos.current = null;
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', stop);
     return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', stop); if (rafId) cancelAnimationFrame(rafId); };
-  }, [dragging, item.id, updateWindow]);
+  }, [dragging, item.id, item.x, item.y, updateWindow, publishSnapZone]);
 
   useEffect(() => {
     if (!resizing) return undefined;
     let rafId = null;
-    let pendingSize = null;
+    const paint = () => {
+      rafId = null;
+      const el = frameRef.current;
+      const size = resizeSize.current;
+      if (!el || !size) return;
+      el.style.width = `${size.width}px`;
+      el.style.height = `${size.height}px`;
+    };
     const move = event => {
-      // Throttle size updates with requestAnimationFrame
-      pendingSize = {
+      resizeSize.current = {
         width: Math.max(320, resizeStart.current.width + (event.clientX - resizeStart.current.x)),
         height: Math.max(220, resizeStart.current.height + (event.clientY - resizeStart.current.y)),
       };
-      if (!rafId) {
-        rafId = requestAnimationFrame(() => {
-          if (pendingSize) {
-            updateWindow(item.id, pendingSize);
-            pendingSize = null;
-          }
-          rafId = null;
-        });
-      }
+      if (!rafId) rafId = requestAnimationFrame(paint);
     };
     const stop = () => {
       if (rafId) {
@@ -116,13 +138,44 @@ export default function DesktopWindow({ item, apps = [] }) {
         rafId = null;
       }
       setResizing(false);
+      const size = resizeSize.current;
+      resizeSize.current = null;
+      if (size) updateWindow(item.id, size);
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', stop);
     return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', stop); if (rafId) cancelAnimationFrame(rafId); };
   }, [resizing, item.id, updateWindow]);
 
-  if (item.minimized) return null;
+  /* The element and the props injected into it are memoized: re-running
+   * `cloneElement` with fresh closures on every render re-rendered the entire
+   * app subtree whenever anything in the chrome changed. */
+  const appProps = useMemo(() => ({
+    windowed: true,
+    minimizeSelf: () => updateWindow(item.id, { minimized: true }),
+    maximizeSelf: () => updateWindow(item.id, { maximized: !item.maximized }),
+    isMaximized: item.maximized,
+  }), [item.id, item.maximized, updateWindow]);
+
+  // Render only the active tab — unmounting inactive tabs frees their
+  // component state, DOM nodes, and subscriptions.  When a tab becomes
+  // active again it mounts fresh (lazy components still load instantly
+  // from the module cache).
+  const content = useMemo(() => {
+    const tab = tabs.find(t => t.key === item.activeTab) || tabs[0];
+    if (!tab) return null;
+    return (
+      <div key={tab.key} className="h-full min-h-0">
+        <React.Suspense fallback={<div className="flex h-full w-full items-center justify-center text-xs text-white/30">Loading…</div>}>
+          {React.isValidElement(tab.component) ? React.cloneElement(tab.component, {
+            ...appProps,
+            isWindowActive: !item.minimized,
+            closeSelf: () => tabs.length > 1 ? closeTab(item.id, tab.key) : animatedClose(),
+          }) : tab.component}
+        </React.Suspense>
+      </div>
+    );
+  }, [tabs, item.activeTab, item.minimized, item.id, appProps, closeTab, animatedClose]);
 
   const style = item.maximized
     ? {
@@ -132,23 +185,6 @@ export default function DesktopWindow({ item, apps = [] }) {
       height: 'calc(100% - var(--tb-bottom, 48px))',
     }
     : { left: item.x, top: item.y, width: item.width, height: item.height };
-
-  const content = React.isValidElement(active?.component)
-    ? (
-      <React.Suspense fallback={<div className="flex h-full w-full items-center justify-center text-xs text-white/30">Loading…</div>}>
-        {React.cloneElement(active.component, {
-          windowed: true,
-          closeSelf: () => {
-            if (tabs.length > 1) closeTab(item.id, active.key);
-            else animatedClose();
-          },
-          minimizeSelf: () => updateWindow(item.id, { minimized: true }),
-          maximizeSelf: () => updateWindow(item.id, { maximized: !item.maximized }),
-          isMaximized: item.maximized,
-        })}
-      </React.Suspense>
-    )
-    : active?.component;
 
   // Drag from any non-interactive pixel in the top zone (app header area).
   const startDrag = event => {
@@ -208,9 +244,10 @@ export default function DesktopWindow({ item, apps = [] }) {
 
   return (
     <section
+      ref={frameRef}
       className={`nx-window ${item.maximized ? 'maximized' : ''} ${animClass}`}
       data-app={active?.appId || ''}
-      style={{ ...style, zIndex: item.zIndex }}
+      style={{ ...style, zIndex: item.zIndex, display: item.minimized ? 'none' : undefined }}
       onMouseDown={() => focusWindow(item.id)}
       onMouseDownCapture={startDrag}
       onContextMenu={windowMenu}
@@ -230,4 +267,4 @@ export default function DesktopWindow({ item, apps = [] }) {
       {dragging && snapZone && <div aria-hidden style={snapPreviewStyle(snapZone)} />}
     </section>
   );
-}
+});

@@ -7,7 +7,6 @@ import Icon from '../Icon';
  * call this hook.  React batches the state updates into a single render pass
  * because they all fire in the same microtask. */
 
-let _tick = 0;
 let _tickSubscribers = 0;
 let _tickInterval = null;
 const _tickListeners = new Set();
@@ -17,7 +16,6 @@ function subscribeTick(fn) {
   _tickSubscribers += 1;
   if (!_tickInterval) {
     _tickInterval = setInterval(() => {
-      _tick += 1;
       const now = new Date();
       for (const listener of _tickListeners) listener(now);
     }, 1000);

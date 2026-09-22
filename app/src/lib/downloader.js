@@ -47,7 +47,7 @@ let backendCheckedAt = 0;
 async function backendOnlineCached() {
   const now = Date.now();
   if (backendOnline === null || now - backendCheckedAt > 15000) {
-    backendOnline = Boolean(await backendHealth());
+    backendOnline = (await backendHealth())?.ok ?? false;
     backendCheckedAt = now;
   }
   return backendOnline;

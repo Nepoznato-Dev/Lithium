@@ -42,7 +42,7 @@ function ActivityGrid({ activeDates }) {
   );
 }
 
-export default function WelcomeScreen({ onSelectPrompt }) {
+export default function WelcomeScreen({ onSelectPrompt: _onSelectPrompt }) {
   const { activeDates } = useWorkspaceActivity();
 
   return (

@@ -191,25 +191,19 @@ export default function Calculator({ windowed = false, closeSelf, minimizeSelf, 
     if (Number.isFinite(result)) setExpression(`=${formatResult(result)}`);
   };
 
-  // Full keyboard support.
-  useEffect(() => {
-    const onKey = event => {
-      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.tagName === 'SELECT') return;
-      const { key } = event;
-      if (/^[0-9.]$/.test(key)) append(key);
-      else if (key === '+') append('+');
-      else if (key === '-') append('-');
-      else if (key === '*') append('*');
-      else if (key === '/') { event.preventDefault(); append('/'); }
-      else if (key === '%') append('%');
-      else if (key === '(' || key === ')') append(key);
-      else if (key === 'Enter' || key === '=') { event.preventDefault(); equals(); }
-      else if (key === 'Backspace') backspace();
-      else if (key === 'Escape') clearAll();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [append, backspace, clearAll, equals]);
+  // Keep arithmetic shortcuts inside this app; native controls retain Enter/Space.
+  const handleKeyDown = event => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const { key } = event;
+    if ((key === 'Enter' || key === ' ') && event.target.closest('button, a, [role="button"]')) return;
+    if (/^[0-9.]$/.test(key)) append(key);
+    else if (['+', '-', '*', '%', '(', ')'].includes(key)) append(key);
+    else if (key === '/') { event.preventDefault(); append('/'); }
+    else if (key === 'Enter' || key === '=') { event.preventDefault(); equals(); }
+    else if (key === 'Backspace') { event.preventDefault(); backspace(); }
+    else if (key === 'Escape') clearAll();
+  };
 
   const display = expression.startsWith('=') ? expression.slice(1) : expression;
 
@@ -232,7 +226,7 @@ export default function Calculator({ windowed = false, closeSelf, minimizeSelf, 
   const modeLabel = mode === 'standard' ? 'Standard' : CONVERTERS[mode]?.label || 'Calculator';
 
   return (
-    <div className="relative flex h-full min-w-0 flex-col bg-[#1e1e1e] text-white">
+    <div className="relative flex h-full min-w-0 flex-col bg-[#1e1e1e] text-white" role="group" aria-label="Calculator" tabIndex={0} onKeyDown={handleKeyDown}>
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.05]">
         <button className="calc-flat" onClick={() => setMenuOpen(value => !value)} aria-label="Menu" title="Calculator modes">

@@ -86,7 +86,7 @@ export function recordAppLaunch(appId, appName) {
 }
 
 export function recordDownload(name, url) {
-  return recordEvent({ type: 'download', title: name, url, appId: 'downloader' });
+  return recordEvent({ type: 'download', title: name, url, appId: 'store' });
 }
 
 export function recordBookmark(title, url) {

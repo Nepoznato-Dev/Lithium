@@ -1,0 +1,37 @@
+{
+  "name": "Lithium",
+  "short_name": "Lithium",
+  "description": "A lightweight, offline-first web desktop for games, music, browsing, files, AI, and quick tools.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "orientation": "any",
+  "icons": [
+    { "src": "/pwa-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/pwa-icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/pwa-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/Li-Logo.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "categories": ["productivity", "utilities"],
+  "file_handlers": [
+    {
+      "action": "/files",
+      "accept": { "*/*": [".*"] }
+    }
+  ],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "share_target": {
+    "action": "/share-target",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}

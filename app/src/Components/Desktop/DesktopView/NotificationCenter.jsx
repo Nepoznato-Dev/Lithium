@@ -7,6 +7,7 @@ import {
   markRead,
   subscribeToHistory,
 } from '../../../lib/desktop/notify';
+import { clearUnreadCount } from '../../../lib/services/notificationService';
 import { relativeTime, TONE_COLORS } from './wallpapers';
 
 /** Notification center popup. Owns its own subscription so the desktop tree
@@ -21,6 +22,10 @@ export default function NotificationCenter({ onCtxMenu }) {
   });
   useEffect(() => subscribeToHistory(setHistory), []);
   const unread = history.filter(entry => !entry.read).length;
+
+  // Clear the PWA app-icon badge when the notification center opens —
+  // the user has now seen the notifications.
+  useEffect(() => { clearUnreadCount(); }, []);
   return (
     <div className="nx-popup nx-notif-center" onClick={event => event.stopPropagation()}>
       <div className="nx-notif-header">

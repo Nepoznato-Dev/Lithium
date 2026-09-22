@@ -35,7 +35,7 @@ export function detectSnapZone(clientX, clientY) {
   // Check quarter zones when dragging to corners (not at the very top edge)
   if (clientY > 60) {
     const area = workArea();
-    const midX = area.left + area.width / 2;
+    const midX = area.left + area.width / 2; // eslint-disable-line no-unused-vars
     const midY = area.height / 2;
     const cornerThreshold = Math.min(area.width, area.height) * 0.2;
     if (clientX < area.left + cornerThreshold && clientY > midY - cornerThreshold) return 'quarter-top-left';
@@ -48,7 +48,7 @@ export function detectSnapZone(clientX, clientY) {
 
 /** Window bounds for a snap side, or null for maximize (caller sets maximized: true). */
 export function snapBounds(side) {
-  const prefs = storage.get('taskbar-prefs', { position: 'bottom' }).position;
+  const prefs = storage.get('taskbar-prefs', { position: 'bottom' }).position; // eslint-disable-line no-unused-vars
   const w = window.innerWidth;
   const h = window.innerHeight;
   const area = workArea();

@@ -2,8 +2,7 @@
  * Recursive folder tree with expand/collapse.
  * Lazy-loads children on expand via the namespace.
  */
-import { useState, useCallback } from 'preact/hooks';
-import Icon from '../../../../Components/Icon';
+import { useState } from 'preact/hooks';
 import { childrenOf, getEntry } from '../../../fileSystem.js';
 import SideRow from './SideRow.jsx';
 

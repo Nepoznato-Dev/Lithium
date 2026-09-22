@@ -19,10 +19,10 @@ let _dtInterval = null;
 
 /** Kill the page — used when theft is detected. */
 function kill() {
-  try { window.close(); } catch {}
+  try { window.close(); } catch { /* blocked */ }
   // Fallback: blank the document so nothing is visible.
-  try { document.documentElement.replaceChildren(); } catch {}
-  try { location.replace('about:blank'); } catch {}
+  try { document.documentElement.replaceChildren(); } catch { /* blocked */ }
+  try { location.replace('about:blank'); } catch { /* blocked */ }
 }
 
 // ─── Exported guards ─────────────────────────────────────────────────────────

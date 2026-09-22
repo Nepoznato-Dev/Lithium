@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 import { verifyPin } from '../../lib/desktop/ui';
-import { storage } from '../../lib/storage';
 import { useSettings } from '../SettingsContext';
 import Icon from '../Icon';
 
 /** Full-screen lock overlay. Mounts on top of everything until the correct
  *  PIN (or a no-PIN unlock, if the user hasn't set one) is entered. */
 export default function LockScreen({ onUnlock }) {
-  const { settings, updateSetting } = useSettings();
+  const { settings } = useSettings();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [now, setNow] = useState(() => new Date());

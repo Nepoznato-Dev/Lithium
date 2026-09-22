@@ -7,7 +7,7 @@
  * The search engine's own CSS renders the results natively.
  */
 
-import { fetchSearchHtml, getBackendUrl, SCRAPE_PROVIDERS, detectCaptcha, BraveCaptchaError } from './searchProxy';
+import { fetchSearchHtml, SCRAPE_PROVIDERS, detectCaptcha, BraveCaptchaError } from './searchProxy';
 
 /**
  * Fetch search results as raw HTML, sanitize, and inject a top bar.

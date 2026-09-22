@@ -21,8 +21,10 @@ import { DEFAULT_TRACKING_PARAMS, DEFAULT_COSMETIC_RULES, DEFAULT_SHIELD_LEVEL }
 // ── Event channel ────────────────────────────────────────────────────────────
 const EVENT = 'lithium:privacy';
 const STATS_KEY = 'lithium:privacy:stats';
-const RULES_KEY = 'lithium:privacy:rules';
+// eslint-disable-next-line no-unused-vars -- reserved for future rules persistence
+const _RULES_KEY = 'lithium:privacy:rules';
 const DOMAINS_KEY = 'lithium:privacy:domains';
+const HISTORY_KEY = 'lithium:privacy:history';
 
 function emit(type, detail) {
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { type, ...detail, ts: Date.now() } }));
@@ -66,6 +68,8 @@ function bump(key, amount = 1) {
   stats[key] = (stats[key] || 0) + amount;
   persistStats(stats);
   emit('stats', { key, value: stats[key], total: stats });
+  // Snapshot history if the day has changed
+  maybeSnapshotHistory(stats);
   return stats;
 }
 
@@ -78,6 +82,42 @@ export function getStats() {
 export function resetStats() {
   persistStats(emptyStats());
   emit('stats-reset');
+}
+
+// ── Stats history ─────────────────────────────────────────────────────────────
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadHistory() {
+  try { return storage.get(HISTORY_KEY, []); } catch { return []; }
+}
+
+function persistHistory(history) {
+  storage.set(HISTORY_KEY, history);
+}
+
+/** Snapshot current stats for today if not already done. Keeps last 7 days. */
+function maybeSnapshotHistory(stats) {
+  const today = todayStr();
+  let history = loadHistory();
+  const last = history.length > 0 ? history[history.length - 1] : null;
+  if (last && last.date === today) return; // already snapshotted today
+  history.push({
+    date: today,
+    adsBlocked: stats.adsBlocked || 0,
+    trackersPrevented: stats.trackersPrevented || 0,
+    dataSavedBytes: stats.dataSavedBytes || 0,
+    pagesProcessed: stats.pagesProcessed || 0,
+  });
+  // Keep only the last 7 days
+  if (history.length > 7) history = history.slice(-7);
+  persistHistory(history);
+}
+
+/** Get the last 7 days of privacy stats snapshots. */
+export function getHistory() {
+  return loadHistory();
 }
 
 // ── Per-domain rules ─────────────────────────────────────────────────────────

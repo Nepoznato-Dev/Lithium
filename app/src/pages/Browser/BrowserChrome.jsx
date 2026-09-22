@@ -4,10 +4,10 @@
  * so the active tab visually merges into the navigation bar.
  */
 import { useRef, useEffect } from 'preact/hooks';
-import { tabs, activeTabId, activeTab, currentUrl, navigateTab, setTabLoading } from './stores/tabStore';
-import { internalRoute, findBarOpen, shieldsPanelOpen, backendUp } from './stores/browserStore';
+import { tabs, activeTab, currentUrl, navigateTab, clearTabSession } from './stores/tabStore';
+import { internalRoute, backendUp } from './stores/browserStore';
 import { bookmarks } from './stores/bookmarksStore';
-import { historyEntries, clearHistory } from './stores/historyStore';
+import { clearHistory } from './stores/historyStore';
 import { checkBackendHealth } from './io/network';
 import { loadAll } from './io/persistence';
 import { installKeyboardShortcuts } from './io/keyboard';
@@ -63,7 +63,7 @@ const LITHIUM_PAGES = {
   privacy: PrivacyPage,
 };
 
-export default function BrowserChrome({ windowed = false, closeSelf, minimizeSelf, maximizeSelf, isMaximized, initialUrl }) {
+export default function BrowserChrome({ windowed = false, closeSelf, minimizeSelf, maximizeSelf, isMaximized, initialUrl, isWindowActive = true }) {
   const { settings } = useSettings();
   const omniboxRef = useRef(null);
   // Resolve lithium:// protocol URLs to internal page components
@@ -94,8 +94,8 @@ export default function BrowserChrome({ windowed = false, closeSelf, minimizeSel
 
   // Keyboard shortcuts
   useEffect(() => {
-    return installKeyboardShortcuts(omniboxRef);
-  }, []);
+    if (isWindowActive) return installKeyboardShortcuts(omniboxRef);
+  }, [isWindowActive]);
 
   // Deep-link: navigate to initialUrl if provided
   useEffect(() => {
@@ -103,7 +103,7 @@ export default function BrowserChrome({ windowed = false, closeSelf, minimizeSel
       const tab = activeTab.value;
       navigateTab(tab.id, initialUrl);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initialUrl]);
 
   // Listen for browser-navigate events (from Viewport link clicks)
   useEffect(() => {
@@ -122,6 +122,7 @@ export default function BrowserChrome({ windowed = false, closeSelf, minimizeSel
   useEffect(() => {
     const handler = () => {
       clearHistory();
+      clearTabSession();
       bookmarks.value = [];
     };
     window.addEventListener('browser-clear-data', handler);

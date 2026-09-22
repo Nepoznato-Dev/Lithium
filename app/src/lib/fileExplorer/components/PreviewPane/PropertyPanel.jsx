@@ -2,7 +2,6 @@
  * Metadata display for a selected entry.
  * Shows name, type, size, dates, cold status.
  */
-import Icon from '../../../../Components/Icon';
 
 function formatSize(bytes) {
   if (!bytes) return '0 B';
@@ -11,7 +10,7 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export default function PropertyPanel({ entry, tree }) {
+export default function PropertyPanel({ entry, tree: _tree }) {
   if (!entry) return null;
 
   const rows = [

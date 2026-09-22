@@ -2,7 +2,6 @@
  * Keyboard shortcut handler for the file explorer.
  */
 import { useCallback, useEffect } from 'react';
-import { selectedItems, view, nav } from '../state/signals.jsx';
 
 export function useKeyboard({ onCopy, onCut, onPaste, onDelete, onRename, onOpen, onEscape, onSelectAll, onUp }) {
   const onKeyDown = useCallback((event) => {

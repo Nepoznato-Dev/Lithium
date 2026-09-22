@@ -32,8 +32,10 @@ export function subscribeAi(handler) {
 
 // ── Storage keys ─────────────────────────────────────────────────────────────
 const SESSIONS_KEY = 'lithium:ai:sessions';
-const ACTIVE_MODEL_KEY = 'lithium:ai:active-model';
-const ACTIVE_PROVIDER_KEY = 'lithium:ai:active-provider';
+/** Shared with lib/ai/providers.js so the desktop, Cortex and every BYO-key
+ *  surface agree on one "active provider" instead of two competing ones. */
+const ACTIVE_MODEL_KEY = 'ai-active-model';
+const ACTIVE_PROVIDER_KEY = 'ai-provider';
 const SYSTEM_PROMPT_KEY = 'lithium:ai:system-prompt';
 
 // ── Session management ───────────────────────────────────────────────────────
@@ -49,13 +51,17 @@ function persistSessions(sessions) {
   storage.set(SESSIONS_KEY, sessions);
 }
 
-/** Create a new conversation session.  Returns the session object. */
-export function createSession({ title = 'New Chat', model, provider, context } = {}) {
+/** Create a new conversation session.  Returns the session object.
+ *  Accepts an options object or a bare title string, since most callers just
+ *  want to name the chat they are about to fill. */
+export function createSession(options = {}) {
+  const { title = 'New Chat', model, provider, context } =
+    typeof options === 'string' ? { title: options } : options;
   const session = {
     id: makeId(),
     title,
-    model: model || getActiveModel(),
-    provider: provider || getActiveProvider(),
+    model: model || getActiveModel() || undefined,
+    provider: provider || getActiveProvider() || undefined,
     messages: [],
     context: context || null,
     createdAt: Date.now(),
@@ -88,6 +94,10 @@ export function appendMessage(sessionId, message) {
     content: message.content || '',
     ts: Date.now(),
     ...(message.context ? { context: message.context } : {}),
+    // What a Lite reply cost, so the transcript can say so after a reload.
+    ...(message.usage ? { usage: message.usage } : {}),
+    // Thinking mode used for this reply, shown in the transcript.
+    ...(message.thinkingMode ? { thinkingMode: message.thinkingMode } : {}),
   });
   sessions[idx].updatedAt = Date.now();
   // Auto-title from first user message
@@ -97,6 +107,30 @@ export function appendMessage(sessionId, message) {
   persistSessions(sessions);
   emit('message-appended', { sessionId, message: sessions[idx].messages.at(-1) });
   return sessions[idx];
+}
+
+/** Replace a session's messages wholesale — the auto-compactor's only move.
+ *  The summaries it writes are ordinary stored messages from then on. */
+function replaceMessages(sessionId, messages) {
+  const sessions = loadSessions();
+  const idx = sessions.findIndex(s => s.id === sessionId);
+  if (idx < 0) return null;
+  sessions[idx].messages = messages;
+  sessions[idx].updatedAt = Date.now();
+  persistSessions(sessions);
+  emit('session-compacted', { sessionId, count: messages.length });
+  return sessions[idx];
+}
+
+/** What a stored message looks like on the wire: its own text, plus the context
+ *  that rode on its turn, plus a label when it is a compaction summary — the
+ *  model is told what it is reading, the transcript already shows the human. */
+function wireText(msg) {
+  const head = msg.role === 'system' && msg.compacted
+    ? `Summary of the ${msg.compacted.replaced} messages that came before:\n${msg.content}`
+    : String(msg.content || '');
+  // An attachment-only turn has no text of its own, hence the trim.
+  return (msg.context?.text ? `${head}\n\n${msg.context.text}` : head).trim();
 }
 
 /** Delete a session. */
@@ -186,49 +220,146 @@ export function buildContext(sources) {
 }
 
 // ── Quick chat helper ────────────────────────────────────────────────────────
-/** Send a single message and get a response.  Creates a session if needed.
- *  This is the simplest way for an app to talk to the AI.
+/** Send one message in a session and return the assistant reply.
+ *  The heart of the service: every app that wants the AI calls this (or
+ *  quickChat) so conversations all land in one place Cortex can show.
+ *
+ *  @param {string} sessionId — from createSession()
+ *  @param {string} text — the user's prompt
+ *  @param {Object} [options]
+ *  @param {Object} [options.context] — buildContext() payload for THIS turn
+ *  @param {Array} [options.attachments] — readFiles() records to fold into THIS turn
+ *  @param {Function} [options.onToken] — streams deltas when given
+ *  @param {Function} [options.onUsage] — Lite tier: called with the credit and
+ *    token receipt for this reply, which is also stored on the assistant message
+ *  @param {AbortSignal} [options.signal] — cancels the upstream request
+ *  @param {string} [options.provider] / [options.model] — one-off overrides
+ *  @param {string} [options.system] — replaces the stored system prompt for this turn
+ *  @returns {Promise<string>} the full assistant text
+ */
+export async function sendMessage(sessionId, text, { context, attachments, onToken, onUsage, onReasoning, signal, provider, model, system, thinkingMode } = {}) {
+  const providerId = provider || getSession(sessionId)?.provider || getActiveProvider();
+  const modelId = model || getSession(sessionId)?.model || getActiveModel();
+
+  // Dynamic import keeps the provider/model stack out of the desktop bundle —
+  // this service is loaded by the shell for its session list alone.
+  const { chatCompletion, streamChatCompletion, DEFAULT_PROVIDER, modelSupportsVision, acceptsImageParts } =
+    await import('../ai/providers');
+
+  // Resolve the thinking budget from the mode id. Lite gets a capped budget.
+  let thinkingBudget = 0;
+  if (thinkingMode && providerId !== 'local') {
+    const { liteBudget, thinkingBudget: resolveBudget } = await import('../ai/thinkingModes');
+    thinkingBudget = providerId === DEFAULT_PROVIDER ? liteBudget(thinkingMode) : resolveBudget(thinkingMode);
+  }
+
+  // Attached files belong to the turn that carried them, like page context does:
+  // text becomes a block appended to the message, an image becomes a caption —
+  // or a genuine content part, when the model can see and the provider is
+  // OpenAI-shaped enough to carry one.
+  let turn = context || null;
+  let imageBlock = null;
+  if (attachments?.length) {
+    const { serializeAttachments, imageParts } = await import('../ai/attachments');
+    const vision = modelSupportsVision(modelId) && acceptsImageParts(providerId);
+    turn = {
+      text: [context?.text, serializeAttachments(attachments, { vision })].filter(Boolean).join('\n\n'),
+      sources: [...(context?.sources || []), ...attachments.map(att => att.name)],
+      ts: context?.ts || Date.now(),
+    };
+    // The pixels live in this request only. Storing a base64 image on the
+    // message would put it in localStorage and in every later turn's history.
+    if (vision) imageBlock = imageParts(attachments);
+  }
+
+  // Price the turn that is about to go out, and fold the old end of the thread
+  // away before it rather than after. A provider that will not summarize must
+  // not swallow the message, so this failure only means the turn goes over budget.
+  const systemPrompt = system || getSystemPrompt();
+  const history = getSession(sessionId)?.messages || [];
+  const { estimateContextTokens } = await import('../ai/contextEstimate');
+  if (estimateContextTokens([...history, { role: 'user', content: text, context: turn }], systemPrompt, modelId).shouldCompact) {
+    const { compactMessages } = await import('../ai/compactor');
+    const compacted = await compactMessages(history, {
+      provider: providerId, model: modelId, signal,
+    }).catch(() => null);
+    if (compacted) replaceMessages(sessionId, compacted.messages);
+  }
+
+  if (!appendMessage(sessionId, { role: 'user', content: text, context: turn })) {
+    throw new Error(`no AI session '${sessionId}'`);
+  }
+  const session = getSession(sessionId);
+
+  // Page/file/selection context belongs to the turn that carried it, so it is
+  // composed in here rather than written into the stored message.
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...session.messages.map(msg => ({ role: msg.role, content: wireText(msg) })),
+  ];
+
+  if (imageBlock?.length) {
+    const current = messages[messages.length - 1];
+    const words = String(current.content).trim();
+    current.content = [
+      ...(words ? [{ type: 'text', text: words }] : []),
+      ...imageBlock,
+    ];
+  }
+
+  // Keep the receipt as well as forwarding it: it belongs to the message it
+  // describes, and a reply is priced by the tokens it used.
+  let usage = null;
+  const reportUsage = receipt => { usage = receipt; onUsage?.(receipt); };
+
+  let reply;
+  // The tool-calling loop replaces a single streamChatCompletion for the
+  // lithium provider: it streams text normally but intercepts model tool_calls,
+  // runs them via apiManager, and re-sends the conversation until the model
+  // stops calling tools. Falls through to the normal path for other providers
+  // or when no skills are offered.
+  if (onToken && providerId === DEFAULT_PROVIDER) {
+    const { buildSkillRegistry } = await import('../ai/skillRegistry');
+    const { isOffered } = await import('../ai/skillPermissions');
+    const registry = buildSkillRegistry();
+    const hasSkills = [...registry.values()].some(s => isOffered(s.id, s.permission));
+    if (hasSkills) {
+      const { runToolLoop } = await import('../ai/toolLoop');
+      reply = await runToolLoop({
+        messages,
+        model: modelId,
+        signal,
+        onToken,
+        onReasoning,
+        onUsage: reportUsage,
+        thinkingBudget,
+      });
+    } else {
+      reply = await streamChatCompletion(providerId, messages, { model: modelId, signal, onToken, onUsage: reportUsage, onReasoning, thinkingBudget });
+    }
+  } else if (onToken) {
+    reply = await streamChatCompletion(providerId, messages, { model: modelId, signal, onToken, onUsage: reportUsage, onReasoning, thinkingBudget });
+  } else {
+    reply = await chatCompletion(providerId, messages, { model: modelId, signal, onUsage: reportUsage, thinkingBudget });
+  }
+
+  appendMessage(sessionId, { role: 'assistant', content: reply || '', usage, thinkingMode });
+  emit('message-replied', { sessionId, usage });
+  return reply || '';
+}
+
+/**
+ * Send a single message and get a response.  Creates a session if needed.
+ * This is the simplest way for an app to talk to the AI.
  *
  *  @param {string} userMessage — the user's prompt
- *  @param {Object} [options]
- *  @param {Object} [options.context] — context from buildContext()
- *  @param {string} [options.sessionId] — existing session to append to
- *  @param {string} [options.model] — override model
- *  @param {string} [options.provider] — override provider
+ *  @param {Object} [options] — see sendMessage(), plus [options.sessionId]
  *  @returns {Promise<{ session: Object, response: string }>}
  */
 export async function quickChat(userMessage, options = {}) {
-  let sessionId = options.sessionId;
-  if (!sessionId) {
-    const session = createSession({ context: options.context });
-    sessionId = session.id;
-  }
-  // Append user message
-  appendMessage(sessionId, { role: 'user', content: userMessage, context: options.context });
-
-  // Build the full prompt
-  const session = getSession(sessionId);
-  if (!session) throw new Error('Session not found');
-
-  const messages = [
-    { role: 'system', content: getSystemPrompt() },
-    ...session.messages.map(m => ({ role: m.role, content: m.content })),
-  ];
-
-  // Route to the appropriate provider
-  let response = '';
-  try {
-    const { chatCompletion } = await import('../ai/providers');
-    const model = options.model || session.model;
-    const provider = options.provider || session.provider;
-    response = await chatCompletion(messages, { model, provider });
-  } catch (err) {
-    response = `Error: ${err.message}`;
-  }
-
-  // Append assistant response
-  appendMessage(sessionId, { role: 'assistant', content: response });
-
+  const sessionId = options.sessionId
+    || createSession({ context: options.context, model: options.model, provider: options.provider }).id;
+  const response = await sendMessage(sessionId, userMessage, options);
   return { session: getSession(sessionId), response };
 }
 
@@ -253,7 +384,7 @@ export async function exportSessionToFile(sessionId) {
   const session = getSession(sessionId);
   if (!session) return null;
   try {
-    const { loadTree, saveTree, createEntry, SYS } = await import('../fileSystem');
+    const { loadTree, saveTree, createEntry } = await import('../fileSystem');
     const { SYS: SYS_IDS } = await import('../fileSystem/systemDirs');
     const tree = loadTree();
     // Ensure the AI folder exists
@@ -273,7 +404,7 @@ export async function exportSessionToFile(sessionId) {
     saveTree(next);
     emit('session-exported', { sessionId, fileName });
     return next[next.length - 1]?.id || null;
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -307,5 +438,5 @@ export async function autoSaveSession(sessionId) {
       const next = createEntry(tree, { name: fileName, type: 'text', parentId: SYS_IDS.AI, content });
       saveTree(next);
     }
-  } catch {}
+  } catch { /* autosave is best-effort — a missing AI folder must not break chat */ }
 }

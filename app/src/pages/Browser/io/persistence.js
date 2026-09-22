@@ -10,6 +10,7 @@ import { loadBrowserSettings } from '../stores/settingsStore';
 import { loadTopSites } from '../stores/newTabStore';
 import { loadReadingList } from '../stores/readingListStore';
 import { globalStats } from '../stores/shieldsStore';
+import { clearTabSession } from '../stores/tabStore';
 
 const KEYS = {
   bookmarks: 'browser-bookmarks',
@@ -64,5 +65,6 @@ export function saveReadingListToDisk(list) {
 
 /** Clear all browser persisted data. */
 export function clearAllBrowserData() {
+  clearTabSession();
   Object.values(KEYS).forEach(key => storage.set(key, null));
 }

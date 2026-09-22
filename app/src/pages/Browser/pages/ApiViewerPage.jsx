@@ -2,61 +2,27 @@
  * ApiViewerPage — internal API catalog viewer at lithium://api.
  * Displays all registered internal APIs grouped by namespace,
  * with parameter schemas and allowed caller information.
+ *
+ * The catalog is read live from apiManager rather than mirrored here: a copy
+ * drifts the moment an API is added or removed, and this page is the place
+ * users trust to tell them what actually exists.
  */
 import { useState } from 'preact/hooks';
 import Icon from '../../../Components/Icon';
-
-const _API_CATALOG = [
-  { api: 'system.get_info', ns: 'system', desc: 'Build version, time and platform details', callers: ['system','user','widget','model'], params: [] },
-  { api: 'system.open_start_menu', ns: 'system', desc: 'Open the Start menu', callers: ['system','user','widget','model'], params: [] },
-  { api: 'system.close_start_menu', ns: 'system', desc: 'Close the Start menu', callers: ['system','user','widget','model'], params: [] },
-  { api: 'system.show_desktop', ns: 'system', desc: 'Minimize every open window', callers: ['system','user','widget','model'], params: [] },
-  { api: 'system.get_volume', ns: 'system', desc: 'Current taskbar volume level', callers: ['system','user','widget','model'], params: [] },
-  { api: 'system.set_volume', ns: 'system', desc: 'Set the taskbar volume level', callers: ['system','user','widget','model'], params: [{ name: 'level', type: 'number', required: true, min: 0, max: 100 }] },
-  { api: 'system.notify', ns: 'system', desc: 'Show a desktop toast notification', callers: ['system','user','widget','model'], params: [
-    { name: 'title', type: 'string', required: true }, { name: 'body', type: 'string', required: false },
-    { name: 'tone', type: 'string', required: false, values: ['info','success','warning','error'] }] },
-  { api: 'apps.list', ns: 'apps', desc: 'List every registered desktop app', callers: ['system','user','widget','model'], params: [] },
-  { api: 'apps.open', ns: 'apps', desc: 'Open (or focus) a desktop app window', callers: ['system','user','widget','model'], params: [{ name: 'id', type: 'string', required: true }] },
-  { api: 'apps.close', ns: 'apps', desc: 'Close a desktop app window', callers: ['system','user','widget','model'], params: [{ name: 'id', type: 'string', required: true }] },
-  { api: 'apps.focus', ns: 'apps', desc: 'Bring an app window to the front', callers: ['system','user','widget','model'], params: [{ name: 'id', type: 'string', required: true }] },
-  { api: 'settings.get', ns: 'settings', desc: 'Read one setting (or all) by dotted path', callers: ['system','user','widget','model'], params: [{ name: 'path', type: 'string', required: false }] },
-  { api: 'settings.set', ns: 'settings', desc: 'Change a setting by dotted path', callers: ['system','user','widget','model'], params: [{ name: 'path', type: 'string', required: true }, { name: 'value', type: 'any', required: true }] },
-  { api: 'fs.list', ns: 'fs', desc: 'List entries of a virtual-FS folder', callers: ['system','user','widget','model'], params: [{ name: 'folder', type: 'string', required: false }] },
-  { api: 'fs.read', ns: 'fs', desc: 'Read a text file content by id', callers: ['system','user','widget','model'], params: [{ name: 'id', type: 'string', required: true }] },
-  { api: 'fs.write', ns: 'fs', desc: 'Create or overwrite a text file', callers: ['system','user','widget','model'], params: [{ name: 'name', type: 'string', required: true }, { name: 'parent', type: 'string', required: false }, { name: 'content', type: 'string', required: false }] },
-  { api: 'fs.create_folder', ns: 'fs', desc: 'Create a folder in the virtual FS', callers: ['system','user','widget','model'], params: [{ name: 'name', type: 'string', required: true }, { name: 'parent', type: 'string', required: false }] },
-  { api: 'fs.delete', ns: 'fs', desc: 'Delete an entry (recursive for folders)', callers: ['system','user','widget','model'], params: [{ name: 'id', type: 'string', required: true }] },
-  { api: 'fs.tree', ns: 'fs', desc: 'Recursive overview of a folder', callers: ['system','user','widget','model'], params: [{ name: 'folder', type: 'string', required: false }] },
-  { api: 'fs.append', ns: 'fs', desc: 'Append text to a file', callers: ['system','user','widget','model'], params: [{ name: 'name', type: 'string', required: true }, { name: 'parent', type: 'string', required: false }, { name: 'content', type: 'string', required: false }] },
-  { api: 'fs.move', ns: 'fs', desc: 'Move an entry into another folder', callers: ['system','user','widget','model'], params: [{ name: 'id', type: 'string', required: true }, { name: 'parent', type: 'string', required: true }] },
-  { api: 'fs.rename', ns: 'fs', desc: 'Rename an entry', callers: ['system','user','widget','model'], params: [{ name: 'id', type: 'string', required: true }, { name: 'name', type: 'string', required: true }] },
-  { api: 'weather.get', ns: 'weather', desc: 'Cached local weather', callers: ['system','user','widget','model'], params: [] },
-  { api: 'ai.list_providers', ns: 'ai', desc: 'Configured AI providers', callers: ['system','user','widget','model'], params: [] },
-  { api: 'ai.get_tier', ns: 'ai', desc: 'Active on-device inference tier', callers: ['system','user','widget','model'], params: [] },
-  { api: 'ai.set_tier', ns: 'ai', desc: 'Switch the on-device inference tier', callers: ['system','user','widget','model'], params: [{ name: 'tier', type: 'string', required: true, values: ['lite','efficient','performance','ultra'] }] },
-  { api: 'models.list', ns: 'models', desc: 'Model catalog with download status', callers: ['system','user','widget','model'], params: [] },
-  { api: 'cloud.list_drives', ns: 'cloud', desc: 'Connected external cloud drives', callers: ['system','user','widget','model'], params: [] },
-  { api: 'cloud.test_drive', ns: 'cloud', desc: 'Test a cloud drive credentials', callers: ['system','user','widget','model'], params: [{ name: 'id', type: 'string', required: true }] },
-  { api: 'memory.list', ns: 'memory', desc: 'All memory keys with timestamps', callers: ['system','user','widget','model'], params: [] },
-  { api: 'memory.read', ns: 'memory', desc: 'Read one memory entry by key', callers: ['system','user','widget','model'], params: [{ name: 'key', type: 'string', required: true }] },
-  { api: 'memory.write', ns: 'memory', desc: 'Store a memory entry', callers: ['system','user','widget','model'], params: [{ name: 'key', type: 'string', required: true }, { name: 'value', type: 'string', required: true }] },
-  { api: 'memory.delete', ns: 'memory', desc: 'Delete a memory entry', callers: ['system','user','widget','model'], params: [{ name: 'key', type: 'string', required: true }] },
-  { api: 'widgets.list', ns: 'widgets', desc: 'User widgets with enabled state', callers: ['system','user','widget','model'], params: [] },
-  { api: 'widgets.set_enabled', ns: 'widgets', desc: 'Enable or disable a widget', callers: ['system','user','model'], params: [{ name: 'id', type: 'string', required: true }, { name: 'enabled', type: 'boolean', required: true }] },
-];
+import { getCatalog } from '../../../lib/ai/apiManager';
 
 const NS_ICONS = {
   system: 'Monitor',
   apps: 'LayoutGrid',
   settings: 'Settings',
-  fs: 'FolderTree',
+  fs: 'Folder',
   weather: 'Cloud',
-  ai: 'Brain',
-  models: 'Box',
+  ai: 'BrainCircuit',
+  knowledge: 'Library',
   cloud: 'HardDrive',
   memory: 'Database',
-  widgets: 'Widget',
+  widgets: 'Puzzle',
+  code: 'Code',
 };
 
 const NS_COLORS = {
@@ -66,14 +32,15 @@ const NS_COLORS = {
   fs: 'text-green-400',
   weather: 'text-cyan-400',
   ai: 'text-pink-400',
-  models: 'text-amber-400',
+  knowledge: 'text-rose-400',
   cloud: 'text-sky-400',
   memory: 'text-emerald-400',
   widgets: 'text-violet-400',
+  code: 'text-yellow-400',
 };
 
 export default function ApiViewerPage() {
-  const catalog = _API_CATALOG;
+  const catalog = getCatalog();
   const [query, setQuery] = useState('');
   const [expandedApi, setExpandedApi] = useState(null);
 
