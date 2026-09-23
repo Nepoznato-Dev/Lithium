@@ -1,12 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useId, useState, useEffect, useRef } from 'react';
 import { ACCENT_OPTIONS } from '../../lib/settings';
 import Icon from '../../Components/Icon';
 
-export function EnhancedToggle({ value, checked, onChange }) {
+const RowLabelContext = createContext(undefined);
+
+export function EnhancedToggle({ value, checked, onChange, 'aria-label': ariaLabel }) {
+  const labelId = useContext(RowLabelContext);
   const isOn = value !== undefined ? Boolean(value) : Boolean(checked);
   return (
     <button
+      type="button"
       role="switch"
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabel ? undefined : labelId}
       aria-checked={isOn}
       onClick={() => onChange(!isOn)}
       className={`settings-toggle ${isOn ? 'on' : ''}`}
@@ -16,9 +22,33 @@ export function EnhancedToggle({ value, checked, onChange }) {
   );
 }
 
-export function EnhancedSlider({ value, min, max, step, suffix, onChange }) {
+export function EnhancedSlider({ value, min, max, step, suffix, onChange, onDecrement, onIncrement, decrementLabel, incrementLabel }) {
+  const labelId = useContext(RowLabelContext);
   const [draft, setDraft] = useState(value);
   const dragging = useRef(false);
+  const pending = useRef(null);
+  const changeRef = useRef(onChange);
+  changeRef.current = onChange;
+
+  useEffect(() => {
+    const commitPending = () => {
+      if (pending.current === null) return;
+      const next = pending.current;
+      pending.current = null;
+      dragging.current = false;
+      changeRef.current(next);
+    };
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') commitPending();
+    };
+    window.addEventListener('pagehide', commitPending);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      commitPending();
+      window.removeEventListener('pagehide', commitPending);
+      document.removeEventListener('visibilitychange', onHidden);
+    };
+  }, []);
 
   // Sync external changes when not dragging
   useEffect(() => {
@@ -29,20 +59,62 @@ export function EnhancedSlider({ value, min, max, step, suffix, onChange }) {
 
   return (
     <div className="settings-slider-wrap">
+      {onDecrement && (
+        <button
+          type="button"
+          className="settings-slider-step-btn"
+          aria-label={decrementLabel || 'Decrease'}
+          onClick={() => onDecrement(Math.max(min, draft - (step || 1)))}
+        >
+          {decrementLabel || '−'}
+        </button>
+      )}
       <input
         type="range"
         className="settings-slider"
+        aria-labelledby={labelId}
+        aria-valuetext={`${draft}${suffix || ''}`}
         min={min}
         max={max}
         step={step || 1}
         value={draft}
-        onPointerDown={() => { dragging.current = true; }}
-        onPointerUp={() => { dragging.current = false; onChange(draft); }}
-        onChange={e => setDraft(Number(e.target.value))}
+        onPointerDown={e => {
+          dragging.current = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }}
+        onPointerUp={e => {
+          dragging.current = false;
+          pending.current = null;
+          onChange(Number(e.currentTarget.value));
+        }}
+        onBlur={e => {
+          if (pending.current !== null) {
+            pending.current = null;
+            dragging.current = false;
+            onChange(Number(e.currentTarget.value));
+          }
+        }}
+        onPointerCancel={() => { pending.current = null; dragging.current = false; setDraft(value); }}
+        onInput={e => {
+          const next = Number(e.currentTarget.value);
+          setDraft(next);
+          pending.current = dragging.current ? next : null;
+          if (!dragging.current) onChange(next);
+        }}
         style={{
-          background: `linear-gradient(to right, var(--accent) ${pct}%, rgba(255,255,255,0.1) ${pct}%)`,
+          background: `linear-gradient(to right, var(--accent) ${pct}%, var(--ui-border) ${pct}%)`,
         }}
       />
+      {onIncrement && (
+        <button
+          type="button"
+          className="settings-slider-step-btn"
+          aria-label={incrementLabel || 'Increase'}
+          onClick={() => onIncrement(Math.min(max, draft + (step || 1)))}
+        >
+          {incrementLabel || '+'}
+        </button>
+      )}
       <span className="settings-slider-value">
         {draft}{suffix || ''}
       </span>
@@ -51,12 +123,15 @@ export function EnhancedSlider({ value, min, max, step, suffix, onChange }) {
 }
 
 export function SegmentedControl({ options, value, onChange }) {
+  const labelId = useContext(RowLabelContext);
   return (
-    <div className="settings-segmented">
+    <div className="settings-segmented" role="group" aria-labelledby={labelId}>
       {options.map(opt => (
         <button
           key={opt.value}
           className={`settings-segmented-btn ${value === opt.value ? 'active' : ''}`}
+          type="button"
+          aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
         >
           {opt.label}
@@ -68,7 +143,6 @@ export function SegmentedControl({ options, value, onChange }) {
 
 export function ColorPickerSwatch({ value, onChange }) {
   const [draft, setDraft] = useState(value);
-  const open = useRef(false);
 
   useEffect(() => { setDraft(value); }, [value]);
 
@@ -81,10 +155,13 @@ export function ColorPickerSwatch({ value, onChange }) {
       <Icon name="Palette" size={14} />
       <input
         type="color"
+        aria-label="Custom color"
         value={draft}
-        onFocus={() => { open.current = true; }}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => { open.current = false; onChange(draft); }}
+        onChange={e => {
+          const next = e.currentTarget.value;
+          setDraft(next);
+          onChange(next);
+        }}
         style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
       />
     </label>
@@ -100,6 +177,9 @@ export function AccentPicker({ value, onChange }) {
           className={`settings-accent-swatch ${value === opt.value ? 'active' : ''}`}
           style={{ backgroundColor: opt.value, '--swatch-color': opt.value }}
           title={opt.label}
+          type="button"
+          aria-label={opt.label}
+          aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
         />
       ))}
@@ -118,6 +198,9 @@ export function NotifPositionPicker({ value, onChange }) {
           key={pos}
           className={`settings-notif-cell ${value === pos ? 'active' : ''}`}
           title={pos}
+          type="button"
+          aria-label={pos.replaceAll('-', ' ')}
+          aria-pressed={value === pos}
           onClick={() => onChange(pos)}
         />
       ))}
@@ -126,13 +209,14 @@ export function NotifPositionPicker({ value, onChange }) {
 }
 
 export function SettingsRow({ title, description, children }) {
+  const labelId = useId();
   return (
     <div className="settings-row">
       <div className="settings-row-info">
-        <div className="settings-row-title">{title}</div>
+        <div id={labelId} className="settings-row-title">{title}</div>
         {description && <div className="settings-row-desc">{description}</div>}
       </div>
-      {children}
+      <RowLabelContext.Provider value={labelId}>{children}</RowLabelContext.Provider>
     </div>
   );
 }

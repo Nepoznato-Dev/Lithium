@@ -2,8 +2,14 @@
  * Virtualized Gallery view — only renders visible image thumbnails.
  * Uses ResizeObserver for accurate column count and IntersectionObserver
  * for lazy thumbnail loading to prevent I/O storms.
+ *
+ * Parallel Solid implementation for low-end mode. The Preact one funnels every
+ * resolved thumbnail into one shared `loadedImages` object, so one late image
+ * re-renders all ~30 visible tiles; the island gives each tile its own URL
+ * signal. See `src/lib/island.jsx` for the mount contract.
  */
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, memo } from 'react';
+import Island, { useLowEnd } from '../../island.jsx';
 import { getThumbUrl, getCachedThumbUrl } from '../thumbCache.js';
 import { preview } from '../state/signals.jsx';
 
@@ -12,7 +18,9 @@ const MIN_COL_WIDTH = 125;
 const GAP = 12;
 const OVERSCAN_ROWS = 3;
 
-export default function GalleryVirtualized({ allImages, openItem, onItemContext }) {
+const loadGalleryIsland = () => import('../../../islands/GalleryIsland.jsx');
+
+function GalleryPreact({ allImages, openItem: _openItem, onItemContext }) {
   const containerRef = useRef(null);
   const [cols, setCols] = useState(6);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 30 });
@@ -94,6 +102,7 @@ export default function GalleryVirtualized({ allImages, openItem, onItemContext 
       if (url) cached[entry.id] = url;
     });
     setLoadedImages(cached);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when image count changes (cache hydration)
   }, [allImages.length]);
 
   // Load thumbnails for visible images — batches all loads into a single setState
@@ -118,6 +127,7 @@ export default function GalleryVirtualized({ allImages, openItem, onItemContext 
     });
 
     return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- loadedImages intentionally excluded to avoid loop
   }, [visibleRange.start, visibleRange.end, allImages]);
 
   const visibleImages = allImages.slice(visibleRange.start, visibleRange.end);
@@ -166,3 +176,15 @@ export default function GalleryVirtualized({ allImages, openItem, onItemContext 
     </div>
   );
 }
+
+function GalleryVirtualized(props) {
+  const lowEnd = useLowEnd();
+  if (!lowEnd) return <GalleryPreact {...props} />;
+  return (
+    <Island load={loadGalleryIsland} state={{ ...props, preview }}>
+      <GalleryPreact {...props} />
+    </Island>
+  );
+}
+
+export default memo(GalleryVirtualized);

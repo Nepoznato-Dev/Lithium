@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useFileSystem } from '../../../lib/fileSystem';
 import { loadDriveConfigs } from '../../../lib/cloudDrives';
 import ExplorerShell from '../../../lib/fileExplorer/components/ExplorerShell';

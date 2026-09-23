@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from '../../lib/router';
 import Icon from '../Icon';
 import AmbientBackground from './AmbientBackground';
 import { useSettings } from '../SettingsContext';
@@ -78,7 +78,7 @@ export default function Shell() {
             {({ isActive }) => (
               <>
                 <Icon name="Sparkles" className="h-[18px] w-[18px]" />
-                Yuki's Stuff
+                Yuki&apos;s Stuff
                 {isActive && <span className="nav-dot ml-auto h-1.5 w-1.5 rounded-full" />}
               </>
             )}

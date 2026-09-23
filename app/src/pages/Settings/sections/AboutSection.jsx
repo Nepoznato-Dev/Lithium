@@ -56,7 +56,7 @@ export default function AboutSection() {
             ['Tailwind CSS', 'Styling'],
             ['Wllama', 'AI inference'],
             ['Rust → WASM', 'Native core'],
-            ['FastAPI', 'Backend proxy'],
+            ['Rust · Axum', 'API + package store'],
             ['IndexedDB', 'Storage'],
             ['OPFS', 'Large files'],
             ['fflate', 'ZIP compression'],

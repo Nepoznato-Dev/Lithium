@@ -1,9 +1,0 @@
-pub mod chat;
-pub mod keys;
-pub mod memory;
-pub mod models;
-pub mod web;
-pub mod local;
-pub mod mcp;
-pub mod openai_server;
-pub mod compute;

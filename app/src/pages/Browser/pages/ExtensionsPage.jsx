@@ -2,7 +2,6 @@
  * ExtensionsPage — mock extensions manager with card grid.
  */
 import { useState } from 'preact/hooks';
-import Icon from '../../../Components/Icon';
 
 const MOCK_EXTENSIONS = [
   { id: '1', name: 'uBlock Origin', description: 'An efficient ad blocker', enabled: true, version: '1.52.0', permissions: ['Read/change all data'] },

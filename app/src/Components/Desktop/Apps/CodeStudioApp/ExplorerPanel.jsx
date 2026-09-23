@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import Icon from '../../../Icon';
 import { childrenOf, updateEntry, removeEntryDeep } from '../../../../lib/fileSystem';
-import { PROJECTS_ID, CODE_EXT, projectPath } from './constants';
+import { CODE_EXT, projectPath } from './constants';
 
 function Node({ entry, tree, expanded, onToggle, onOpen, onExtract, activeId, depth, onCtxMenu, treeCommit }) {
   const kids = childrenOf(tree, entry.id);
@@ -53,7 +53,7 @@ export default function ExplorerPanel({ activity, tree, projects, expanded, sear
         </div>
       ) : (
         <div className="flex flex-1 flex-col overflow-hidden">
-          <input className="mx-2 mb-1 rounded border border-[#3a3a3a] bg-[#3c3c3c] px-2 py-1 text-[12px] outline-none" placeholder="Search files" value={search} onChange={e => {/* handled by parent via search prop */}} />
+          <input className="mx-2 mb-1 rounded border border-[#3a3a3a] bg-[#3c3c3c] px-2 py-1 text-[12px] outline-none" placeholder="Search files" value={search} onChange={_e => {/* handled by parent via search prop */}} />
           <div className="flex-1 overflow-y-auto">
             {searchResults.map(e => <button key={e.id} className="block w-full truncate px-3 py-1 text-left text-[12px] hover:bg-[#2a2d2e]" onClick={() => onOpenFile(e)}>{e.name}</button>)}
           </div>

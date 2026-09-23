@@ -1,6 +1,9 @@
-import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
+import { computeCall } from '../compute';
 import { getBlob } from './manager';
 import { putBlob, deleteBlob } from './liStorage';
+
+const _enc = new TextEncoder();
+const _dec = new TextDecoder();
 
 /**
  * Cold storage tier — compresses idle files into ZIP archives in IndexedDB.
@@ -77,11 +80,12 @@ export async function coldArchive(tree, entryIds, { onProgress } = {}) {
         }
       } catch { /* skip unreadable */ }
     } else {
-      zipEntries[path] = strToU8(entry.content || '');
+      zipEntries[path] = _enc.encode(entry.content || '');
     }
   }
 
-  const compressed = zipSync(zipEntries, { level: 9 });
+  // fflate runs in the compute worker.
+  const compressed = await computeCall('archive.zipBuild', { entries: zipEntries, level: 9 });
   const zipBlob = new Blob([compressed], { type: 'application/octet-stream' });
 
   // Store the ZIP in IndexedDB.
@@ -143,15 +147,15 @@ export async function coldRestore(tree, entryId) {
   if (!blob) return { tree, restored: false };
 
   const raw = new Uint8Array(await blob.arrayBuffer());
-  const extracted = unzipSync(raw);
-  const bytes = extracted[path];
+  const files = await computeCall('archive.zipRead', { bytes: raw });
+  const bytes = bytesOf(files, path);
   if (!bytes) return { tree, restored: false };
 
   // Determine if this should go back inline or to IndexedDB.
   const INLINE_LIMIT = 300000;
   let next = tree;
   if (bytes.length < INLINE_LIMIT) {
-    const text = strFromU8(bytes);
+    const text = _dec.decode(bytes);
     next = next.map(e => e.id === entryId
       ? { ...e, content: text, cold: false, coldRef: undefined, coldOrigSize: undefined, idb: false, size: text.length * 2 }
       : e
@@ -185,7 +189,7 @@ export async function coldRestoreAll(tree, archiveId) {
   if (!blob) return { tree, restored: 0 };
 
   const raw = new Uint8Array(await blob.arrayBuffer());
-  const extracted = unzipSync(raw);
+  const extracted = nameBytes(await computeCall('archive.zipRead', { bytes: raw }));
   const INLINE_LIMIT = 300000;
 
   let next = tree;
@@ -199,7 +203,7 @@ export async function coldRestoreAll(tree, archiveId) {
     if (!bytes) continue;
 
     if (bytes.length < INLINE_LIMIT) {
-      const text = strFromU8(bytes);
+      const text = _dec.decode(bytes);
       next = next.map(e => e.id === entry.id
         ? { ...e, content: text, cold: false, coldRef: undefined, coldOrigSize: undefined, idb: false, size: text.length * 2 }
         : e
@@ -243,13 +247,13 @@ export async function readColdEntry(entry) {
   if (!blob) return null;
 
   const raw = new Uint8Array(await blob.arrayBuffer());
-  const extracted = unzipSync(raw);
-  const bytes = extracted[path];
+  const files = await computeCall('archive.zipRead', { bytes: raw });
+  const bytes = bytesOf(files, path);
   if (!bytes) return null;
 
   // Heuristic: if the original entry was text-like, return as string.
   if (entry.type === 'text' || entry.type === 'markdown' || bytes.length < 64 * 1024) {
-    return strFromU8(bytes);
+    return _dec.decode(bytes);
   }
   return new Blob([bytes]);
 }
@@ -331,6 +335,18 @@ export async function listColdArchives() {
 }
 
 /* ---------- helpers ---------- */
+
+/** Worker zip reads arrive as [{name, data}] — index them by name. */
+function nameBytes(files) {
+  const map = {};
+  for (const f of files) map[f.name] = f.data;
+  return map;
+}
+
+function bytesOf(files, name) {
+  for (const f of files) if (f.name === name) return f.data;
+  return null;
+}
 
 function isDescendantOf(tree, entry, ancestorIds) {
   let current = entry;

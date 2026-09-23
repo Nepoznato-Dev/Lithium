@@ -62,7 +62,7 @@ export function saveTree(tree) {
 }
 
 // Seed first-run defaults and reconcile migrations inside the unified store.
-registerSeeder((current, hadData) => {
+registerSeeder((current, _hadData) => {
   // No data, unreadable data, or empty tree — always seed defaults.
   if (!current || current.length === 0) return defaultTree();
   if (!Array.isArray(current)) return null;
@@ -110,7 +110,11 @@ export function useFileSystem() {
 }
 
 export function getEntry(tree, id) {
-  return fsOpSync({ op: 'entry', tree, id }) || null;
+  // Pure JS — avoids serialising the entire tree to WASM for a simple linear scan.
+  for (let i = 0; i < tree.length; i++) {
+    if (tree[i].id === id) return tree[i];
+  }
+  return null;
 }
 
 export function childrenOf(tree, folderId) {
@@ -129,7 +133,15 @@ export function childrenOf(tree, folderId) {
 }
 
 export function pathOf(tree, id) {
-  return fsOpSync({ op: 'path', tree, id }) || [];
+  // Pure JS — simple ancestor traversal, no need to serialise the tree to WASM.
+  const path = [];
+  let current = getEntry(tree, id);
+  while (current) {
+    path.unshift(current);
+    if (!current.parentId) break;
+    current = getEntry(tree, current.parentId);
+  }
+  return path;
 }
 
 function makeId() {

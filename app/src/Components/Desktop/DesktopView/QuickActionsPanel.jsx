@@ -1,6 +1,6 @@
 import Icon from '../../Icon';
 import { isDndEnabled, setDndEnabled } from '../../../lib/services/notificationService';
-import { listWorkspaces, saveWorkspace, deleteWorkspace, getActiveWorkspace } from '../../../lib/services/workspaceService';
+import { listWorkspaces, saveWorkspace, getActiveWorkspace } from '../../../lib/services/workspaceService';
 import { useState } from 'react';
 
 /** Quick Actions panel — Windows 11-style quick settings with toggles & sliders. */
@@ -52,7 +52,7 @@ export default function QuickActionsPanel({ settings, update, soundLevel, setSou
         )}
 
         {/* Focus / DND mode */}
-        <button className={`nx-qs-tile ${dnd ? 'active' : ''}`} onClick={() => { const next = !dnd; setDnd(next); setDndEnabled(next); }}>
+        <button className={`nx-qs-tile ${dnd ? 'active' : ''}`} onClick={() => { const next = !dnd; setDnd(next); setDndEnabled(next); update?.('notifications.dndEnabled', next); }}>
           <Icon name="Moon" size={18} />
           <span className="nx-qs-tile-label">{dnd ? 'DND On' : 'Focus'}</span>
         </button>
@@ -79,7 +79,9 @@ export default function QuickActionsPanel({ settings, update, soundLevel, setSou
         </button>
 
         {/* Transparency toggle */}
-        <button className={`nx-qs-tile ${settings.theme.transparency !== false ? 'active' : ''}`}>
+        <button className={`nx-qs-tile ${settings.theme.transparency !== false ? 'active' : ''}`} onClick={() => {
+          update?.('theme.transparency', settings.theme.transparency === false);
+        }}>
           <Icon name="Eye" size={18} />
           <span className="nx-qs-tile-label">Transparency</span>
         </button>
@@ -174,7 +176,9 @@ export default function QuickActionsPanel({ settings, update, soundLevel, setSou
           min={40}
           max={100}
           value={settings.display?.brightness ?? 100}
-          readOnly
+          onChange={event => {
+            update?.('display.brightness', Number(event.target.value));
+          }}
         />
         <span className="nx-qs-slider-val">{settings.display?.brightness ?? 100}%</span>
       </div>

@@ -39,3 +39,14 @@ export async function signOut() {
 export function getAuthEmail() {
   return authUser.value?.email || '';
 }
+
+/**
+ * Derive a display name from the email prefix (everything before @).
+ * Falls back to the email itself when no @ is present.
+ */
+export function getDisplayName() {
+  const email = getAuthEmail();
+  const raw = email.includes('@') ? email.slice(0, email.indexOf('@')) : email;
+  if (!raw) return '';
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}

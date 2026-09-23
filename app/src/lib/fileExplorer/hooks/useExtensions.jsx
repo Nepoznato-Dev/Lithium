@@ -6,7 +6,7 @@ import { extensionRegistry } from '../shell/extensions.jsx';
 
 export function useExtensions() {
   // Force re-render when extensions change
-  const [, forceUpdate] = useReducer(x => x + 1, 0);
+  const [, ] = useReducer(x => x + 1, 0);
 
   // Subscribe to registry changes
   // (In a real app we'd use useEffect, but for simplicity the registry

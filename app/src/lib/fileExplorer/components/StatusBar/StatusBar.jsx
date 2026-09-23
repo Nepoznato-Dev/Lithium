@@ -22,7 +22,7 @@ export default memo(function StatusBar({ tree, drive, items }) {
     if (selectedCount !== 1) return null;
     const id = selectedItems.value.values().next().value;
     return tree.find(e => e.id === id) || null;
-  }, [tree, selectedCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tree, selectedCount]);  
 
   const itemCount = useMemo(() => {
     const v = view.value;
@@ -32,7 +32,7 @@ export default memo(function StatusBar({ tree, drive, items }) {
     let n = 0;
     for (const e of tree) { if (e.type !== 'folder' && ++n >= 12) break; }
     return n;
-  }, [tree, drive, items?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tree, drive, items?.length]);  
 
   const viewLabel = view.value === 'files'
     ? `${itemCount} item${itemCount === 1 ? '' : 's'}`

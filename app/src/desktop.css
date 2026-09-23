@@ -1,5 +1,37 @@
 /* Lithium desktop — visual port of the Nexus PagesDisplay desktop UI. */
 
+/* ── Window Controls Overlay ──────────────────────────────────────────
+ * When Lithium runs as an installed PWA with `display_override:
+ * ["window-controls-overlay"]`, the OS draws its own titlebar buttons
+ * (minimize / maximize / close) over the page.  The CSS env vars below
+ * describe the rectangle the OS reserves for those buttons so we can
+ * push our own chrome out of the way.
+ */
+.nx-desktop.wco-active {
+  /* The OS titlebar area sits at the very top of the viewport. */
+  padding-top: env(titlebar-area-height, 0px);
+}
+
+/* A drag handle at the top of the desktop that the OS uses for
+ * window dragging when WCO is active.  Invisible but hit-testable. */
+.wco-drag-handle {
+  position: fixed;
+  top: 0;
+  left: env(titlebar-area-x, 0px);
+  width: env(titlebar-area-width, 100%);
+  height: env(titlebar-area-height, 28px);
+  -webkit-app-region: drag;
+  app-region: drag;
+  z-index: 9999;
+  pointer-events: auto;
+}
+
+/* When WCO is active, push the taskbar down so it doesn't overlap
+ * with the OS titlebar buttons on the top edge. */
+.wco-active .nx-taskbar[data-taskbar="top"] {
+  top: env(titlebar-area-height, 28px);
+}
+
 .nx-desktop {
   position: fixed;
   inset: 0;
@@ -42,8 +74,8 @@
   color: #fff;
   cursor: grab;
   user-select: none;
-  transition: background 0.18s ease-out, border-color 0.18s ease-out, box-shadow 0.18s ease-out, backdrop-filter 0.18s ease-out, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-  backdrop-filter: blur(0px);
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+  backdrop-filter: none;
   animation: nx-icon-enter 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
 }
 
@@ -75,28 +107,22 @@
 .nx-icon:hover {
   background: rgba(255, 255, 255, 0.10);
   border-color: rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(12px);
-  transform: translateY(-3px) scale(1.05);
-  box-shadow:
-    0 6px 20px rgba(0, 0, 0, 0.35),
-    0 2px 8px rgba(0, 0, 0, 0.2),
-    0 0 18px rgba(34, 211, 238, 0.12);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transform: translateY(-1px);
 }
 
 .nx-icon.selected {
-  background: rgba(34, 211, 238, 0.12);
-  border-color: rgba(34, 211, 238, 0.45);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.25), 0 4px 16px rgba(34, 211, 238, 0.15);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent);
 }
 
 .nx-icon.dragging {
   cursor: grabbing;
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-  transform: scale(1.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transform: scale(1.02);
   transition: none;
   will-change: left, top;
 }
@@ -104,7 +130,7 @@
 .nx-icon-label {
   max-width: 100%;
   overflow: hidden;
-  font-size: 11px;
+  font-size: var(--nx-icon-font, 11px);
   line-height: 1.2;
   text-overflow: ellipsis;
   text-shadow:
@@ -129,7 +155,7 @@
   border-radius: 10px;
   background-color: var(--win-bg, rgba(26, 26, 30, 0.97));
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-  animation: nx-window-in 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: nx-window-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
   backdrop-filter: blur(12px);
   transition: box-shadow 0.25s ease-out;
 }
@@ -137,8 +163,7 @@
 .nx-window.maximized { border-radius: 0; }
 
 @keyframes nx-window-in {
-  from { opacity: 0; transform: scale(0.92) translateY(8px); }
-  60%  { opacity: 1; transform: scale(1.015) translateY(-1px); }
+  from { opacity: 0; transform: scale(0.985) translateY(6px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
@@ -147,7 +172,7 @@
   to   { opacity: 0; transform: scale(0.94) translateY(6px); }
 }
 
-.nx-window-content { flex: 1; min-height: 0; min-width: 0; overflow: hidden; background-color: #0f1117; box-shadow: inset 0 1px 3px rgba(0,0,0,.15); }
+.nx-window-content { flex: 1; height: 0; min-height: 0; min-width: 0; overflow: hidden; background-color: #0f1117; box-shadow: inset 0 1px 3px rgba(0,0,0,.15); }
 
 .nx-resize-handle {
   position: absolute;
@@ -553,8 +578,7 @@ button.nx-tray-item.open {
   position: fixed;
   inset: 0;
   z-index: 9998;
-  background-color: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(2px);
+  background-color: rgba(0, 0, 0, 0.12);
 }
 
 .nx-start-search-wrap {
@@ -1400,6 +1424,29 @@ html.lithium-low-end .nx-window.restoring,
 html.lithium-low-end .nx-window.closing {
   animation: none !important;
 }
+
+/*
+ * Low-end mode: stop rendering the contents of windows the user cannot see.
+ *
+ * `content-visibility: auto` makes the browser skip layout and paint for the
+ * subtree while its box is outside the viewport, and that skipped state is real
+ * memory (layout trees, layer tiles, decoded image frames), not just saved CPU.
+ *
+ * Deliberately scoped to the low-end tier:
+ *  - `auto` applies permanent `contain: layout style paint`, which makes the
+ *    element a containing block for `position: fixed` descendants. App-level
+ *    `fixed inset-0` overlays therefore become window-scoped. For a windowed
+ *    desktop that is arguably the intended behaviour, but it is a visual change
+ *    and normal mode must not acquire it silently.
+ *  - The frame (.nx-window) is NOT the target: the in-window ContextMenu is a
+ *    fixed sibling of the content div and would be offset by containment.
+ *  - contain-intrinsic-size only matters while skipped, and the window already
+ *    has an explicit width/height, so this is a no-op for on-screen geometry.
+ */
+html.lithium-low-end .nx-window-content {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 100%;
+}
 html.lithium-low-end .nx-taskbar,
 html.lithium-low-end .nx-window,
 html.lithium-low-end .nx-start-menu,
@@ -1411,6 +1458,44 @@ html.lithium-low-end .nx-calendar,
 html.lithium-low-end .nx-toast,
 html.lithium-low-end .nx-weather-popup {
   backdrop-filter: none !important;
+}
+
+/* ── Battery Saver ─────────────────────────────────────────────────────── */
+html[data-battery-saver="true"] {
+  --glass-blur: 0px !important;
+  --glass-opacity: 1 !important;
+}
+html[data-battery-saver="true"] .nx-window,
+html[data-battery-saver="true"] .nx-taskbar,
+html[data-battery-saver="true"] .nx-start-menu,
+html[data-battery-saver="true"] .nx-popup,
+html[data-battery-saver="true"] .nx-ctx-menu,
+html[data-battery-saver="true"] .nx-notif-center,
+html[data-battery-saver="true"] .nx-quick-settings,
+html[data-battery-saver="true"] .nx-calendar,
+html[data-battery-saver="true"] .nx-toast,
+html[data-battery-saver="true"] .nx-weather-popup,
+html[data-battery-saver="true"] .nx-alttab-panel {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: var(--ui-layer) !important;
+}
+html[data-battery-saver="true"] .nx-window,
+html[data-battery-saver="true"] .nx-start-menu,
+html[data-battery-saver="true"] .nx-popup,
+html[data-battery-saver="true"] .nx-ctx-menu,
+html[data-battery-saver="true"] .nx-alttab-panel,
+html[data-battery-saver="true"] .nx-notif-center,
+html[data-battery-saver="true"] .nx-quick-settings,
+html[data-battery-saver="true"] .nx-calendar,
+html[data-battery-saver="true"] .nx-toast,
+html[data-battery-saver="true"] .nx-weather-popup {
+  animation: none !important;
+  transition: none !important;
+}
+html[data-battery-saver="true"] .settings-card {
+  backdrop-filter: none !important;
+  background: rgba(255, 255, 255, 0.03) !important;
 }
 
 /* Density: large */
@@ -1581,12 +1666,50 @@ html[data-density='default'] { font-size: 16px; }
 
 .nx-toast-container {
   position: fixed;
-  right: 12px;
-  bottom: 64px;
   z-index: 10050;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Default: bottom-right */
+.nx-toast-container:not([data-position]),
+.nx-toast-container[data-position="bottom-right"] {
+  right: 12px;
+  bottom: 64px;
+  align-items: flex-end;
+}
+
+.nx-toast-container[data-position="bottom-left"] {
+  left: 12px;
+  bottom: 64px;
+  align-items: flex-start;
+}
+
+.nx-toast-container[data-position="bottom-center"] {
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  align-items: center;
+}
+
+.nx-toast-container[data-position="top-right"] {
+  right: 12px;
+  top: 16px;
+  align-items: flex-end;
+}
+
+.nx-toast-container[data-position="top-left"] {
+  left: 12px;
+  top: 16px;
+  align-items: flex-start;
+}
+
+.nx-toast-container[data-position="top-center"] {
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  align-items: center;
 }
 
 .nx-toast {
@@ -1917,39 +2040,177 @@ html[data-density='default'] { font-size: 16px; }
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
 }
 
-/* ---------- Battery tray ---------- */
+/* ---------- Tray overflow chevron ---------- */
 
-.nx-battery {
-  display: flex;
-  align-items: center;
+.nx-tray-overflow {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.nx-tray-overflow:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.nx-tray-overflow.open {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
-.nx-battery-shell {
-  width: 24px;
-  height: 13px;
-  border-radius: 2px;
+/* ---------- Hidden Icons panel ---------- */
+
+.nx-hidden-icons {
+  position: fixed;
+  bottom: 52px;
+  right: 12px;
+  z-index: 10039;
+  width: 260px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--ui-panel-fill, rgba(30, 32, 38, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: nx-qs-in 150ms ease-out;
+}
+
+.nx-hi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 8px;
+}
+
+.nx-hi-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.nx-hi-section-label {
+  padding: 8px 14px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.nx-hi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 4px 12px 10px;
+}
+
+.nx-hi-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 100ms ease;
+  min-height: 56px;
   position: relative;
+}
+
+.nx-hi-tile:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.nx-hi-tile.active {
+  background: color-mix(in srgb, var(--accent) 20%, rgba(255, 255, 255, 0.04));
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: #fff;
+}
+
+.nx-hi-tile.active:hover {
+  background: color-mix(in srgb, var(--accent) 28%, rgba(255, 255, 255, 0.04));
+}
+
+.nx-hi-tile-label {
+  font-size: 9px;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.2;
+  max-width: 100%;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.nx-battery-fill {
-  height: 100%;
+.nx-hi-remove {
   position: absolute;
-  left: 0;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: width 0.3s;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 100ms ease, background 100ms ease;
+}
+.nx-hi-tile:hover .nx-hi-remove {
+  opacity: 1;
+}
+.nx-hi-remove:hover {
+  background: rgba(239, 68, 68, 0.7);
+  color: #fff;
 }
 
-.nx-battery-tip {
-  width: 3px;
-  height: 8px;
-  border-radius: 0 1px 1px 0;
+.nx-hi-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 14px;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+}
+
+html[data-theme='light'] .nx-hidden-icons {
+  background: rgba(245, 245, 248, 0.96);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
+}
+html[data-theme='light'] .nx-hi-title {
+  color: rgba(0, 0, 0, 0.8);
+}
+html[data-theme='light'] .nx-hi-section-label {
+  color: rgba(0, 0, 0, 0.4);
+}
+html[data-theme='light'] .nx-hi-tile {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.55);
+}
+html[data-theme='light'] .nx-hi-tile:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.8);
+}
+html[data-theme='light'] .nx-hi-remove {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.5);
+}
+html[data-theme='light'] .nx-hi-remove:hover {
+  background: rgba(239, 68, 68, 0.8);
+  color: #fff;
+}
+html[data-theme='light'] .nx-hi-empty {
+  color: rgba(0, 0, 0, 0.35);
 }
 
 /* ---------- Alt-tab ---------- */
@@ -2430,12 +2691,12 @@ html[data-density='default'] { font-size: 16px; }
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 24px;
+  width: 32px;
+  height: 28px;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--ui-muted);
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
@@ -2488,6 +2749,16 @@ html[data-density='default'] { font-size: 16px; }
 
 .settings-sidebar::-webkit-scrollbar { width: 4px; }
 .settings-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+.settings-sidebar-group-label {
+  padding: 10px 18px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.25);
+  user-select: none;
+}
 
 /* Settings search bar focus enhancement */
 .settings-shell .text-input {
@@ -2672,52 +2943,15 @@ html[data-density='default'] { font-size: 16px; }
 
 /* --- Settings card group --- */
 .settings-card {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.065) 0%, rgba(255, 255, 255, 0.025) 40%, rgba(255, 255, 255, 0.035) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0.03) 100%);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
   padding: 0;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
   overflow: hidden;
-  backdrop-filter: blur(12px);
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.12),
-    0 0 1px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  animation: settings-card-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
-  transition: border-color 0.3s ease, box-shadow 0.35s ease, transform 0.25s ease;
+  box-shadow: inset 0 1px var(--ui-edge);
   position: relative;
 }
-
-.settings-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent) 20%, transparent) 50%, transparent 100%);
-  opacity: 0;
-  transition: opacity 0.35s ease;
-}
-
-.settings-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 18%, rgba(255, 255, 255, 0.08));
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.18),
-    0 0 1px rgba(0, 0, 0, 0.2),
-    0 0 20px color-mix(in srgb, var(--accent) 5%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  transform: translateY(-1px);
-}
-
-.settings-card:hover::before {
-  opacity: 1;
-}
-
-.settings-card:nth-child(2) { animation-delay: 0.04s; }
-.settings-card:nth-child(3) { animation-delay: 0.08s; }
-.settings-card:nth-child(4) { animation-delay: 0.12s; }
-.settings-card:nth-child(5) { animation-delay: 0.16s; }
 
 @keyframes settings-card-in {
   from {
@@ -2757,7 +2991,7 @@ html[data-density='default'] { font-size: 16px; }
   gap: 16px;
   padding: 15px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  transition: background 0.22s ease, padding-left 0.22s ease;
+  transition: background-color 140ms ease;
   position: relative;
 }
 
@@ -2780,8 +3014,7 @@ html[data-density='default'] { font-size: 16px; }
 }
 
 .settings-row:hover {
-  background: rgba(255, 255, 255, 0.03);
-  padding-left: 22px;
+  background: var(--ui-hover);
 }
 
 .settings-row:hover::before {
@@ -2980,6 +3213,31 @@ html[data-density='default'] { font-size: 16px; }
   transition: color 0.2s ease, border-color 0.2s ease;
 }
 
+.settings-slider-step-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-layer);
+  color: var(--ui-text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 100ms ease;
+}
+.settings-slider-step-btn:hover {
+  background: var(--ui-hover);
+  border-color: var(--ui-edge);
+}
+.settings-slider-step-btn:active {
+  transform: scale(0.95);
+}
+
 /* --- Accent color picker --- */
 .settings-accent-grid {
   display: flex;
@@ -3026,6 +3284,76 @@ html[data-density='default'] { font-size: 16px; }
 @keyframes settings-swatch-pop {
   from { transform: scale(0); opacity: 0; }
   to { transform: scale(1); opacity: 0.4; }
+}
+
+/* --- Colorful (per-icon) mode --- */
+.settings-colorful-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.settings-colorful-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.settings-colorful-label {
+  font-size: 10px;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-colorful-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-colorful-swatch {
+  position: relative;
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.settings-colorful-swatch input[type="color"] {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.settings-colorful-clear {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.settings-colorful-clear:hover {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* --- Segmented control --- */
@@ -3541,6 +3869,14 @@ html[data-density='default'] { font-size: 16px; }
   padding: 6px 0;
 }
 
+.settings-wallpaper-wrapper {
+  position: relative;
+}
+
+.settings-wallpaper-wrapper:hover .settings-wallpaper-remove {
+  opacity: 1;
+}
+
 .settings-wallpaper-thumb {
   position: relative;
   aspect-ratio: 16 / 10;
@@ -3579,29 +3915,68 @@ html[data-density='default'] { font-size: 16px; }
   letter-spacing: 0.02em;
 }
 
-/* --- Responsive: collapse sidebar on narrow widths --- */
-@media (max-width: 700px) {
-  .settings-sidebar {
-    width: 56px;
-    padding: 10px 0;
-  }
-  .settings-nav-item {
-    padding: 9px 0;
-    margin: 1px 4px;
-    justify-content: center;
-    gap: 0;
-    font-size: 0;
-  }
-  .settings-nav-item.active {
-    box-shadow: inset 0 -3px 0 var(--accent), 0 0 10px color-mix(in srgb, var(--accent) 10%, transparent);
-  }
-  .settings-nav-item span:not(.settings-nav-icon) {
-    display: none;
-  }
-  .settings-content {
-    padding: 16px;
-  }
+.settings-wallpaper-medium {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 1px 5px;
+  font-size: 8px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
+
+.settings-wallpaper-animated-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 1px 6px;
+  font-size: 8px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(239, 68, 68, 0.75);
+  border-radius: 4px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  animation: settings-badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes settings-badge-pulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+.settings-wallpaper-remove {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  padding: 0;
+}
+
+.settings-wallpaper-remove:hover {
+  background: rgba(239, 68, 68, 0.8);
+}
+
+.settings-wallpaper-thumb:hover + .settings-wallpaper-remove,
+.settings-wallpaper-remove:hover {
+  opacity: 1;
+}
+
 
 /* --- Window titlebar translucency (Settings → Windows) --- */
 html[data-titlebar='true']:not([data-transparency='true']) .nx-window {
@@ -3932,32 +4307,15 @@ html[data-theme='light'] .settings-nav-item.active {
 html[data-theme='light'] .settings-nav-icon {
   background: rgba(0, 0, 0, 0.04);
 }
+html[data-theme='light'] .settings-sidebar-group-label {
+  color: rgba(0, 0, 0, 0.32);
+}
 html[data-theme='light'] .settings-section-header h2 {
   color: rgba(0, 0, 0, 0.85);
   text-shadow: none;
 }
 html[data-theme='light'] .settings-section-header p {
   color: rgba(0, 0, 0, 0.42);
-}
-html[data-theme='light'] .settings-card {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.78) 40%, rgba(255, 255, 255, 0.85) 100%);
-  border-color: rgba(0, 0, 0, 0.07);
-  backdrop-filter: blur(12px);
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.06),
-    0 0 1px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-html[data-theme='light'] .settings-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 20%, rgba(0, 0, 0, 0.07));
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.08),
-    0 0 1px rgba(0, 0, 0, 0.08),
-    0 0 20px color-mix(in srgb, var(--accent) 6%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-html[data-theme='light'] .settings-card::before {
-  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent) 15%, transparent) 50%, transparent 100%);
 }
 html[data-theme='light'] .settings-card-title {
   color: rgba(0, 0, 0, 0.38);
@@ -3991,6 +4349,14 @@ html[data-theme='light'] .settings-slider-value {
   color: rgba(0, 0, 0, 0.6);
   background: rgba(0, 0, 0, 0.03);
   border-color: rgba(0, 0, 0, 0.06);
+}
+html[data-theme='light'] .settings-slider-step-btn {
+  background: #f0f2f5;
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.7);
+}
+html[data-theme='light'] .settings-slider-step-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
 }
 html[data-theme='light'] .settings-segmented {
   background: rgba(0, 0, 0, 0.03);
@@ -4145,4 +4511,206 @@ html[data-theme='light'] .nx-weather-popup {
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
   color: rgba(0, 0, 0, 0.82);
+}
+
+/* Shared surface policy. One blur layer per surface, never per card/icon.
+   This final layer also reconciles the legacy per-theme overrides above. */
+html[data-tint='true'] { --ui-material: color-mix(in srgb, var(--accent) 3%, var(--ui-base)); }
+html[data-transparency='true'] {
+  --ui-panel-fill: color-mix(in srgb, var(--ui-layer) 94%, transparent);
+  --ui-panel-filter: blur(min(12px, var(--glass-blur, 12px)));
+  --ui-window-fill: color-mix(in srgb, var(--ui-material) 96%, transparent);
+  --ui-window-filter: blur(min(8px, var(--glass-blur, 8px)));
+}
+html[data-theme] .nx-window {
+  background: var(--ui-window-fill, var(--ui-material)) !important;
+  border-color: var(--ui-border);
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: var(--ui-window-filter, none) !important;
+  -webkit-backdrop-filter: var(--ui-window-filter, none) !important;
+}
+html .nx-window:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, var(--ui-border)); }
+html[data-theme] :is(.nx-start-menu, .nx-popup, .nx-ctx-menu, .nx-calendar, .nx-notif-center, .nx-quick-settings, .nx-weather-popup, .nx-alttab-panel, .nx-toast) {
+  background: var(--ui-panel-fill, var(--ui-layer)) !important;
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: var(--ui-panel-filter, none) !important;
+  -webkit-backdrop-filter: var(--ui-panel-filter, none) !important;
+}
+html[data-theme] .nx-taskbar {
+  background: var(--ui-panel-fill, var(--ui-layer)) !important;
+  border-color: var(--ui-border);
+  box-shadow: inset 0 1px var(--ui-edge);
+  backdrop-filter: var(--ui-panel-filter, none) !important;
+  -webkit-backdrop-filter: var(--ui-panel-filter, none) !important;
+}
+html .nx-start-menu { max-height: min(680px, calc(100dvh - 80px)); }
+html .nx-start-heading { color: var(--ui-muted); font-size: 12px; letter-spacing: 0.02em; text-transform: none; font-weight: 600; }
+html .nx-start-footer { background: var(--ui-material); border-color: var(--ui-border); }
+html .nx-all-apps-overlay { background: var(--ui-layer); color: var(--ui-text); }
+html .nx-start-search {
+  background: var(--ui-card); border-color: var(--ui-border); border-bottom-color: var(--ui-muted);
+  border-radius: 8px; color: var(--ui-text); font-size: 14px;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+html .nx-start-search:focus { border-color: var(--ui-border); border-bottom-color: var(--accent); box-shadow: inset 0 -1px var(--accent); }
+html[data-theme] .nx-start-search::placeholder { color: var(--ui-muted); opacity: 1; }
+html[data-theme] .nx-weather-cond { color: var(--ui-muted); }
+html :is(.nx-start-button, .nx-pinned-btn, .nx-task-window, .nx-tray-item, .nx-clock, .nx-start-all-apps-btn, .nx-app-row, .nx-start-recommended-row) { color: var(--ui-text); }
+html :is(.nx-start-button, .nx-pinned-btn, .nx-task-window, .nx-tray-item, .nx-app-row) { transition: background-color 140ms ease, border-color 140ms ease; }
+html :is(.nx-pinned-btn, .nx-task-window, .nx-tray-item, .nx-app-row):hover { transform: none; box-shadow: none; background: var(--ui-hover); }
+html .nx-clock { font-variant-numeric: tabular-nums; }
+html .nx-clock-date { color: var(--ui-muted); }
+html .nx-pinned-btn.open::after { width: 12px; height: 3px; border-radius: 2px; box-shadow: none; }
+html .nx-task-window[data-accent] { border: 1px solid var(--ui-border); background: var(--ui-hover); }
+html .nx-task-window[data-accent]::after { bottom: 1px; left: calc(50% - 8px); right: auto; width: 16px; height: 3px; box-shadow: none; }
+html .nx-task-window.minimized::after { width: 6px; left: calc(50% - 3px); background: var(--ui-muted); }
+html .nx-ctx-item:not(.danger):not(.disabled) { color: var(--ui-text); }
+html .nx-ctx-item:not(.disabled):not(.danger):is(:hover, .focused) { background: var(--ui-hover); }
+html :is(.nx-ctx-shortcut, .nx-ctx-heading, .nx-ctx-arrow) { color: var(--ui-muted); }
+html .win-ctrl-btn:hover { background: var(--ui-hover); color: var(--ui-text); }
+html .win-ctrl-btn.close:hover { background: #c42b36; color: #fff; }
+
+/* Settings uses opaque layers: scrolling a card never needs backdrop sampling. */
+.settings-page { container: settings / inline-size; min-height: 0; background: var(--ui-material); color: var(--ui-text); }
+.settings-topbar { display: flex; align-items: center; gap: 16px; min-height: 48px; padding: 6px 10px 6px 20px; border-bottom: 1px solid var(--ui-border); flex-shrink: 0; }
+.settings-app-title { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; min-width: 170px; }
+.settings-save-status { margin-left: auto; color: var(--ui-muted); font-size: 12px; min-width: 36px; }
+.settings-topbar .win-controls { margin-left: 0; }
+.settings-search-icon { color: var(--ui-muted); }
+.settings-search-wrap:focus-within .settings-search-icon { color: var(--ui-text) !important; filter: none; }
+html .settings-page .settings-shell { background: transparent; color: var(--ui-text); }
+html .settings-page .settings-sidebar { width: 208px; background: transparent; border-color: var(--ui-border); padding: 12px 0; overscroll-behavior: contain; }
+html .settings-page .settings-content { padding: 26px 30px; background: var(--ui-layer); overscroll-behavior: contain; }
+html .settings-page :is(.settings-section-header, .settings-section-body) { max-width: 920px; margin-inline: auto; }
+html .settings-page .settings-sidebar-group-label { color: var(--ui-muted); font-size: 11px; letter-spacing: 0.02em; padding-top: 16px; text-transform: none; }
+html .settings-page .settings-nav-item { color: var(--ui-muted); padding: 8px 12px; gap: 10px; border-radius: 6px; transition: background-color 140ms ease; }
+html .settings-page .settings-nav-item:hover { color: var(--ui-text); background: var(--ui-hover); box-shadow: none; }
+html .settings-page .settings-nav-item.active { color: var(--ui-text); background: var(--ui-hover); box-shadow: none; }
+html .settings-page .settings-nav-item::before { height: 18px; left: 0; border-radius: 3px; }
+html .settings-page .settings-nav-icon { width: 22px; height: 22px; background: none; box-shadow: none; transform: none; }
+html .settings-page .settings-nav-item.active svg { color: var(--ui-text); filter: none; }
+html .settings-page .settings-section-header { border: 0; margin-bottom: 22px; padding-bottom: 0; animation: none; }
+html .settings-page .settings-section-header h2 { color: var(--ui-text); font-size: 28px; font-weight: 600; line-height: 1.25; text-shadow: none; text-wrap: balance; }
+html .settings-page .settings-section-header p { color: var(--ui-muted); }
+html .settings-page .settings-section-body { animation-duration: 160ms; }
+html .settings-page .settings-card {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(255, 255, 255, 0.03) 100%);
+  border-color: var(--ui-border); border-radius: 10px; margin-bottom: 14px;
+  box-shadow: inset 0 1px var(--ui-edge);
+  animation: none; transition: none; transform: none;
+}
+html .settings-page :is(.settings-card, .settings-row, .settings-toggle)::before,
+html .settings-page .settings-card-title::after { content: none; }
+html .settings-page .settings-card-title { color: var(--ui-muted); font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; padding: 14px 20px 6px; }
+html .settings-page .settings-row { border-color: color-mix(in srgb, var(--ui-border) 60%, transparent); }
+html .settings-page .settings-row:hover { background: var(--ui-hover); }
+html .settings-page .settings-row-title { color: var(--ui-text); font-size: 14px; }
+html .settings-page :is(.settings-row-desc, .settings-preview-label, .settings-colorful-label, .settings-badge) { color: var(--ui-muted); }
+html .settings-page .text-input { background: var(--ui-card); color: var(--ui-text); border-color: var(--ui-border); border-radius: 6px; box-shadow: none; }
+html .settings-page .text-input:focus { border-bottom-color: var(--accent); box-shadow: inset 0 -1px var(--accent); }
+html .settings-page .text-input::placeholder { color: var(--ui-muted); }
+html .settings-page .settings-toggle { background: var(--ui-layer); border-color: var(--ui-muted); box-shadow: none; animation: none; transition: background-color 140ms ease; }
+html .settings-page .settings-toggle.on { background: var(--accent); border-color: var(--accent); }
+html .settings-page .settings-toggle .settings-toggle-knob { top: 3px; width: 18px; height: 18px; background: var(--ui-text); box-shadow: none; transition: transform 140ms ease; }
+html .settings-page .settings-toggle.on .settings-toggle-knob { background: #17202b; }
+html .settings-page .settings-toggle.on:active .settings-toggle-knob { width: 18px; transform: translateX(20px); }
+html .settings-page .settings-segmented { background: var(--ui-layer); border-color: var(--ui-border); border-radius: 8px; box-shadow: none; flex-wrap: wrap; }
+html .settings-page .settings-segmented-btn { color: var(--ui-muted); border-radius: 5px; transition: background-color 140ms ease; padding-inline: 12px; }
+html .settings-page .settings-segmented-btn.active { color: var(--ui-text); background: var(--ui-card); box-shadow: inset 0 -2px var(--accent); }
+html .settings-page .settings-slider { height: 6px; transition: none; touch-action: none; }
+html .settings-page .settings-slider-value { color: var(--ui-text); background: var(--ui-layer); border-color: var(--ui-border); font-variant-numeric: tabular-nums; }
+html .settings-page .settings-accent-swatch { width: 30px; height: 30px; box-shadow: none; transition: transform 140ms ease; }
+html .settings-page .settings-accent-swatch.active { outline: 2px solid var(--ui-text); outline-offset: 3px; transform: none; }
+html .settings-page .settings-accent-swatch.active::after { background: #fff; box-shadow: 0 0 0 1px #17202b; }
+html .settings-page .settings-preview-card { background: var(--ui-card); border-color: var(--ui-border); }
+.settings-search-empty { padding: 20px 12px; color: var(--ui-muted); font-size: 12px; overflow-wrap: anywhere; }
+
+/* Miniature desktop previews are static CSS, not images or live app instances. */
+.settings-theme-picker { margin: 0 0 22px; padding: 0; min-width: 0; border: 0; }
+.settings-theme-picker legend { margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+.settings-theme-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.settings-theme-choice { padding: 6px 6px 12px; min-width: 0; border: 1px solid var(--ui-border); border-radius: 10px; text-align: left; background: var(--ui-card); color: var(--ui-text); }
+.settings-theme-choice:hover { border-color: var(--ui-muted); }
+.settings-theme-choice[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.settings-theme-scene { display: block; position: relative; height: 90px; overflow: hidden; border-radius: 5px; background: linear-gradient(135deg, #122d45, #365568 55%, #827099); }
+.settings-theme-choice[data-preview='light'] .settings-theme-scene { background: linear-gradient(135deg, #b8dff4, #d3dff5 55%, #ede1fa); }
+.settings-theme-choice[data-preview='system'] .settings-theme-scene { background: linear-gradient(115deg, #c1ddef 49.5%, #2c4057 50%); }
+.settings-theme-window { position: absolute; inset: 16px 18px 20px; border: 1px solid #ffffff30; border-radius: 5px; background: #252b35; display: grid; grid-template-columns: 25% 1fr; gap: 5px; padding: 10px 6px 6px; box-shadow: 0 3px 8px #0002; }
+.settings-theme-choice[data-preview='light'] .settings-theme-window { background: #f7f9fc; border-color: #fff; }
+.settings-theme-window > span { border-radius: 2px; background: #74819530; }
+.settings-theme-window > span:first-child { grid-row: span 2; background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.settings-theme-dock { position: absolute; inset: auto 0 0; height: 12px; display: flex; gap: 3px; align-items: center; justify-content: center; background: #18202bb3; }
+.settings-theme-dock i { width: 6px; height: 6px; border-radius: 1px; background: #c3d8ef; }
+.settings-theme-dock i:first-child { background: var(--accent); }
+.settings-theme-caption { display: flex; align-items: center; gap: 6px; padding: 10px 6px 0; font-size: 13px; font-weight: 600; }
+.settings-theme-description { display: block; padding: 3px 6px 0; font-size: 11px; color: var(--ui-muted); }
+.settings-theme-check { margin-left: auto; visibility: hidden; }
+.settings-theme-choice[aria-pressed='true'] .settings-theme-check { visibility: visible; }
+
+/* Adapt to the app window, not only the browser viewport. */
+@container settings (max-width: 680px) {
+  html .settings-page .settings-sidebar { width: 56px; }
+  html .settings-page .settings-nav-item { padding: 10px 0; justify-content: center; gap: 0; }
+  .settings-nav-item span:not(.settings-nav-icon), .settings-sidebar-group-label { display: none; }
+  html .settings-page .settings-content { padding: 20px 16px; }
+  .settings-app-title { min-width: 0; }
+  .settings-app-title span { display: none; }
+  .settings-topbar { gap: 10px; padding-left: 12px; }
+}
+@container settings (max-width: 480px) {
+  html .settings-page .settings-row { flex-wrap: wrap; gap: 12px; padding: 14px; }
+  .settings-row-info { flex-basis: 100%; }
+  .settings-theme-grid { gap: 6px; }
+  .settings-theme-scene { height: 64px; }
+  .settings-theme-window { inset: 12px 8px 16px; }
+  .settings-theme-description, .settings-app-title { display: none; }
+  .settings-theme-caption { gap: 4px; padding-inline: 0; font-size: 12px; }
+  .settings-theme-caption > svg:first-child { display: none; }
+  .settings-save-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
+
+/* Visible keyboard focus even with a low-contrast custom accent. */
+html :where(.nx-desktop, .nx-ctx-menu, .settings-page) :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ui-text); outline-offset: 2px;
+}
+html .settings-page :is(.settings-accent-swatch, .settings-colorful-swatch):focus-within { outline: 2px solid var(--ui-text); outline-offset: 3px; }
+
+/* Preferences win over every material, including legacy inline/theme rules. */
+html:is(.lithium-low-end, [data-battery-saver='true'], [data-transparency='false'], [data-contrast='high']) {
+  --ui-panel-fill: var(--ui-layer); --ui-panel-filter: none;
+  --ui-window-fill: var(--ui-material); --ui-window-filter: none;
+}
+html:is(.lithium-low-end, [data-battery-saver='true']) :is(.nx-desktop, .settings-page) *,
+html:is(.lithium-low-end, [data-battery-saver='true']) :is(.nx-desktop, .settings-page) *::before,
+html:is(.lithium-low-end, [data-battery-saver='true']) :is(.nx-desktop, .settings-page) *::after {
+  animation: none !important; transition: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important;
+}
+html:is(.lithium-low-end, [data-battery-saver='true']) :is(.nx-taskbar, .nx-start-menu, .nx-icon) img { filter: none !important; }
+html[data-transparency='false'] :is(.nx-desktop, .settings-page) * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+html[data-motion='reduced'] :is(.nx-desktop, .settings-page) *,
+html[data-motion='reduced'] :is(.nx-desktop, .settings-page) *::before,
+html[data-motion='reduced'] :is(.nx-desktop, .settings-page) *::after,
+html[data-motion='reduced'] .nx-ctx-menu { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.nx-desktop, .settings-page), :is(.nx-desktop, .settings-page) *,
+  :is(.nx-desktop, .settings-page) *::before, :is(.nx-desktop, .settings-page) *::after,
+  .nx-ctx-menu { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html { --ui-panel-fill: var(--ui-layer) !important; --ui-panel-filter: none !important; --ui-window-fill: var(--ui-material) !important; --ui-window-filter: none !important; }
+  html :is(.nx-desktop, .settings-page) * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+}
+html[data-contrast='high'] { --ui-text: #fff; --ui-muted: #fff; --ui-border: #fff; --ui-base: #000; --ui-layer: #000; --ui-card: #000; --ui-material: #000; }
+html[data-theme='light'][data-contrast='high'] { --ui-text: #000; --ui-muted: #000; --ui-border: #000; --ui-base: #fff; --ui-layer: #fff; --ui-card: #fff; --ui-material: #fff; }
+@media (forced-colors: active) {
+  html { --ui-text: CanvasText !important; --ui-muted: CanvasText !important; --ui-border: ButtonText !important; --ui-material: Canvas !important; --ui-layer: Canvas !important; --ui-card: Canvas !important; --ui-panel-fill: Canvas !important; --ui-window-fill: Canvas !important; --ui-panel-filter: none !important; --ui-window-filter: none !important; }
+  html .nx-ctx-item:not(.disabled):is(:hover, .focused) { background: Highlight; color: HighlightText; forced-color-adjust: none; }
+  html :where(.nx-desktop, .nx-ctx-menu, .settings-page) :focus-visible { outline-color: Highlight; }
+  .settings-theme-choice[aria-pressed='true'], html .settings-page .settings-nav-item.active,
+  html .settings-page .settings-segmented-btn.active { outline: 2px solid Highlight; outline-offset: -3px; }
+  html .settings-page .settings-toggle.on { background: Highlight; forced-color-adjust: none; }
+  html .settings-page .settings-toggle.on .settings-toggle-knob { background: HighlightText; }
 }

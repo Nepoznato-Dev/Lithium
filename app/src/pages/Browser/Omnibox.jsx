@@ -17,8 +17,10 @@ import { renderSearchResults } from '../../lib/searchResultsRenderer';
 import Icon from '../../Components/Icon';
 import { SEARCH_ENGINES } from '../../lib/settings';
 import { useSettings } from '../../Components/SettingsContext';
+import { createDebouncedSuggester } from '../../lib/searchSuggestions';
 
-function hostname(url) {
+// eslint-disable-next-line no-unused-vars -- utility reserved for future URL display
+function _hostname(url) {
   if (!url) return '';
   let s = url;
   const schemeIdx = s.indexOf('://');
@@ -35,7 +37,9 @@ function isSecure(url) {
 
 export default function Omnibox({ inputRef, onNavigate }) {
   const { settings } = useSettings();
-  const searchUrl = SEARCH_ENGINES[settings.browser?.searchEngine]?.url || SEARCH_ENGINES.duckduckgo.url;
+  const searchEngineId = settings.browser?.searchEngine || 'brave';
+  const searchUrl = SEARCH_ENGINES[searchEngineId]?.url || SEARCH_ENGINES.duckduckgo.url;
+  const suggestionsEnabled = settings.browser?.searchSuggestions !== false;
   const url = currentUrl.value;
 
   // Display: hide internal lithium://newtab URL from the user; show other lithium:// pages as-is
@@ -45,6 +49,10 @@ export default function Omnibox({ inputRef, onNavigate }) {
   const [focused, setFocused] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [selectedIdx, setSelectedIdx] = useState(-1);
+
+  // Create a debounced web suggestion fetcher
+  const suggestRef = useRef(null);
+  if (!suggestRef.current) suggestRef.current = createDebouncedSuggester(250);
 
   // Sync draft with current URL when tab changes
   useEffect(() => { setDraft(displayUrl || ''); }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -91,13 +99,13 @@ export default function Omnibox({ inputRef, onNavigate }) {
       // 3. Calculator — simple arithmetic
       try {
         if (/^[\d\s+\-*/().]+$/.test(draft) && /\d/.test(draft)) {
-          // eslint-disable-next-line no-eval
+           
           const calcResult = Function(`"use strict"; return (${draft})`)();
           if (typeof calcResult === 'number' && isFinite(calcResult)) {
             results.push({ type: 'calc', title: `= ${calcResult}`, url: '', value: String(calcResult) });
           }
         }
-      } catch {}
+      } catch { /* calc failed */ }
 
       // 4. Open tabs
       const openTabs = tabs.value.filter(t => {
@@ -144,9 +152,31 @@ export default function Omnibox({ inputRef, onNavigate }) {
 
       setSuggestions(results.slice(0, 12));
       setSelectedIdx(-1);
+
+      // Fetch web search suggestions in parallel (non-blocking)
+      if (suggestionsEnabled && !/^https?:\/\//i.test(draft) && !/^lithium:\/\//i.test(draft)) {
+        const isLikelyUrl = /^[\w-]+(\.[\w-]+)+/.test(draft);
+        if (!isLikelyUrl && draft.length >= 2) {
+          suggestRef.current(draft, searchEngineId).then(webSuggestions => {
+            if (webSuggestions && webSuggestions.length > 0) {
+              setSuggestions(prev => {
+                // Merge web suggestions at the end, max 4
+                const existing = prev.filter(s => s.type !== 'web-suggestion');
+                const webItems = webSuggestions.slice(0, 4).map(text => ({
+                  type: 'web-suggestion',
+                  title: text,
+                  url: '',
+                  searchQuery: text,
+                }));
+                return [...existing, ...webItems].slice(0, 14);
+              });
+            }
+          });
+        }
+      }
     }, 120);
     return () => clearTimeout(timer);
-  }, [draft, focused]);
+  }, [draft, focused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = useCallback((value) => {
     const trimmed = (value || draft).trim();
@@ -186,7 +216,7 @@ export default function Omnibox({ inputRef, onNavigate }) {
     }
     setFocused(false);
     inputRef.current?.blur();
-  }, [draft, searchUrl, onNavigate]);
+  }, [draft, searchUrl, onNavigate, inputRef]);  
 
   const handleSearch = async (query) => {
     const providerKey = activeSearchProvider.value;
@@ -259,7 +289,7 @@ export default function Omnibox({ inputRef, onNavigate }) {
           setActiveTab(s.tabId);
         } else if (s.type === 'calc') {
           // Copy result to clipboard
-          try { navigator.clipboard?.writeText(s.value); } catch {}
+          try { navigator.clipboard?.writeText(s.value); } catch { /* clipboard unavailable */ }
           setFocused(false);
           inputRef.current?.blur();
           return;
@@ -270,6 +300,9 @@ export default function Omnibox({ inputRef, onNavigate }) {
         } else if (s.type === 'history' || s.type === 'topsite') {
           clearAllModes();
           onNavigate(s.url);
+        } else if (s.type === 'web-suggestion') {
+          // Search for the web suggestion text
+          handleSearch(s.searchQuery || s.title);
         } else {
           submit(s.title);
         }
@@ -352,13 +385,15 @@ export default function Omnibox({ inputRef, onNavigate }) {
                 } else if (s.type === 'tab') {
                   setActiveTab(s.tabId);
                 } else if (s.type === 'calc') {
-                  try { navigator.clipboard?.writeText(s.value); } catch {}
+                  try { navigator.clipboard?.writeText(s.value); } catch { /* clipboard unavailable */ }
                 } else if (s.type === 'engine') {
                   setDraft(s.keyword + ' ');
                   return;
                 } else if (s.type === 'history' || s.type === 'topsite') {
                   clearAllModes();
                   onNavigate(s.url);
+                } else if (s.type === 'web-suggestion') {
+                  handleSearch(s.searchQuery || s.title);
                 } else {
                   submit(s.title);
                 }
@@ -371,6 +406,7 @@ export default function Omnibox({ inputRef, onNavigate }) {
                   s.type === 'history' ? 'Clock' :
                   s.type === 'tab' ? 'Monitor' :
                   s.type === 'keyword' ? 'Search' :
+                  s.type === 'web-suggestion' ? 'Search' :
                   s.type === 'engine' ? 'Hash' :
                   s.type === 'calc' ? 'Calculator' :
                   'Globe'
@@ -380,6 +416,7 @@ export default function Omnibox({ inputRef, onNavigate }) {
               <span className="flex-1 truncate">{s.title || s.url}</span>
               <span className="shrink-0 text-[10px] opacity-30">
                 {s.type === 'keyword' ? s.keyword :
+                 s.type === 'web-suggestion' ? 'suggest' :
                  s.type === 'engine' ? 'engine' :
                  s.type === 'tab' ? 'tab' :
                  s.type === 'calc' ? '=' :

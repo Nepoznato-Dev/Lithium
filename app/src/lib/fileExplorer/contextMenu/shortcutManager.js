@@ -9,7 +9,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { ActionRegistry } from './ActionRegistry';
-import { getEntry, isTrashed } from '../../fileSystem.js';
+import { getEntry } from '../../fileSystem.js';
 
 /**
  * Build a normalised key string from a KeyboardEvent.

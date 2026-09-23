@@ -16,7 +16,7 @@ const MusicNowPlaying = memo(function MusicNowPlaying({ rightOpen, engine, solo,
           </div>
           {solo.status === 'connecting' && <p className="text-[11px] text-white/40">Connecting…</p>}
           {solo.status === 'connected' && solo.auth && !solo.auth.logged_in && (
-            <p className="mb-2 text-[11px] leading-relaxed text-amber-300">Connected — waiting for the daemon's Spotify Connect login.</p>
+            <p className="mb-2 text-[11px] leading-relaxed text-amber-300">Connected — waiting for the daemon&apos;s Spotify Connect login.</p>
           )}
           {solo.info && (
             <div className="mb-2 flex items-center gap-2.5">

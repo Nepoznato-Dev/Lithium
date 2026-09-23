@@ -13,7 +13,7 @@ export default function StatusBar() {
   if (!url) return null;
 
   let display = url;
-  try { display = new URL(url).hostname.replace(/^www\./, '') + new URL(url).pathname; } catch {}
+  try { display = new URL(url).hostname.replace(/^www\./, '') + new URL(url).pathname; } catch { /* invalid URL */ }
 
   return (
     <div className="pointer-events-none fixed bottom-1 left-1 z-50 max-w-md">

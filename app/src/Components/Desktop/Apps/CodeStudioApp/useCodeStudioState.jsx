@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useFileSystem, childrenOf, createEntry, updateEntry, readEntryContent, getEntry, removeEntryDeep } from '../../../../lib/fileSystem';
+import { useMemo, useState } from 'react';
+import { useFileSystem, childrenOf, createEntry, updateEntry, readEntryContent } from '../../../../lib/fileSystem';
 import { extractZipEntry } from '../../../../lib/repos';
 import { callTrusted } from '../../../../lib/ai/apiManager';
-import ContextMenu, { useContextMenu } from '../../ContextMenu';
+import { useContextMenu } from '../../ContextMenu';
 import { PROJECTS_ID, projectPath } from './constants';
 import { findByPath, tabContentFor } from './treeUtils';
 import { diffLines } from './diffUtils';
 
-export default function useCodeStudioState({ windowed }) {
+export default function useCodeStudioState({ windowed: _windowed }) {
   const [tree, commit] = useFileSystem();
   const [activity, setActivity] = useState('explorer');
   const [expanded, setExpanded] = useState(() => new Set([PROJECTS_ID]));

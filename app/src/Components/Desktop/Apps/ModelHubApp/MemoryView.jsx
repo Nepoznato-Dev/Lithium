@@ -37,6 +37,7 @@ export default function MemoryView({ onCtxMenu }) {
     finally { setSyncing(false); }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const entries = useMemo(() => Object.entries(loadMemory()).sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0)), [version]);
   const add = () => { if (!draftKey.trim()) return; writeMemory(draftKey, draftValue); setDraftKey(''); setDraftValue(''); setAdding(false); };
 

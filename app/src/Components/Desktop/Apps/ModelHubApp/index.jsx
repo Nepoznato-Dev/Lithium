@@ -84,10 +84,12 @@ export default function ModelHubApp({ windowed = false, closeSelf, minimizeSelf,
 
   const newChat = () => { setChatId(makeChatId()); setView('playground'); };
 
+   
   const handlePaletteAction = useCallback((action) => {
     if (action === 'new-chat') newChat();
     else if (action === 'clear-chat') { setChatId(makeChatId()); }
     else if (action.startsWith('open-chat:')) openChat(action.slice(10));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- chatId intentionally excluded: palette actions should work for the current chat
   }, [chatId]);
 
   return (

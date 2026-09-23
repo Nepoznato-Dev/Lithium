@@ -1,12 +1,14 @@
 /**
  * SettingsPage — browser settings with sidebar navigation and sections.
+ * Synced with global Lithium settings via settingsStore bridge.
  * Sections: Appearance, Privacy, Shields, Search, Downloads, Accessibility, System.
  */
-import { useState } from 'preact/hooks';
-import { browserSettings, updateBrowserSetting, resetBrowserSettings } from '../stores/settingsStore';
+import { useState, useEffect } from 'preact/hooks';
+import { browserSettings, updateBrowserSetting, resetBrowserSettings, loadBrowserSettings, subscribeToGlobalSettings } from '../stores/settingsStore';
 import { shieldsEnabled, toggleShields } from '../stores/shieldsStore';
-import { authUser, authChecked, getAuthEmail, signOut } from '../stores/authStore';
+import { authUser, authChecked, getDisplayName, signOut } from '../stores/authStore';
 import { signIn, signUp, isSupabaseConfigured } from '../../../lib/supabase';
+import { SEARCH_ENGINES, SEARCH_ENGINE_CATEGORIES } from '../../../lib/settings';
 import Icon from '../../../Components/Icon';
 
 const SECTIONS = [
@@ -24,6 +26,13 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState('appearance');
   const settings = browserSettings.value;
   const shieldsOn = shieldsEnabled.value;
+
+  // Sync with global Lithium settings when they change externally
+  useEffect(() => {
+    return subscribeToGlobalSettings(() => {
+      loadBrowserSettings();
+    });
+  }, []);
 
   return (
     <div className="flex h-full" style={{ background: 'hsl(var(--background))' }}>
@@ -101,12 +110,27 @@ export default function SettingsPage() {
 
         {activeSection === 'search' && (
           <Section title="Search Engine">
-            <SelectRow label="Default search engine" value={settings.searchEngine} options={[
-              { value: 'brave', label: 'Brave Search' },
-              { value: 'duckduckgo', label: 'DuckDuckGo' },
-              { value: 'google', label: 'Google' },
-              { value: 'bing', label: 'Bing' },
-            ]} onChange={v => updateBrowserSetting('searchEngine', v)} />
+            <div className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3">
+              <span className="text-xs text-white/70">Default search engine</span>
+              <select
+                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/80 outline-none"
+                value={settings.searchEngine || 'brave'}
+                onChange={e => updateBrowserSetting('searchEngine', e.target.value)}
+              >
+                {Object.entries(SEARCH_ENGINE_CATEGORIES).map(([catKey, catLabel]) => {
+                  const catEngines = Object.entries(SEARCH_ENGINES).filter(([, eng]) => eng.category === catKey);
+                  if (catEngines.length === 0) return null;
+                  return (
+                    <optgroup key={catKey} label={catLabel}>
+                      {catEngines.map(([v, eng]) => (
+                        <option key={v} value={v}>{eng.label}</option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
+              </select>
+            </div>
+            <ToggleRow label="Search suggestions" checked={settings.searchSuggestions !== false} onChange={v => updateBrowserSetting('searchSuggestions', v)} />
             <SelectRow label="Scrape provider" value={settings.scrapeProvider || ''} options={[
               { value: '', label: 'None (direct)' },
               { value: 'brave', label: 'Brave' },
@@ -236,10 +260,10 @@ function AccountSection() {
       <Section title="Sync & Login">
         <div className="flex items-center gap-3 rounded-lg border border-white/[0.06] p-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-cyan-500/20 text-sm font-bold text-cyan-300">
-            {getAuthEmail().charAt(0).toUpperCase()}
+            {getDisplayName().charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm text-white/90">{getAuthEmail()}</p>
+            <p className="truncate text-sm text-white/90">{getDisplayName()} <span className="text-[11px] text-cyan-400/60 font-normal">Cloud user</span></p>
             <p className="text-[11px] text-white/40">Signed in — login auto-fill is active</p>
           </div>
           <button

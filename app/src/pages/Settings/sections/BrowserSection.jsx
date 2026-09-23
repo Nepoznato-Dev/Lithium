@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { SEARCH_ENGINES } from '../../../lib/settings';
 import { SCRAPE_PROVIDERS } from '../../../lib/searchProxy';
-import { authUser, authChecked, getAuthEmail, signOut, initAuth } from '../../Browser/stores/authStore';
+import { authUser, authChecked, getDisplayName, signOut, initAuth } from '../../Browser/stores/authStore';
 import { signIn, signUp, isSupabaseConfigured } from '../../../lib/supabase';
-import Icon from '../../../Components/Icon';
 import { CardGroup, SettingsRow, SegmentedControl, EnhancedToggle } from '../controls';
 
 export default function BrowserSection({ settings, update }) {
@@ -31,7 +30,7 @@ export default function BrowserSection({ settings, update }) {
   return (
     <div>
       <CardGroup label="Search">
-        <SettingsRow title="Search engine" description="Default engine for address-bar queries">
+        <SettingsRow title="Search engine" description="Default engine for address-bar queries and Start menu web search">
           <SegmentedControl
             value={settings.browser.searchEngine}
             onChange={v => update('browser.searchEngine', v)}
@@ -58,6 +57,36 @@ export default function BrowserSection({ settings, update }) {
         </SettingsRow>
       </CardGroup>
 
+      <CardGroup label="Browser UI">
+        <SettingsRow title="Bookmarks bar" description="Show the bookmarks bar below the address bar">
+          <EnhancedToggle value={settings.browser?.showBookmarksBar ?? true} onChange={v => update('browser.showBookmarksBar', v)} />
+        </SettingsRow>
+        <SettingsRow title="Status bar" description="Show the status bar at the bottom of the browser">
+          <EnhancedToggle value={settings.browser?.showStatusBar ?? false} onChange={v => update('browser.showStatusBar', v)} />
+        </SettingsRow>
+        <SettingsRow title="Compact tab strip" description="Use a smaller tab strip for more vertical space">
+          <EnhancedToggle value={settings.browser?.compactTabs ?? false} onChange={v => update('browser.compactTabs', v)} />
+        </SettingsRow>
+      </CardGroup>
+
+      <CardGroup label="Privacy & Security">
+        <SettingsRow title="Block third-party cookies" description="Prevent websites from setting cross-site tracking cookies">
+          <EnhancedToggle value={settings.browser?.blockThirdPartyCookies ?? true} onChange={v => update('browser.blockThirdPartyCookies', v)} />
+        </SettingsRow>
+        <SettingsRow title="Do Not Track" description="Send a Do Not Track header with all requests">
+          <EnhancedToggle value={settings.browser?.doNotTrack ?? true} onChange={v => update('browser.doNotTrack', v)} />
+        </SettingsRow>
+        <SettingsRow title="Prevent fingerprinting" description="Limit browser fingerprint that sites can use to identify you">
+          <EnhancedToggle value={settings.browser?.preventFingerprinting ?? true} onChange={v => update('browser.preventFingerprinting', v)} />
+        </SettingsRow>
+      </CardGroup>
+
+      <CardGroup label="Downloads">
+        <SettingsRow title="Ask before downloading" description="Confirm each download before saving">
+          <EnhancedToggle value={settings.browser?.askBeforeDownload ?? true} onChange={v => update('browser.askBeforeDownload', v)} />
+        </SettingsRow>
+      </CardGroup>
+
       <CardGroup label="Sync & Login">
         {!isSupabaseConfigured() ? (
           <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
@@ -71,10 +100,10 @@ export default function BrowserSection({ settings, update }) {
           <div className="settings-row">
             <div className="flex items-center gap-3">
               <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(34,211,238,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#67e8f9' }}>
-                {getAuthEmail().charAt(0).toUpperCase()}
+                {getDisplayName().charAt(0).toUpperCase()}
               </div>
               <div>
-                <div className="text-[13px] text-white/90">{getAuthEmail()}</div>
+                <div className="text-[13px] text-white/90">{getDisplayName()} <span className="text-[11px] text-cyan-400/60 font-normal">Cloud user</span></div>
                 <div className="text-[11px] text-white/40">Auto-fill active — login forms will be detected</div>
               </div>
             </div>
@@ -96,10 +125,10 @@ export default function BrowserSection({ settings, update }) {
         )}
       </CardGroup>
 
-      <CardGroup label="Cloudflare Proxy">
+      <CardGroup label="Page Proxy">
         <SettingsRow
           title="Enable proxy"
-          description="Route web pages through a Cloudflare Worker to bypass iframe restrictions (CSP, X-Frame-Options). Sites that normally refuse embedding will load natively."
+          description="Route web pages through your own server to bypass iframe restrictions (CSP, X-Frame-Options). Sites that normally refuse embedding will load natively."
         >
           <EnhancedToggle
             checked={Boolean(settings.browser?.proxyEnabled)}
@@ -107,13 +136,13 @@ export default function BrowserSection({ settings, update }) {
           />
         </SettingsRow>
         <SettingsRow
-          title="Proxy URL"
-          description="The deployed Worker URL (e.g. https://lithium-proxy.your-subdomain.workers.dev)"
+          title="Proxy origin"
+          description="Where to send them — the server is asked at /api/web/proxy. Leave empty to use the one Lithium already found; set an origin like this machine's address to reach a server on another host."
         >
           <input
             className="text-input w-56 rounded-full py-1.5 text-xs"
             type="url"
-            placeholder="https://lithium-proxy.workers.dev"
+            placeholder={`http://${window.location.hostname}:8734`}
             value={proxyUrl}
             onChange={e => setProxyUrl(e.target.value)}
             onBlur={() => update('browser.proxyUrl', proxyUrl.trim())}

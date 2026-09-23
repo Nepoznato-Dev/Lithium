@@ -48,10 +48,12 @@ function saveAll(apps) {
  * Create or update a dynamic app.
  *
  * @param {object} manifest  Raw manifest JSON (will be validated).
- * @param {string} html      The app's HTML entry (srcdoc content).
+ * @param {string} html      The app's HTML (body/structure only).
+ * @param {string} [css]     Optional CSS styles.
+ * @param {string} [js]      Optional JavaScript code.
  * @returns {object}         The validated manifest with _dynamic flag.
  */
-export function addDynamicApp(manifest, html) {
+export function addDynamicApp(manifest, html, css, js) {
   if (typeof html !== 'string' || !html.trim()) {
     throw new Error('HTML content must be a non-empty string');
   }
@@ -61,6 +63,8 @@ export function addDynamicApp(manifest, html) {
   const entry = {
     manifest: validated,
     html,
+    css: typeof css === 'string' ? css : '',
+    js: typeof js === 'string' ? js : '',
     createdAt: existing >= 0 ? apps[existing].createdAt : Date.now(),
     updatedAt: Date.now(),
   };

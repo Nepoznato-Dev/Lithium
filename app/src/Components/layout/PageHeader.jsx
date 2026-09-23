@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../../lib/router';
 import Icon from '../Icon';
 
 /** Consistent page header with back navigation, title, and subtitle.

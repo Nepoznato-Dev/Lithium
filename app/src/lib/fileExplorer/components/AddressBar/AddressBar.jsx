@@ -12,13 +12,7 @@ export default memo(function AddressBar({ dropTarget }) {
   const [pathText, setPathText] = useState('');
   const { back, forward, canBack, canForward } = useHistory();
 
-  const handleClick = useCallback(() => {
-    if (!editing) {
-      const crumbs = nav.value.stack.map(c => c.name);
-      setPathText(crumbs.join(' \\ '));
-      setEditing(true);
-    }
-  }, [editing]);
+  /* handleClick reserved for future breadcrumb editing */
 
   const handleCommit = useCallback(() => {
     setEditing(false);

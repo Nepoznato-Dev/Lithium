@@ -10,25 +10,30 @@ import useNotesActions from './useNotesActions';
 
 const VAULT_ID = 'default-notes';
 const noteName = entry => entry.name.replace(/\.(md|txt)$/i, '');
+const LAYOUT_OPTIONS = [
+  { value: 'notes', label: 'Notes', hint: 'Markdown workspace', icon: 'BookOpen' },
+  { value: 'notepad', label: 'Notepad', hint: 'Simple text editor', icon: 'FileText' },
+];
 
 /* ---------- Obsidian-style markdown notes ---------- */
 
-export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, maximizeSelf, isMaximized }) {
+export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, maximizeSelf, isMaximized, initialEntryId, openRequest }) {
   const areaRef = useRef(null);
   const gutterRef = useRef(null);
   const s = useNotesState();
-  const a = useNotesActions(s, areaRef, gutterRef);
+  const a = useNotesActions(s, areaRef, gutterRef, initialEntryId, openRequest);
   const {
-    tree, tabs, setTabs, activeId, setActiveId, mode, setMode,
+    tree, tabs, activeId, mode: storedMode, setMode,
+    layout, fontSize, setFontSize, loading, saveStatus, saveDraft,
     inlineEdit, setInlineEdit, sidebarOpen, setSidebarOpen,
     switcherOpen, setSwitcherOpen, switcherQuery, setSwitcherQuery,
-    openFolders, setOpenFolders, spellCheck, setSpellCheck,
+    spellCheck, setSpellCheck,
     notesSettings, setNotesSettings, settingsOpen, setSettingsOpen,
     graphOpen, setGraphOpen, graphMode, setGraphMode,
     outlineOpen, setOutlineOpen, backlinksOpen, setBacklinksOpen,
     tagsOpen, setTagsOpen, cmdPaletteOpen, setCmdPaletteOpen,
     cmdQuery, setCmdQuery, searchOpen, setSearchOpen,
-    searchQuery, setSearchQuery, starred, setStarred,
+    searchQuery, setSearchQuery, starred,
     templateMenuOpen, setTemplateMenuOpen,
     active, draft, setDraft, frontmatter, previewHtml, headings,
     backlinks, allTags, vaultNotes, starredNotes,
@@ -36,27 +41,37 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
   } = s;
   const {
     menu, openMenu, closeMenu,
-    openNote, closeTab, commitInlineEdit,
+    openNote, closeTab, commitInlineEdit, changeLayout, onAppKey,
     createNote, createDailyNote, insertTemplate, toggleStar,
-    createFolder, renameEntry, deleteEntry, restore, deletePermanent,
+    createFolder,
     openWiki, exportNote,
-    editSelection, wrapSelection, setHeading, prefixLines, onEditorKey,
+    onEditorKey,
     renderTree, contextItems,
     cmdResults, searchResults, switcherResults, trashedFolders,
     noteMenu, folderMenu,
   } = a;
 
+  const isNotepad = layout === 'notepad';
+  const mode = isNotepad && (storedMode === 'split' || storedMode === 'live') ? 'edit' : storedMode;
+
   return (
-    <div className="flex h-full min-w-0 flex-col bg-[#1e1f24] text-white" onContextMenu={e => openMenu(e, contextItems())}>
+    <div className="flex h-full min-w-0 flex-col bg-[#1e1f24] text-white" data-notes-layout={layout} onKeyDown={onAppKey} onContextMenu={e => openMenu(e, contextItems())}>
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-white/[0.08] bg-[#191a1f] pl-3">
+        <Icon name="FileText" size={14} className="acc-text" />
+        <span className="mr-auto text-xs font-medium text-white/80">Notes</span>
+        {windowed && <WinControls onClose={() => { commitInlineEdit(); void saveDraft(); closeSelf?.(); }} onMinimize={minimizeSelf} onMaximize={maximizeSelf} isMaximized={isMaximized} />}
+      </div>
       <div className="relative flex min-h-0 flex-1">
       {/* Ribbon */}
-      <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-white/[0.08] bg-[#191a1f] py-2">
-        <button className={`notes-rail ${sidebarOpen ? 'active' : ''}`} title="Vault" onClick={() => setSidebarOpen(v => !v)}><Icon name="Folder" size={16} /></button>
+      <div className="flex w-11 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-white/[0.08] bg-[#191a1f] py-2">
+        <button className={`notes-rail ${sidebarOpen ? 'active' : ''}`} aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'} aria-expanded={sidebarOpen} title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'} onClick={() => setSidebarOpen(v => !v)}><Icon name="PanelLeft" size={16} /></button>
         <button className="notes-rail" title="Go to file (Ctrl+O)" onClick={() => setSwitcherOpen(true)}><Icon name="Search" size={16} /></button>
+        {!isNotepad && <>
         <button className={`notes-rail ${graphOpen ? 'active' : ''}`} title="Graph view (Ctrl+G)" onClick={() => setGraphOpen(v => !v)}><Icon name="Network" size={16} /></button>
         <button className={`notes-rail ${outlineOpen ? 'active' : ''}`} title="Outline" onClick={() => setOutlineOpen(v => !v)}><Icon name="List" size={16} /></button>
         <button className={`notes-rail ${backlinksOpen ? 'active' : ''}`} title="Backlinks" onClick={() => setBacklinksOpen(v => !v)}><Icon name="Link2" size={16} /></button>
         <button className={`notes-rail ${tagsOpen ? 'active' : ''}`} title="Tags" onClick={() => setTagsOpen(v => !v)}><Icon name="Tag" size={16} /></button>
+        </>}
         <button className="notes-rail" title="Search vault (Ctrl+F)" onClick={() => setSearchOpen(true)}><Icon name="Search" size={16} /></button>
         <button className={`notes-rail ${settingsOpen ? 'active' : ''}`} title="Settings" onClick={() => setSettingsOpen(v => !v)}><Icon name="SlidersHorizontal" size={16} /></button>
         <div className="mt-auto" />
@@ -66,7 +81,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
 
       {/* Sidebar */}
       {sidebarOpen && (
-        <div className="flex w-52 shrink-0 flex-col border-r border-white/[0.08] bg-[#232429]">
+        <aside aria-label="Notes sidebar" className="flex min-h-0 w-52 shrink-0 flex-col border-r border-white/[0.08] bg-[#232429]">
           <div className="flex items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-white/40">
             Vault
             <span className="flex gap-1">
@@ -75,7 +90,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
               <button className="text-white/40 hover:text-white" title="New note" onClick={() => createNote()}><Icon name="Plus" size={13} /></button>
             </span>
           </div>
-          <div className="flex-1 overflow-y-auto pb-2 pr-1">
+          <div className="min-h-0 flex-1 overflow-y-auto pb-2 pr-1">
             {/* Starred section */}
             {starredNotes.length > 0 && (
               <div className="mb-2">
@@ -105,12 +120,25 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
               </div>
             )}
           </div>
-          <button className="flex w-full items-center gap-1.5 border-t border-white/[0.08] px-3 py-2 text-[11px] text-white/60 hover:bg-white/[0.04]" title="Switch note" onClick={() => setSwitcherOpen(true)}>
+          <button className="flex w-full shrink-0 items-center gap-1.5 border-t border-white/[0.08] px-3 py-2 text-[11px] text-white/60 hover:bg-white/[0.04]" title="Switch note" onClick={() => setSwitcherOpen(true)}>
             <Icon name="BookOpen" size={12} className="acc-text" />
             <span className="min-w-0 flex-1 truncate text-left">{active ? noteName(active) : `${vaultNotes.length} notes`}</span>
             <Icon name="ChevronDown" size={12} />
           </button>
-        </div>
+          <div role="group" aria-label="Editor layout" className="shrink-0 border-t border-white/[0.08] p-2">
+            <div className="px-2 pb-1.5 pt-1 text-[9px] font-semibold uppercase tracking-widest text-white/40">Editor layout</div>
+            {LAYOUT_OPTIONS.map(option => (
+              <button key={option.value} type="button" aria-label={`${option.label} layout`} aria-pressed={layout === option.value} className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] ${layout === option.value ? 'acc-soft acc-text' : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80'}`} onClick={() => changeLayout(option.value)}>
+                <Icon name={option.icon} size={16} className="shrink-0" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-medium">{option.label}</span>
+                  <span className="block text-[10px] text-white/40">{option.hint}</span>
+                </span>
+                {layout === option.value && <Icon name="Check" size={13} className="shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </aside>
       )}
 
       {/* Main */}
@@ -122,21 +150,27 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
               const entry = getEntry(tree, id);
               if (!entry) return null;
               return (
-                <div key={id} className={`group flex items-center gap-2 border-r border-white/[0.08] px-3 py-2 text-xs ${activeId === id ? 'bg-[#1e1f24] text-white' : 'text-white/50 hover:bg-white/[0.04]'}`} onClick={() => setActiveId(id)}>
-                  <Icon name="FileText" size={12} className="acc-text" />
-                  <span className="max-w-[120px] truncate">{noteName(entry)}</span>
-                  {starred.includes(id) && <Icon name="Star" size={9} className="text-yellow-400" />}
-                  <button className="text-white/30 opacity-0 group-hover:opacity-100 hover:text-white" onClick={e => { e.stopPropagation(); closeTab(id); }} aria-label="Close tab"><Icon name="X" size={12} /></button>
+                <div key={id} className={`group flex shrink-0 items-center border-r border-white/[0.08] text-xs ${activeId === id ? 'bg-[#1e1f24] text-white' : 'text-white/50 hover:bg-white/[0.04]'}`}>
+                  <button className="flex items-center gap-2 px-3 py-2" aria-pressed={activeId === id} onClick={() => openNote(id)}>
+                    <Icon name="FileText" size={12} className="acc-text" />
+                    <span className="max-w-[120px] truncate">{isNotepad ? entry.name : noteName(entry)}</span>
+                    {starred.includes(id) && <Icon name="Star" size={9} className="text-yellow-400" />}
+                  </button>
+                  <button className="mr-2 text-white/30 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-white" onClick={() => closeTab(id)} aria-label={`Close ${entry.name}`}><Icon name="X" size={12} /></button>
                 </div>
               );
             })}
           </div>
           <button className="px-3 py-2 text-white/50 hover:text-white" title="New tab (Ctrl+N)" onClick={() => createNote()}><Icon name="Plus" size={14} /></button>
-          {windowed && <WinControls onClose={closeSelf} onMinimize={minimizeSelf} onMaximize={maximizeSelf} isMaximized={isMaximized} />}
+          {isNotepad && <>
+            <button className="notes-tool" aria-label="Open note" title="Open note (Ctrl+O)" onClick={() => setSwitcherOpen(true)}><Icon name="FolderOpen" size={14} /></button>
+            <button className="notes-tool" aria-label="Toggle Markdown preview" aria-pressed={mode === 'preview'} title="Toggle Markdown preview (Ctrl+E)" disabled={!active || loading} onClick={() => setMode(mode === 'preview' ? 'edit' : 'preview')}><Icon name="Eye" size={14} /></button>
+            <button className="notes-tool" aria-label="Save note" title="Save (Ctrl+S)" disabled={!active || loading} onClick={() => { void saveDraft(); }}><Icon name="Save" size={14} /></button>
+          </>}
         </div>
 
         {/* Toolbar */}
-        {active && (
+        {!isNotepad && active && (
           <div className="flex items-center gap-1 border-b border-white/[0.08] px-3 py-1.5 text-xs text-white/50">
             <button className={`notes-tool ${mode === 'edit' ? 'active' : ''}`} title="Edit" onClick={() => { setMode('edit'); setInlineEdit(null); }}><Icon name="Pencil" size={13} /></button>
             <button className={`notes-tool ${mode === 'preview' ? 'active' : ''}`} title="Reading mode (Ctrl+E)" onClick={() => { setMode('preview'); setInlineEdit(null); }}><Icon name="Eye" size={13} /></button>
@@ -157,7 +191,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
         )}
 
         {/* Frontmatter bar */}
-        {active && Object.keys(frontmatter).length > 0 && (
+        {!isNotepad && active && Object.keys(frontmatter).length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.08] bg-[#1a1b20] px-3 py-1.5 text-[10px] text-white/40">
             {Object.entries(frontmatter).map(([key, val]) => (
               <span key={key} className="flex items-center gap-1">
@@ -172,32 +206,34 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
         {!active ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-5 text-sm acc-text">
             <button className="hover:underline" onClick={() => createNote()}>Create new note (Ctrl + N)</button>
-            <button className="hover:underline" onClick={() => createDailyNote()}>Open today&apos;s daily note (Ctrl+Shift+D)</button>
+            {!isNotepad && <button className="hover:underline" onClick={() => createDailyNote()}>Open today&apos;s daily note (Ctrl+Shift+D)</button>}
             <button className="hover:underline" onClick={() => setSwitcherOpen(true)}>Go to file (Ctrl + O)</button>
-            <button className="hover:underline" onClick={() => setCmdPaletteOpen(true)}>Command palette (Ctrl + P)</button>
+            {!isNotepad && <button className="hover:underline" onClick={() => setCmdPaletteOpen(true)}>Command palette (Ctrl + P)</button>}
             <button className="text-white/40 hover:underline" onClick={() => setSidebarOpen(v => !v)}>{sidebarOpen ? 'Close sidebar' : 'Open sidebar'}</button>
           </div>
+        ) : loading ? (
+          <div role="status" className="flex flex-1 items-center justify-center text-xs text-white/50">{saveStatus === 'Could not load note' ? saveStatus : 'Loading note…'}</div>
         ) : mode === 'edit' ? (
           <div className="flex min-h-0 flex-1">
-            {notesSettings.lineNumbers && (
-              <div ref={gutterRef} className="w-10 shrink-0 select-none overflow-hidden border-r border-white/[0.08] bg-[#191a1f] py-4 pr-2 text-right font-mono text-[13px] text-white/30" style={{ lineHeight: 1.7 }} aria-hidden>
+            {!isNotepad && notesSettings.lineNumbers && (
+              <div ref={gutterRef} className="w-10 shrink-0 select-none overflow-hidden border-r border-white/[0.08] bg-[#191a1f] py-4 pr-2 text-right font-mono text-[13px] text-white/30" style={{ lineHeight: 1.7, fontSize }} aria-hidden>
                 {Array.from({ length: lineCount }, (_, i) => <div key={i}>{i + 1}</div>)}
               </div>
             )}
-            <textarea ref={areaRef} className="notes-editor" value={draft} spellCheck={spellCheck} dir={notesSettings.rtl ? 'rtl' : 'ltr'} onChange={e => setDraft(e.target.value)} onKeyDown={onEditorKey} onScroll={e => { if (gutterRef.current) gutterRef.current.scrollTop = e.target.scrollTop; }} placeholder="Write markdown… use [[Wiki links]] to connect notes.&#10;&#10;Ctrl+P for commands · Ctrl+G for graph · Ctrl+E to toggle reading mode" />
+            <textarea ref={areaRef} className="notes-editor" aria-label="Note content" style={{ fontSize, tabSize: 2 }} value={draft} spellCheck={spellCheck} dir={notesSettings.rtl ? 'rtl' : 'ltr'} onChange={e => setDraft(e.target.value)} onKeyDown={onEditorKey} onScroll={e => { if (gutterRef.current) gutterRef.current.scrollTop = e.target.scrollTop; }} placeholder={isNotepad ? 'Start typing…' : 'Write markdown… use [[Wiki links]] to connect notes.'} />
           </div>
         ) : mode === 'preview' ? (
-          <div className="md-body flex-1 overflow-y-auto px-6 py-4" onClick={e => { const wiki = e.target.closest('[data-wiki]'); if (wiki) { e.preventDefault(); openWiki(wiki.dataset.wiki); } const embed = e.target.closest('[data-embed]'); if (embed) { e.preventDefault(); openWiki(embed.dataset.embed); } const tag = e.target.closest('.md-tag'); if (tag) { e.preventDefault(); setTagsOpen(true); } }} dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          <div className="md-body flex-1 overflow-y-auto px-6 py-4" style={{ fontSize }} onClick={e => { const wiki = e.target.closest('[data-wiki]'); if (wiki) { e.preventDefault(); openWiki(wiki.dataset.wiki); } const embed = e.target.closest('[data-embed]'); if (embed) { e.preventDefault(); openWiki(embed.dataset.embed); } const tag = e.target.closest('.md-tag'); if (tag) { e.preventDefault(); setTagsOpen(true); } }} dangerouslySetInnerHTML={{ __html: previewHtml }} />
         ) : mode === 'split' ? (
           /* Split mode */
           <div className="flex min-h-0 flex-1">
             <div className="flex min-h-0 flex-1 border-r border-white/[0.08]">
-              {notesSettings.lineNumbers && (
-                <div ref={gutterRef} className="w-10 shrink-0 select-none overflow-hidden border-r border-white/[0.08] bg-[#191a1f] py-4 pr-2 text-right font-mono text-[13px] text-white/30" style={{ lineHeight: 1.7 }} aria-hidden>
+              {!isNotepad && notesSettings.lineNumbers && (
+                <div ref={gutterRef} className="w-10 shrink-0 select-none overflow-hidden border-r border-white/[0.08] bg-[#191a1f] py-4 pr-2 text-right font-mono text-[13px] text-white/30" style={{ lineHeight: 1.7, fontSize }} aria-hidden>
                   {Array.from({ length: lineCount }, (_, i) => <div key={i}>{i + 1}</div>)}
                 </div>
               )}
-              <textarea ref={areaRef} className="notes-editor" value={draft} spellCheck={spellCheck} dir={notesSettings.rtl ? 'rtl' : 'ltr'} onChange={e => setDraft(e.target.value)} onKeyDown={onEditorKey} onScroll={e => { if (gutterRef.current) gutterRef.current.scrollTop = e.target.scrollTop; }} placeholder="Write markdown…" />
+              <textarea ref={areaRef} className="notes-editor" aria-label="Note content" style={{ fontSize, tabSize: 2 }} value={draft} spellCheck={spellCheck} dir={notesSettings.rtl ? 'rtl' : 'ltr'} onChange={e => setDraft(e.target.value)} onKeyDown={onEditorKey} onScroll={e => { if (gutterRef.current) gutterRef.current.scrollTop = e.target.scrollTop; }} placeholder="Write markdown…" />
             </div>
             <div className="md-body min-h-0 flex-1 overflow-y-auto px-6 py-4" onClick={e => { const wiki = e.target.closest('[data-wiki]'); if (wiki) { e.preventDefault(); openWiki(wiki.dataset.wiki); } }} dangerouslySetInnerHTML={{ __html: previewHtml }} />
           </div>
@@ -270,18 +306,22 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
         {/* Status bar */}
         {active && (
           <div className="flex items-center gap-3 border-t border-white/[0.08] bg-[#191a1f] px-3 py-1 text-[10px] text-white/30">
-            <span>{noteName(active)}</span>
-            {frontmatter.tags && Array.isArray(frontmatter.tags) && frontmatter.tags.length > 0 && (
+            <span className="max-w-[160px] truncate">{active.name}</span>
+            <span role="status">{loading ? 'Loading…' : saveStatus}</span>
+            {!isNotepad && frontmatter.tags && Array.isArray(frontmatter.tags) && frontmatter.tags.length > 0 && (
               <span className="flex items-center gap-1">{frontmatter.tags.map(t => <span key={t} className="text-purple-400/60">#{t}</span>)}</span>
             )}
             <span className="ml-auto">{draft.length} chars</span>
-            <span>Ln {draft.slice(0, areaRef.current?.selectionStart || 0).split('\n').length}</span>
+            <span>{lineCount} lines</span>
+            <button aria-label="Decrease font size" className="rounded px-1 hover:bg-white/10" onClick={() => setFontSize(size => Math.max(10, size - 1))}>A−</button>
+            <span>{fontSize}px</span>
+            <button aria-label="Increase font size" className="rounded px-1 hover:bg-white/10" onClick={() => setFontSize(size => Math.min(24, size + 1))}>A+</button>
           </div>
         )}
       </div>
 
       {/* Outline panel */}
-      {outlineOpen && (
+      {!isNotepad && outlineOpen && (
         <div className="flex w-48 shrink-0 flex-col border-l border-white/[0.08] bg-[#232429]">
           <div className="flex items-center gap-2 border-b border-white/[0.08] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
             <Icon name="List" size={11} className="acc-text" /> Outline
@@ -308,7 +348,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
       )}
 
       {/* Backlinks panel */}
-      {backlinksOpen && (
+      {!isNotepad && backlinksOpen && (
         <div className="flex w-56 shrink-0 flex-col border-l border-white/[0.08] bg-[#232429]">
           <div className="flex items-center gap-2 border-b border-white/[0.08] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
             <Icon name="Link2" size={11} className="acc-text" /> Backlinks ({backlinks.length})
@@ -335,7 +375,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
       )}
 
       {/* Tags panel */}
-      {tagsOpen && (
+      {!isNotepad && tagsOpen && (
         <div className="flex w-48 shrink-0 flex-col border-l border-white/[0.08] bg-[#232429]">
           <div className="flex items-center gap-2 border-b border-white/[0.08] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
             <Icon name="Tag" size={11} className="acc-text" /> Tags ({allTags.size})
@@ -453,7 +493,7 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
       )}
 
       {/* Graph view */}
-      {graphOpen && (
+      {!isNotepad && graphOpen && (
         <InteractiveGraph
           notes={vaultNotes}
           activeId={activeId}
@@ -501,6 +541,8 @@ export default function NotesApp({ windowed = false, closeSelf, minimizeSelf, ma
             <div className="pt-3 text-[10px] font-semibold uppercase tracking-widest text-white/35">Hotkeys</div>
             {[
               ['Ctrl+N', 'New note'],
+              ['Ctrl+S', 'Save note'],
+              ['Ctrl+W', 'Close note tab'],
               ['Ctrl+O', 'Go to file / quick switch'],
               ['Ctrl+P', 'Command palette'],
               ['Ctrl+E', 'Cycle edit → read → split → live'],

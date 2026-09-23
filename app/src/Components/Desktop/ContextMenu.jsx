@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from '../Icon';
 import { PngIcon } from './DesktopApps';
@@ -63,35 +63,156 @@ function actionableIndices(items) {
   return indices;
 }
 
-function SubFlyout({ items, anchorRect, onAction, ctx }) {
-  const ref = React.useRef(null);
+/**
+ * How long a submenu branch stays open after the pointer leaves the list that
+ * owns it. Flyouts render through a portal, so they are *not* DOM descendants
+ * of their parent list — and Preact binds `onMouseLeave` natively, so the
+ * parent list reports a leave the moment the pointer enters the gap between a
+ * menu and its flyout. Closing there made every submenu vanish before it could
+ * be clicked (React hid this behind its synthesized enter/leave events).
+ */
+const SUBMENU_GRACE_MS = 260;
+
+/** A menu box still counts as hovered this many pixels past its edge, so a slow
+ *  diagonal approach across the gap does not collapse the branch. */
+const HOVER_SLACK = 10;
+
+/**
+ * Hover bookkeeping shared by one open menu and every flyout portalled under
+ * it. A single pending close is enough: the pointer walks the menu stack, so
+ * the most recent `mouseleave` is always the branch being abandoned.
+ */
+function createMenuSession() {
+  /** @type {Set<HTMLElement>} every rendered menu box of this tree */
+  const surfaces = new Set();
+  const point = { x: -1, y: -1 };
+  let timer = 0;
+
+  const cancel = () => {
+    if (timer) { clearTimeout(timer); timer = 0; }
+  };
+
+  const hovering = () => {
+    if (point.x < 0) return false;
+    for (const node of surfaces) {
+      if (!node.isConnected) { surfaces.delete(node); continue; }
+      const r = node.getBoundingClientRect();
+      if (point.x >= r.left - HOVER_SLACK && point.x <= r.right + HOVER_SLACK
+        && point.y >= r.top - HOVER_SLACK && point.y <= r.bottom + HOVER_SLACK) return true;
+    }
+    return false;
+  };
+
+  return {
+    /** Track a menu box while it is mounted; returns an unregister callback. */
+    surface(node) {
+      if (!node) return null;
+      surfaces.add(node);
+      return () => surfaces.delete(node);
+    },
+    track(x, y) { point.x = x; point.y = y; },
+    /** The pointer left the window: nothing counts as hovered any more. */
+    drop() { point.x = -1; point.y = -1; },
+    cancel,
+    /** Defer `close`, and keep deferring while the pointer rests on the menu. */
+    schedule(close) {
+      cancel();
+      const tick = () => {
+        timer = 0;
+        if (hovering()) { timer = setTimeout(tick, SUBMENU_GRACE_MS); return; }
+        close();
+      };
+      timer = setTimeout(tick, SUBMENU_GRACE_MS);
+    },
+  };
+}
+
+/** Place a flyout beside its anchor row — flipping to the left of the row near
+ *  the right edge, and clamped inside the viewport. */
+function flyoutPosition(anchorRect, width, height) {
+  const gap = 4;
+  const flip = anchorRect.right + gap + width > window.innerWidth - 6;
+  const x = flip ? anchorRect.left - gap - width : anchorRect.right + gap;
+  return clampPosition(x, anchorRect.top - 5, width, height);
+}
+
+function SubFlyout({ items, anchor, onAction, onDeactivate, ctx, session }) {
+  const ref = useRef(null);
   const [pos, setPos] = useState(() => {
-    const width = 224;
-    const flip = anchorRect.right + width + 8 > window.innerWidth;
-    return { x: flip ? Math.max(6, anchorRect.left - width - 4) : anchorRect.right + 4, y: anchorRect.top - 4 };
+    const rect = anchor?.getBoundingClientRect?.();
+    // Height 0: the real box is unknown yet, so only clamp what is known.
+    return rect ? flyoutPosition(rect, 224, 0) : { x: 0, y: 0 };
   });
 
-  // Fine-clamp once the real size is known.
+  /**
+   * Re-measure from the live anchor row instead of trusting a snapshot: the
+   * root menu repositions itself after its first paint, and long lists scroll,
+   * either of which walks a one-shot rect away from the row it belongs to.
+   */
+  const place = useCallback(() => {
+    const node = ref.current;
+    if (!node || !anchor?.isConnected) return;
+    const box = node.getBoundingClientRect();
+    const next = flyoutPosition(anchor.getBoundingClientRect(), box.width, box.height);
+    setPos(prev => (prev.x === next.x && prev.y === next.y ? prev : next));
+  }, [anchor]);
+
+  useLayoutEffect(place);
+
+  // Capture-phase, because the scrolling element is usually an ancestor list:
+  // the flyout has to travel with its row rather than stay where it opened.
   useEffect(() => {
-    if (!ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    setPos(prev => clampPosition(prev.x, prev.y, rect.width, rect.height));
-  }, []);
+    const onScroll = () => place();
+    window.addEventListener('scroll', onScroll, true);
+    return () => window.removeEventListener('scroll', onScroll, true);
+  }, [place]);
+
+  useEffect(() => {
+    const off = session.surface(ref.current);
+    return () => { if (off) off(); };
+  }, [session]);
 
   // Portal to body: a parent with backdrop-filter/transform would otherwise
   // become the containing block and offset position:fixed.
+  // `max-content` keeps the box off shrink-to-fit: a fixed element sized by its
+  // available space would change width when it moves, which feeds back into the
+  // flip decision the placement is derived from.
   return createPortal(
-    <div ref={ref} className="nx-ctx-menu" role="menu" aria-label="Submenu" style={{ position: 'fixed', left: pos.x, top: pos.y, animation: 'none' }}>
-      <MenuList items={items} onAction={onAction} ctx={ctx} />
+    <div
+      ref={ref}
+      className="nx-ctx-menu"
+      role="menu"
+      aria-label="Submenu"
+      style={{ position: 'fixed', left: pos.x, top: pos.y, width: 'max-content', animation: 'none' }}
+      onMouseEnter={() => session.cancel()}
+      onMouseLeave={() => session.schedule(onDeactivate)}
+      onMouseDown={event => event.stopPropagation()}
+      onContextMenu={event => { event.preventDefault(); event.stopPropagation(); }}
+    >
+      <MenuList items={items} onAction={onAction} ctx={ctx} session={session} />
     </div>,
     document.body
   );
 }
 
-function MenuList({ items, onAction, focusIndex = 0, onFocusIndex, typeAhead, ctx }) {
-  const [openSub, setOpenSub] = useState(null); // { id, rect }
+function MenuList({ items, onAction, focusIndex = 0, onFocusIndex, typeAhead: _typeAhead, ctx, session }) {
+  const [openSub, setOpenSub] = useState(null); // { id, el }
   const [lazyItems, setLazyItems] = useState(null); // resolved lazy submenu items
   const listRef = useRef(null);
+  const openSubRef = useRef(null);
+  openSubRef.current = openSub;
+
+  const closeSub = useCallback(() => {
+    setOpenSub(null);
+    setLazyItems(null);
+    if (onFocusIndex) onFocusIndex(-1);
+  }, [onFocusIndex]);
+
+  /** Show (or re-anchor) the branch owned by `item`. */
+  const openSubFor = useCallback((item, row) => {
+    session.cancel();
+    setOpenSub({ id: item.id, el: row });
+  }, [session]);
 
   // Scroll the focused item into view when focusIndex changes.
   useEffect(() => {
@@ -112,7 +233,13 @@ function MenuList({ items, onAction, focusIndex = 0, onFocusIndex, typeAhead, ct
   }, [ctx]);
 
   return (
-    <div ref={listRef} className="nx-ctx-list" role="menu" onMouseLeave={() => { setOpenSub(null); setLazyItems(null); if (onFocusIndex) onFocusIndex(-1); }}>
+    <div
+      ref={listRef}
+      className="nx-ctx-list"
+      role="menu"
+      onMouseEnter={() => session.cancel()}
+      onMouseLeave={() => { if (openSubRef.current) session.schedule(closeSub); }}
+    >
       {items.map((item, index) => {
         if (item.type === 'separator') return <div key={item.id || `sep-${index}`} className="nx-menu-sep" role="separator" />;
         if (item.type === 'heading') {
@@ -138,7 +265,7 @@ function MenuList({ items, onAction, focusIndex = 0, onFocusIndex, typeAhead, ct
                 if (item.items === null && item._actionId) {
                   resolveLazySubmenu(item);
                 }
-                setOpenSub({ id: item.id, rect: event.currentTarget.getBoundingClientRect() });
+                openSubFor(item, event.currentTarget);
               } else {
                 setOpenSub(null);
               }
@@ -149,8 +276,14 @@ function MenuList({ items, onAction, focusIndex = 0, onFocusIndex, typeAhead, ct
             onClick={event => {
               event.stopPropagation();
               if (item.disabled || item.loading) return;
-              if (!hasSub && item.action) item.action();
-              if (!hasSub) onAction();
+              // A row that owns a branch opens it and keeps the menu alive —
+              // dismissing here is what made the options beside it unclickable.
+              if (hasSub) {
+                openSubFor(item, event.currentTarget);
+                return;
+              }
+              if (item.action) item.action();
+              onAction();
             }}
           >
             <span className="nx-ctx-item-left">
@@ -175,7 +308,17 @@ function MenuList({ items, onAction, focusIndex = 0, onFocusIndex, typeAhead, ct
         // For lazy items, use the resolved array.
         const subItems = item.items || lazyItems;
         if (!subItems || subItems.length === 0) return null;
-        return <SubFlyout key={openSub.id} items={subItems} anchorRect={openSub.rect} onAction={onAction} ctx={ctx} />;
+        return (
+          <SubFlyout
+            key={openSub.id}
+            items={subItems}
+            anchor={openSub.el}
+            onAction={onAction}
+            onDeactivate={closeSub}
+            ctx={ctx}
+            session={session}
+          />
+        );
       })()}
     </div>
   );
@@ -188,9 +331,15 @@ export default function ContextMenu({ menu, onClose }) {
   const [focusIndex, setFocusIndex] = useState(-1);
   const typeAheadRef = useRef('');
   const typeAheadTimer = useRef(null);
+  // One hover session per open menu: every flyout of this branch shares it, so
+  // travel between two portalled boxes counts as staying on the menu.
+  const sessionRef = useRef(null);
+  if (!sessionRef.current) sessionRef.current = createMenuSession();
+  const session = sessionRef.current;
 
   // Store the element that was focused when the menu opened, for restoration.
   // menu.source captures what the user was focused on when the menu opened.
+  /* eslint-disable react-hooks/exhaustive-deps -- only run on mount */
   useEffect(() => {
     triggerRef.current = menu.source?.target || document.activeElement;
     return () => {
@@ -200,6 +349,36 @@ export default function ContextMenu({ menu, onClose }) {
       }
     };
   }, []);
+  /* eslint-enable react-hooks/exhaustive-deps */
+
+  /**
+   * Follow the pointer for as long as the menu is open. The menu boxes cannot
+   * answer "is the cursor still mine?" by themselves — while the pointer sits in
+   * the gap between a menu and its flyout it is inside neither, and that is
+   * exactly where a naive mouseleave used to destroy the submenu.
+   */
+  useEffect(() => {
+    const offSurface = session.surface(ref.current);
+    const onMove = event => session.track(event.clientX, event.clientY);
+    // relatedTarget is null only when the pointer exits the window; without
+    // this a flyout would keep believing the cursor still rests on it.
+    const onOut = event => { if (!event.relatedTarget) session.drop(); };
+    window.addEventListener('pointermove', onMove, true);
+    window.addEventListener('pointerout', onOut, true);
+    return () => {
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerout', onOut, true);
+      if (offSurface) offSurface();
+      session.cancel();
+    };
+  }, [session]);
+
+  // A second right-click reuses this instance: forget whatever the previous
+  // branch still had open and start from the new click point.
+  useEffect(() => {
+    session.cancel();
+    session.track(menu.x, menu.y);
+  }, [session, menu]);
 
   // Smart-clamp once we know the real rendered size.
   useEffect(() => {
@@ -284,8 +463,17 @@ export default function ContextMenu({ menu, onClose }) {
   return createPortal(
     <>
       <div className="fixed inset-0 z-[10015]" onClick={handleBackdropClick} onContextMenu={event => { event.preventDefault(); handleBackdropClick(); }} />
-      <div ref={ref} className="nx-ctx-menu" role="menu" aria-label="Context menu" style={{ left: pos.x, top: pos.y }} onMouseDown={event => event.stopPropagation()} onContextMenu={event => event.stopPropagation()}>
-        <MenuList items={menu.items} onAction={handleAction} focusIndex={focusIndex} onFocusIndex={setFocusIndex} ctx={menu._ctx} />
+      <div
+        ref={ref}
+        className="nx-ctx-menu"
+        role="menu"
+        aria-label="Context menu"
+        style={{ left: pos.x, top: pos.y }}
+        onMouseEnter={() => session.cancel()}
+        onMouseDown={event => event.stopPropagation()}
+        onContextMenu={event => { event.preventDefault(); event.stopPropagation(); }}
+      >
+        <MenuList key={menu.id} items={menu.items} onAction={handleAction} focusIndex={focusIndex} onFocusIndex={setFocusIndex} ctx={menu._ctx} session={session} />
       </div>
     </>,
     document.body
@@ -295,6 +483,8 @@ export default function ContextMenu({ menu, onClose }) {
 /** Hook helper: returns [menu, openMenu, closeMenu].
  *  The menu state includes `source` — the appId (from the nearest .nx-window)
  *  and `target` (the DOM element the user right-clicked on). */
+let openSeq = 0;
+
 export function useContextMenu() {
   const [menu, setMenu] = useState(null);
   const open = (event, items, ctx) => {
@@ -304,6 +494,9 @@ export function useContextMenu() {
     const windowEl = target.closest?.('.nx-window');
     const appId = windowEl?.getAttribute('data-app') || null;
     setMenu({
+      // Identity for the menu list: lets a reused instance drop the branch the
+      // previous menu still had open instead of inheriting it.
+      id: ++openSeq,
       x: event.clientX,
       y: event.clientY,
       items,

@@ -12,7 +12,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PngIcon } from '../common/PngIcon.jsx';
 import { CACHE_CAP, IDB_CAP, LOCAL_CAP, formatBytes, clearSiteCache } from '../../../storage/manager.js';
 import { createBackupZip, downloadBlob as downloadZipBlob } from '../../../storage/zipArchive.js';
-import { computeBreakdown, computeTreemap, TYPE_COLORS, getFolderBreakdown } from '../../../storage/storageBreakdown.js';
+import { computeBreakdown, computeTreemap, TYPE_COLORS } from '../../../storage/storageBreakdown.js';
 import { getAppStateMetrics, getSerializedAppsSize, loadApp, unloadApp, sweepIdleApps } from '../../../storage/appStateSerializer.js';
 
 /* ── Reusable sub-components ─────────────────────────────────────────────── */
@@ -137,7 +137,7 @@ export default function StoragePanel({ snapshot: initialSnapshot, onRefresh, onC
     try {
       const blob = await createBackupZip(tree);
       downloadZipBlob(blob, `lithium-full-backup-${Date.now()}.zip`);
-    } catch {}
+    } catch { /* backup failed */ }
     setBackupBusy(false);
   }, [tree]);
 
@@ -155,7 +155,7 @@ export default function StoragePanel({ snapshot: initialSnapshot, onRefresh, onC
         const result = await restoreBackupZip(file, { replace: true });
         commit(result.tree);
         refreshLocal();
-      } catch {}
+      } catch { /* restore failed */ }
       setRestoreBusy(false);
     };
     input.click();
@@ -167,7 +167,7 @@ export default function StoragePanel({ snapshot: initialSnapshot, onRefresh, onC
       await sweepIdleApps();
       setAppMetrics(getAppStateMetrics());
       getSerializedAppsSize().then(setSerializedSize).catch(() => {});
-    } catch {}
+    } catch { /* sweep failed */ }
     setSweeping(false);
   }, []);
 
@@ -294,7 +294,7 @@ function BreakdownTab({ breakdown, loading, treemapRef, treemapWidth }) {
     color: t.color,
   }));
 
-  const tierItems = breakdown.tierBreakdown.map(t => ({
+  const tierItems = breakdown.tierBreakdown.map(t => ({ // eslint-disable-line no-unused-vars
     id: t.tier,
     name: t.tier,
     size: t.bytes,
@@ -392,7 +392,7 @@ function BreakdownTab({ breakdown, loading, treemapRef, treemapWidth }) {
 
 /* ── Top Files Tab ───────────────────────────────────────────────────────── */
 
-function TopFilesTab({ breakdown, loading, tree }) {
+function TopFilesTab({ breakdown, loading, tree: _tree }) {
   if (loading || !breakdown) {
     return <div className="flex items-center justify-center gap-2 py-8 text-white/40"><PngIcon name="Loader2" size={16} className="animate-spin" /> Loading…</div>;
   }
@@ -497,7 +497,7 @@ function AppStatesTab({ metrics, serializedSize, sweeping, onSweep, onLoad, onUn
 
 /* ── Actions Tab ─────────────────────────────────────────────────────────── */
 
-function ActionsTab({ backupBusy, restoreBusy, onBackup, onRestore, onRefresh, snapshot }) {
+function ActionsTab({ backupBusy, restoreBusy, onBackup, onRestore, onRefresh, snapshot: _snapshot }) {
   return (
     <div className="space-y-4">
       {/* ZIP backup */}

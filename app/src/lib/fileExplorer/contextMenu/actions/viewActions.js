@@ -7,7 +7,6 @@
  */
 
 import { ActionRegistry } from '../ActionRegistry';
-import { childrenOf } from '../../../fileSystem.js';
 
 /* ------------------------------------------------------------------ */
 /*  fs.new-folder                                                      */
@@ -55,7 +54,7 @@ ActionRegistry.register({
   group: 'view',
   order: 64,
   when: (ctx) => ctx.scope === 'empty',
-  execute(_entries, ctx) {
+  execute(_entries, _ctx) {
     // The ExplorerShell wires a hidden <input type="file"> ref.
     // We dispatch a custom event so the shell can click it.
     window.dispatchEvent(new CustomEvent('lithium:explorer-upload'));

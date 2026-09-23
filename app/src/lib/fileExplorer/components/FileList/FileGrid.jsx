@@ -1,8 +1,16 @@
 /**
  * Grid view with virtualization — only renders visible items.
  * Measures actual column count from container width for accuracy.
+ *
+ * Two implementations live side by side. The Preact one below is the default;
+ * in low-end mode `FileGridIsland.jsx` (Solid) is fetched and mounted instead,
+ * because this is the hottest update path in the shell: a scroll frame changes
+ * which slice of `items` is visible, and the Preact version must rebuild and
+ * diff a vnode tree per visible tile to follow it. See the island's header
+ * comment for what the port buys and `src/lib/island.jsx` for the contract.
  */
 import { useState, useEffect, useRef, memo } from 'react';
+import Island, { useLowEnd } from '../../../island.jsx';
 import { selectedItems, draggingId } from '../../state/signals.jsx';
 import FileItem from './FileItem.jsx';
 
@@ -11,7 +19,10 @@ const MIN_COL_WIDTH = 100; // minmax(100px) from the CSS grid
 const GAP = 6; // gap-1.5 ≈ 6px
 const OVERSCAN_ROWS = 3; // Extra rows above/below viewport
 
-const FileGrid = memo(function FileGrid({ treeRef, drive, items, openItem, onItemContext, dragProps, dropTarget }) {
+/** Module scope so the island is mounted once rather than re-fetched per render. */
+const loadGridIsland = () => import('../../../../islands/FileGridIsland.jsx');
+
+const FileGridPreact = memo(function FileGrid({ treeRef, drive, items, openItem, onItemContext, dragProps, dropTarget }) {
   const containerRef = useRef(null);
   const [cols, setCols] = useState(6);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
@@ -91,6 +102,8 @@ const FileGrid = memo(function FileGrid({ treeRef, drive, items, openItem, onIte
   // to draggingId changes; the effect then patches the DOM classList.
   // A MutationObserver re-applies the ring when virtualization swaps DOM nodes,
   // so we don't need `items` as a dependency (which caused a re-run every scroll).
+  // NOTE: the Solid island needs none of this — a per-tile `class` binding is
+  // already recycled with the tile. This workaround is Preact-shape-only.
   const dragRingElRef = useRef(null);
   const currentDragId = draggingId.value; // subscribe to signal
   const dragIdRef = useRef(currentDragId);
@@ -146,4 +159,14 @@ const FileGrid = memo(function FileGrid({ treeRef, drive, items, openItem, onIte
   );
 });
 
-export default FileGrid;
+function FileGrid(props) {
+  const lowEnd = useLowEnd();
+  if (!lowEnd) return <FileGridPreact {...props} />;
+  return (
+    <Island load={loadGridIsland} state={{ ...props, selectedItems, draggingId }}>
+      <FileGridPreact {...props} />
+    </Island>
+  );
+}
+
+export default memo(FileGrid);

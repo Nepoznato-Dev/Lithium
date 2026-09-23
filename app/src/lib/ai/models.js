@@ -5,9 +5,10 @@ import { backendUrl } from '../backendApi';
 import { opfsAvailable, opfsDelete, opfsGetFile, opfsWriteStream } from '../storage/indexedDB';
 
 /**
- * Lightweight local model catalog (GGUF, Q4_K_M) downloaded from Hugging Face
- * into IndexedDB. Files count toward the 15 GB IndexedDB tier and show up in
- * the Storage Manager.
+ * On-device model registry (GGUF, Q4_K_M) fetched from Hugging Face into
+ * browser storage. There is no capability tiering here: a local model is just
+ * a file the user chose to download, and they pick it by id. Files count
+ * toward the local tier in the Storage Manager.
  */
 
 export const MODEL_CATALOG = [
@@ -17,7 +18,6 @@ export const MODEL_CATALOG = [
     params: '0.6B',
     quant: 'Q4_K_M',
     size: 468_000_000,
-    tier: 'lite',
     url: 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf',
     blurb: 'Tiny but sharp — great for summaries, time & weather reports.',
   },
@@ -27,7 +27,6 @@ export const MODEL_CATALOG = [
     params: '1.5B',
     quant: 'Q4_K_M',
     size: 1_100_000_000,
-    tier: 'efficient',
     url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf',
     blurb: 'Balanced instruction follower for everyday assistant tasks (MMLU 74).',
   },
@@ -37,7 +36,6 @@ export const MODEL_CATALOG = [
     params: 'E2B',
     quant: 'Q4_K_M',
     size: 3_106_738_272,
-    tier: 'efficient',
     url: 'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf',
     blurb: 'Fast multimodal model (image/audio/video aware) — text chat in Lithium for now.',
   },
@@ -47,7 +45,6 @@ export const MODEL_CATALOG = [
     params: '3B',
     quant: 'Q4_K_M',
     size: 1_950_000_000,
-    tier: 'performance',
     url: 'https://huggingface.co/mradermacher/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B.Q4_K_M.gguf',
     blurb: 'Hugging Face’s smol 3B-class leader with 128k context.',
   },
@@ -57,7 +54,6 @@ export const MODEL_CATALOG = [
     params: '3.8B',
     quant: 'Q4_K_M',
     size: 2_500_000_000,
-    tier: 'performance',
     url: 'https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf',
     blurb: 'Microsoft’s compact reasoner — MMLU 73 / MATH 62 at half the memory of 8B models.',
   },
@@ -67,7 +63,6 @@ export const MODEL_CATALOG = [
     params: '4B',
     quant: 'Q4_K_M',
     size: 2_497_281_120,
-    tier: 'ultra',
     url: 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf',
     blurb: 'Thinking mode for complex tasks — MATH-500 97, strongest in the lineup.',
   },
@@ -125,7 +120,6 @@ export function addCustomModel({ name, url, size = 0, blurb = '' }) {
     params: 'custom',
     quant: 'GGUF',
     size: Number(size) || 0,
-    tier: 'custom',
     url: String(url),
     blurb: String(blurb || 'Custom model added by you — runs fully in the browser via wllama.'),
     custom: true,
@@ -148,7 +142,6 @@ export async function importLocalGguf(file, name) {
     params: 'custom',
     quant: 'GGUF',
     size: file.size,
-    tier: 'custom',
     url: '',
     blurb: 'Imported from this device — runs fully in the browser via wllama.',
     custom: true,
@@ -181,7 +174,6 @@ export function registerExternalGguf({ name, opfsName, size = 0, url = '' }) {
     params: 'custom',
     quant: 'GGUF',
     size: Number(size) || 0,
-    tier: 'custom',
     url: String(url || ''),
     blurb: 'Downloaded with the Downloader app — runs fully in the browser via wllama.',
     custom: true,
@@ -279,42 +271,17 @@ export async function listHfDir(repoId, path = '') {
   throw lastError || new Error('Hugging Face lookup failed');
 }
 
-/* ---------- Inference tiers (benchmarked placements) ---------- */
+/* ---------- Which models are physically present on this device ---------- */
 
-export const TIERS = [
-  { id: 'auto', label: 'Auto', modelId: 'qwen2.5-1.5b', hint: 'dynamically picks the best tier for your query' },
-  { id: 'lite', label: 'Lite', modelId: 'qwen3-0.6b', hint: 'fast & lightweight · everyday tasks' },
-  { id: 'efficient', label: 'Efficient', modelId: 'qwen2.5-1.5b', alt: 'gemma-4-e2b', hint: 'balanced speed & quality · standard reasoning' },
-  { id: 'performance', label: 'Performance', modelId: 'smollm3-3b', alt: 'phi-4-mini', hint: 'advanced reasoning · high output quality' },
-  { id: 'ultra', label: 'Ultra', modelId: 'qwen3-4b', hint: 'frontier-class · expert deep reasoning & thinking' },
-];
-
-/** Analyze a message and return the best tier id for it. */
-export function autoSelectTier(text) {
-  const t = (text || '').toLowerCase();
-  const len = text.length;
-  // Ultra signals: deep reasoning, complex analysis, multi-step
-  if (/\b(think|reason|analyze|compare|evaluate|prove|derive|explain in detail|step.by.step|chain.of.thought)\b/.test(t) && len > 80) return 'ultra';
-  // Performance signals: coding, writing, structured output
-  if (/\b(code|write|function|class|implement|debug|refactor|algorithm|design|architecture|essay|article|report)\b/.test(t) && len > 40) return 'performance';
-  // Lite signals: short, simple questions
-  if (len < 60 && /^\s*(what|who|when|where|how|is|are|do|does|can|will)\b/i.test(text.trim())) return 'lite';
-  // Default: efficient
-  return 'efficient';
+/** Models with weights already stored locally, in catalog order. */
+export function downloadedModels() {
+  const meta = loadModelMeta();
+  return allModels().filter(model => meta[model.id]?.downloaded);
 }
 
-export const getTier = () => storage.get('ai-tier', 'lite');
-export const setTier = id => storage.set('ai-tier', id);
-export const tierModel = tierId => TIERS.find(tier => tier.id === tierId) || TIERS[0];
-
-/** Which model of a tier is downloaded (prefers the primary). Null if none. */
-export function downloadedModelFor(tierId) {
-  const tier = tierModel(tierId);
-  const meta = loadModelMeta();
-  for (const id of [tier.modelId, tier.alt].filter(Boolean)) {
-    if (meta[id]?.downloaded) return getModel(id);
-  }
-  return null;
+/** Whether one model's weights are on this device. */
+export function isModelDownloaded(id) {
+  return !!loadModelMeta()[id]?.downloaded;
 }
 
 /* ---------- OPFS streaming storage (multi-GB safe) ---------- */

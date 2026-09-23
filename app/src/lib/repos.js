@@ -1,9 +1,11 @@
-import { unzipSync, strFromU8 } from 'fflate';
+import { computeCall } from './compute';
 import { openStream } from './downloader';
 import { hydrate } from './storage/unifiedStore';
 import { loadTree, saveTree } from './fileSystem';
 import { getBlob } from './storage/manager';
 import { putBlob } from './storage/liStorage';
+
+const _dec = new TextDecoder();
 
 /**
  * GitHub repo importer — pulls a repo into Projects/{repo} using only
@@ -127,7 +129,7 @@ export async function importGithubRepo(url, { onProgress } = {}) {
     const bytes = new Uint8Array(await fileRes.arrayBuffer());
 
     if (isText(name, bytes)) {
-      tree = [...tree, { id: makeId(), name, type: 'text', parentId, content: strFromU8(bytes), createdAt: now, updatedAt: now }];
+      tree = [...tree, { id: makeId(), name, type: 'text', parentId, content: _dec.decode(bytes), createdAt: now, updatedAt: now }];
     } else if (bytes.length <= MAX_BINARY) {
       const id = makeId();
       await putBlob('repo', id, new Blob([bytes]), undefined, { name });
@@ -149,7 +151,8 @@ export async function extractZipEntry(entry, { onProgress } = {}) {
   const blob = await getBlob(entry.id);
   if (!blob) throw new Error('Could not read the zip blob');
   onProgress?.({ phase: 'extract' });
-  const entries = unzipSync(new Uint8Array(await blob.arrayBuffer()));
+  // fflate runs in the compute worker — files arrive as [{name, data}].
+  const files = await computeCall('archive.zipRead', { bytes: new Uint8Array(await blob.arrayBuffer()) });
 
   await hydrate();
   let tree = loadTree();
@@ -170,14 +173,14 @@ export async function extractZipEntry(entry, { onProgress } = {}) {
   };
 
   let count = 0;
-  for (const [path, bytes] of Object.entries(entries)) {
+  for (const { name: path, bytes } of files) {
     if (count >= MAX_FILES || !path || path.endsWith('/')) continue;
     const segs = path.split('/');
     if (segs.includes('node_modules')) continue;
     const name = segs[segs.length - 1];
     const parentId = ensureDir(segs.slice(0, -1).join('/'));
     if (isText(name, bytes)) {
-      tree = [...tree, { id: makeId(), name, type: 'text', parentId, content: strFromU8(bytes), createdAt: now, updatedAt: now }];
+      tree = [...tree, { id: makeId(), name, type: 'text', parentId, content: _dec.decode(bytes), createdAt: now, updatedAt: now }];
     } else if (bytes.length <= MAX_BINARY) {
       const id = makeId();
       await putBlob('repo', id, new Blob([bytes]), undefined, { name });

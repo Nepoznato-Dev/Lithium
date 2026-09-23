@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AI_PROVIDERS, chatCompletion, streamChatCompletion, loadKeys, visibleProviders, modelsForProvider, getSelectedModel, setSelectedModel, TAG_COLORS, getBestModelForTier } from '../../../../lib/ai/providers';
+import { AI_PROVIDERS, chatCompletion, streamChatCompletion, loadKeys, visibleProviders, modelsForProvider, getSelectedModel, setSelectedModel, TAG_COLORS } from '../../../../lib/ai/providers';
 import { buildWeatherReport, fetchWeather, requestLocation } from '../../../../lib/deviceContext';
-import { allModels, downloadedModelFor, getModel, getTier, loadModelMeta, tierModel, TIERS, autoSelectTier } from '../../../../lib/ai/models';
+import { allModels, downloadedModels, getModel, loadModelMeta } from '../../../../lib/ai/models';
 import { storage } from '../../../../lib/storage';
 import { renderMarkdown } from '../../../../lib/markdown';
 import { getCatalog } from '../../../../lib/ai/apiManager';
-import { extractApiCalls, extractWidgetBlocks, stripToolBlocks, deleteChat, loadChats, makeChatId, upsertChat, MODES, CORTEX_MODE_ORDER, getCortexMode, setCortexMode } from '../../../../lib/ai/agent';
+import { extractApiCalls, extractWidgetBlocks, stripToolBlocks, deleteChat, loadChats, makeChatId, upsertChat, MODES } from '../../../../lib/ai/agent';
 import { backendBuildContext, backendWebSearch } from '../../../../lib/backendApi';
 import { loadTree, readEntryContent } from '../../../../lib/fileSystem';
 import Icon from '../../../Icon';
@@ -13,19 +13,10 @@ import { WidgetBlockChips, ApiCallChips } from './WidgetApiChips';
 import { buildDevicePrompt } from './prompts';
 import WelcomeScreen from './WelcomeScreen';
 
-/* ── Tier icons for inline buttons ── */
-const TIER_ICONS = {
-  auto: 'Sparkles',
-  lite: 'Snowflake',
-  efficient: 'Cpu',
-  performance: 'Activity',
-  ultra: 'Zap',
-};
-
-/** Resolve the effective tier: if 'auto', pick based on message; otherwise use as-is. */
-function resolveTier(selectedTier, messageText) {
-  if (selectedTier !== 'auto') return selectedTier;
-  return autoSelectTier(messageText);
+/** Pick the first downloaded local model, or null if none. */
+function pickLocalModel() {
+  const dl = downloadedModels();
+  return dl.length > 0 ? dl[0] : null;
 }
 
 /* ── Cloud model picker — scrollable vertical list of provider models ── */
@@ -72,9 +63,9 @@ function CloudModelPicker({ provider, value, onChange }) {
 }
 
 export default function PlaygroundView({ onNeedModels, onCtxMenu, chatId, onChatIdChange, onNavigateModels }) {
-  const [provider, setProvider] = useState(() => (downloadedModelFor(getTier()) ? 'local' : loadKeys().groq ? 'groq' : 'builtin'));
+  const [provider, setProvider] = useState(() => (pickLocalModel() ? 'local' : loadKeys().groq ? 'groq' : 'builtin'));
   const [cloudModel, setCloudModel] = useState(() => getSelectedModel(provider));
-  const [localModel, setLocalModel] = useState(() => storage.get('ai-local-model', ''));
+  const [localModel, setLocalModel] = useState(() => storage.get('ai-local-model', '')); // eslint-disable-line no-unused-vars
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState(() => {
     const pending = sessionStorage.getItem('lithium:cortex-pending-prompt') || '';
@@ -82,14 +73,14 @@ export default function PlaygroundView({ onNeedModels, onCtxMenu, chatId, onChat
     return pending;
   });
   const [busy, setBusy] = useState(false);
-  const [thinking, setThinking] = useState(false);
-  const [effort, setEffort] = useState(() => storage.get('ai-effort', 'medium'));
-  const [contextWindow, setContextWindow] = useState(() => storage.get('ai-context-window', 8192));
-  const [webMode, setWebMode] = useState(() => storage.get('ai-web-mode', 'off'));
+  const [thinking, setThinking] = useState(false); // eslint-disable-line no-unused-vars
+  const [effort, setEffort] = useState(() => storage.get('ai-effort', 'medium')); // eslint-disable-line no-unused-vars
+  const [contextWindow, setContextWindow] = useState(() => storage.get('ai-context-window', 8192)); // eslint-disable-line no-unused-vars
+  const [webMode, setWebMode] = useState(() => storage.get('ai-web-mode', 'off')); // eslint-disable-line no-unused-vars
   const [attachedFiles, setAttachedFiles] = useState([]);
-  const [tier, setTierState] = useState(getTier());
-  const [deviceControl, setDeviceControl] = useState(() => storage.get('ai-device-control', false));
-  const [mode, setMode] = useState(getCortexMode);
+  const [tier, setTierState] = useState(() => storage.get('ai-tier', 'efficient'));
+  const [deviceControl, setDeviceControl] = useState(() => storage.get('ai-device-control', false)); // eslint-disable-line no-unused-vars
+  const [mode, setMode] = useState(() => storage.get('cortex-mode', 'chat')); // eslint-disable-line no-unused-vars
   const [editingIdx, setEditingIdx] = useState(null);
   const [editDraft, setEditDraft] = useState('');
   const [apiLines, setApiLines] = useState('');
@@ -119,13 +110,13 @@ export default function PlaygroundView({ onNeedModels, onCtxMenu, chatId, onChat
     else setMessages([]);
   }, [chatId]);
 
-  const removeCurrentChat = () => { const newId = makeChatId(); deleteChat(chatId); setChats(loadChats()); onChatIdChange(newId); setMessages([]); };
+  const removeCurrentChat = () => { const newId = makeChatId(); deleteChat(chatId); setChats(loadChats()); onChatIdChange(newId); setMessages([]); }; // eslint-disable-line no-unused-vars
 
-  const exportChatToFile = async () => {
+  const exportChatToFile = async () => { // eslint-disable-line no-unused-vars
     if (messages.length === 0) return;
     try {
       const { exportSessionToFile } = await import('../../../../lib/services/aiService');
-      const { createSession, appendMessage, getSession } = await import('../../../../lib/services/aiService');
+      const { createSession, appendMessage } = await import('../../../../lib/services/aiService');
       const title = chats.find(c => c.id === chatId)?.title || 'New conversation';
       const sid = createSession({ title });
       for (const msg of messages) appendMessage(sid, msg);
@@ -161,7 +152,7 @@ export default function PlaygroundView({ onNeedModels, onCtxMenu, chatId, onChat
       (deviceControl && mode !== 'chat' ? buildDevicePrompt(apiLines) : '');
   };
 
-  const persist = (key, value, setter) => { setter(value); storage.set(key, value); };
+  const persist = (key, value, setter) => { setter(value); storage.set(key, value); }; // eslint-disable-line no-unused-vars
   const attachFiles = async e => {
     const files = [...(e.target.files || [])];
     const entries = loadTree();
@@ -237,24 +228,20 @@ export default function PlaygroundView({ onNeedModels, onCtxMenu, chatId, onChat
   };
 
   const push = (role, content) => setMessages(prev => [...prev, { role, content }]);
-  const downloadedOptions = useMemo(() => allModels().filter(m => loadModelMeta()[m.id]?.downloaded), []);
-  const tierResolved = downloadedModelFor(tier) || getModel(tierModel(tier).modelId);
-  const localTarget = localModel && getModel(localModel) ? localModel : (tierResolved?.id || tier);
+  const downloadedOptions = useMemo(() => allModels().filter(m => loadModelMeta()[m.id]?.downloaded), []); // eslint-disable-line no-unused-vars
+  const tierResolved = pickLocalModel();
+  const localTarget = localModel && getModel(localModel) ? localModel : (tierResolved?.id || 'qwen3-0.6b');
 
   const send = async text => {
     const raw = typeof text === 'string' ? text : input;
     const trimmed = String(raw || '').trim();
     if (!trimmed || busy) return;
-    // Resolve effective tier: if 'auto', pick based on message complexity
-    const effectiveTier = resolveTier(tier, trimmed);
     setInput('');
     push('user', trimmed);
     setBusy(true);
     try {
       if (provider === 'local') {
-        // Use effective tier to pick local model
-        const effectiveTierModel = downloadedModelFor(effectiveTier) || getModel(tierModel(effectiveTier).modelId);
-        const rtTarget = localModel && getModel(localModel) ? localModel : (effectiveTierModel?.id || effectiveTier);
+        const rtTarget = localModel && getModel(localModel) ? localModel : (pickLocalModel()?.id || 'qwen3-0.6b');
         const rt = await import('../../../../lib/ai/modelRuntime');
         try { await rt.ensureRuntime(rtTarget); }
         catch (err) {
@@ -290,7 +277,7 @@ export default function PlaygroundView({ onNeedModels, onCtxMenu, chatId, onChat
           try { const b = await backendBuildContext(raw, { maxTokens: Number(contextWindow), modelId: localTarget, includeMemory: true }); req = b.messages || raw; } catch { /* backend optional */ }
         }
         const reply = await streamChatCompletion(provider, req, {
-          model: provider !== 'local' && provider !== 'builtin' ? (cloudModel || (tier === 'auto' ? getBestModelForTier(effectiveTier, provider) : getSelectedModel(provider))) : undefined,
+          model: provider !== 'local' && provider !== 'builtin' ? (cloudModel || getSelectedModel(provider)) : undefined,
           onToken: (_chunk, full) => {
             setMessages(prev => {
               const n = [...prev];
@@ -484,7 +471,7 @@ export default function PlaygroundView({ onNeedModels, onCtxMenu, chatId, onChat
               onClick={() => setTierDropdownOpen(v => !v)}
             >
               <Icon name="Sparkles" size={12} className="text-[#4a9e6d]" />
-              {TIERS.find(t => t.id === tier)?.label || 'Efficient'}
+              {{ auto: 'Auto', ultra: 'Ultimate', performance: 'Performance', efficient: 'Efficient', lite: 'Lite' }[tier] || 'Efficient'}
               <Icon name="ChevronDown" size={10} className="text-[#9e9890]" />
             </button>
             {/* Custom tier dropdown */}

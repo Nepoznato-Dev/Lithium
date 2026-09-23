@@ -62,6 +62,9 @@ export const FILE_ASSOCIATIONS = {
 
   // ── AI Models ────────────────────────────────────────────────────────
   '.gguf':  { appId: 'ai-hub',       label: 'Cortex' },
+
+  // ── App Shortcuts ───────────────────────────────────────────────────
+  '.li':    { appId: '__shortcut__',  label: 'App Shortcut' },
 };
 
 /**

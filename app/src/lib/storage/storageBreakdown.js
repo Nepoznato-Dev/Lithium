@@ -1,5 +1,5 @@
 import { getTree } from './unifiedStore';
-import { idbKeys, idbGet } from './indexedDB';
+import { idbKeys } from './indexedDB';
 import { formatBytes } from './manager';
 
 /**
@@ -180,7 +180,7 @@ export async function computeBreakdown(tree) {
 
     const folderTree = buildFolderTree(currentTree);
 
-    const rootFolder = folderTree.get('root');
+    const rootFolder = folderTree.get('root'); // eslint-disable-line no-unused-vars
     const topFolders = [...folderTree.values()]
       .filter(n => n.id !== 'root')
       .sort((a, b) => b.totalSize - a.totalSize)
@@ -215,7 +215,7 @@ export async function computeBreakdown(tree) {
         else if (key.startsWith('opfs:')) opfsCount++;
         else idbBlobCount++;
       }
-    } catch {}
+    } catch { /* ignore cursor errors */ }
 
     const result = {
       totalSize,

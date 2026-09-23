@@ -174,7 +174,7 @@ export class OperationQueue {
    */
   async undo(tree, commit) {
     if (!this.canUndo()) return;
-    const { ops, treeBefore } = this.undoStack.pop();
+    const { ops } = this.undoStack.pop();
 
     // Apply reverse ops in LIFO order
     let nextTree = tree;

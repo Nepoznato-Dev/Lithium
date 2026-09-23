@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AI_PROVIDERS, chatCompletion, loadKeys, saveKeys, modelsForProvider } from '../../../../lib/ai/providers';
 import Icon from '../../../Icon';
 
-export default function ConnectionsView({ onCtxMenu }) {
+export default function ConnectionsView({ onCtxMenu: _onCtxMenu }) {
   const [keys, setKeys] = useState(loadKeys);
   const [drafts, setDrafts] = useState({});
   const [testing, setTesting] = useState('');

@@ -2,7 +2,7 @@
  * HistoryPage — grouped history viewer with search and bulk actions.
  */
 import { useState } from 'preact/hooks';
-import { historyEntries, groupedHistory, filteredHistory, historyQuery, removeHistoryEntry, clearHistory, clearHistoryRange } from '../stores/historyStore';
+import { groupedHistory, filteredHistory, historyQuery, removeHistoryEntry, clearHistory, clearHistoryRange } from '../stores/historyStore';
 import Icon from '../../../Components/Icon';
 
 export default function HistoryPage() {

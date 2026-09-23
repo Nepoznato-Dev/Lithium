@@ -17,7 +17,7 @@ const ACTIONS = [
   { id: 'device-report', label: 'Device report', icon: 'MapPin', desc: 'Generate location & weather report' },
 ];
 
-export default function CommandPalette({ open, onClose, onNavigate, onAction, chats, chatId }) {
+export default function CommandPalette({ open, onClose, onNavigate, onAction, chats, chatId: _chatId }) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef(null);

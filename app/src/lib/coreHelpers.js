@@ -1,16 +1,19 @@
 /**
  * Shared helpers for the Lithium WASM facade.
  *
- * Only 4 CPU-intensive WASM modules are loaded:
- *   Boot (eager):   filesystem, snapshot_codec
- *   Lazy:           lz4, xxh3
+ * Only 4 CPU-intensive WASM modules exist:
+ *   Boot (eager, main thread): filesystem
+ *   Worker / lazy:             snapshot_codec, lz4, xxh3
  *
- * All other functionality (settings, browser, AI, shell, etc.)
- * is implemented as pure JS in coreNative.js — zero download cost.
+ * The compute Web Worker (workers/compute.worker.js) loads snapshot_codec,
+ * lz4 and xxh3 in its own realm via these helpers, so they no longer sit on
+ * the UI boot path. `hasWasm()` therefore tracks the main-thread filesystem
+ * module only. All other functionality is implemented as pure JS —
+ * zero download cost.
  */
 
 const _MODULE_NAMES = ['filesystem', 'snapshot_codec', 'lz4', 'xxh3'];
-const _BOOT_MODULES = ['filesystem', 'snapshot_codec'];
+const _BOOT_MODULES = ['filesystem'];
 
 const _enc = new TextEncoder();
 const _dec = new TextDecoder();
@@ -68,16 +71,20 @@ export function hasWasm() {
   return _bootReady;
 }
 
-/** Diagnostic: returns a summary of all WASM module statuses. */
+/** Diagnostic: returns a summary of all WASM module statuses.
+ *  `hosted` says which realm owns the module — only `filesystem` runs on this
+ *  thread now, so the compute-worker modules read `loaded: false` here by
+ *  design rather than indicating a failure. */
 export function wasmStatus() {
   const result = { modules: {} };
   for (const name of _MODULE_NAMES) {
+    const hosted = _BOOT_MODULES.includes(name) ? 'main' : 'compute-worker';
     const exp = _modules[name];
     if (exp) {
       const fns = Object.keys(exp).filter(k => typeof exp[k] === 'function');
-      result.modules[name] = { loaded: true, functions: fns, memory: `${(exp.memory.buffer.byteLength / 1024).toFixed(0)} KB` };
+      result.modules[name] = { loaded: true, hosted, functions: fns, memory: `${(exp.memory.buffer.byteLength / 1024).toFixed(0)} KB` };
     } else {
-      result.modules[name] = { loaded: false };
+      result.modules[name] = { loaded: false, hosted };
     }
   }
   result.wasm = _bootReady;

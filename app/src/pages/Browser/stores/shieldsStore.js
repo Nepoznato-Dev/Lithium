@@ -1,9 +1,10 @@
 /**
  * Shields state — privacy protection stats and per-site controls.
- * Stats are accumulated per navigation and reset daily.
+ * Stats are accumulated from real ad/tracker blocking via adBlocker.js.
  * Per-site overrides are persisted to localStorage.
  */
 import { signal, computed } from '@preact/signals';
+import { scanDocument, applyBlocking, classifyUrl, shouldBlock } from '../../../lib/services/adBlocker';
 
 const OVERRIDES_KEY = 'lithium:shields-overrides';
 const UA_OVERRIDES_KEY = 'lithium:ua-overrides';
@@ -13,13 +14,13 @@ function loadOverrides() {
   try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY)) || {}; } catch { return {}; }
 }
 function saveOverrides(val) {
-  try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(val)); } catch {}
+  try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(val)); } catch { /* quota exceeded */ }
 }
 function loadUaOverrides() {
   try { return JSON.parse(localStorage.getItem(UA_OVERRIDES_KEY)) || {}; } catch { return {}; }
 }
 function saveUaOverrides(val) {
-  try { localStorage.setItem(UA_OVERRIDES_KEY, JSON.stringify(val)); } catch {}
+  try { localStorage.setItem(UA_OVERRIDES_KEY, JSON.stringify(val)); } catch { /* quota exceeded */ }
 }
 
 /** Global shields stats (accumulated across all sites). */
@@ -125,13 +126,54 @@ export function getSiteOverride(hostname) {
   };
 }
 
-/** Simulate random blocking on navigation. */
-export function simulateBlocking() {
-  if (!shieldsEnabled.value) return;
-  const ads = Math.floor(Math.random() * 8) + 1;
-  const trackers = Math.floor(Math.random() * 12) + 2;
-  const https = Math.random() > 0.7 ? 1 : 0;
-  const scripts = Math.random() > 0.8 ? Math.floor(Math.random() * 3) + 1 : 0;
-  const data = Math.floor(Math.random() * 50000) + 5000;
-  incrementStats(ads, trackers, https, scripts, data);
+/**
+ * Process a parsed document for real ad/tracker blocking.
+ * Scans the document, removes classified elements, and records stats.
+ *
+ * @param {Document} doc — DOMParser document to scan and clean
+ * @param {string} pageUrl — the page URL being rendered
+ * @returns {{ ads: number, trackers: number, scripts: number, dataSaved: number }}
+ */
+export function processDocument(doc, pageUrl) {
+  if (!shieldsEnabled.value) return { ads: 0, trackers: 0, scripts: 0, dataSaved: 0 };
+
+  // Check per-site override
+  let pageHost = '';
+  try { pageHost = new URL(pageUrl).hostname.replace(/^www\./, ''); } catch { /* invalid URL */ }
+  const siteOverride = pageHost ? getSiteOverride(pageHost) : null;
+  if (siteOverride && !siteOverride.enabled) {
+    return { ads: 0, trackers: 0, scripts: 0, dataSaved: 0 };
+  }
+
+  // Scan the document for classified resources
+  const scan = scanDocument(doc, pageUrl);
+
+  // Apply blocking (remove elements from DOM)
+  applyBlocking(doc, scan);
+
+  // Record real stats
+  const adsCount = scan.ads.length;
+  const trackersCount = scan.trackers.length;
+  const scriptsCount = scan.ads.filter(el => el.tagName === 'SCRIPT').length
+    + scan.trackers.filter(el => el.tagName === 'SCRIPT').length;
+  const dataSaved = scan.dataSaved;
+
+  if (adsCount + trackersCount + scan.mining.length + scan.social.length > 0) {
+    incrementStats(adsCount, trackersCount, 0, scriptsCount, dataSaved);
+  }
+
+  return { ads: adsCount, trackers: trackersCount, scripts: scriptsCount, dataSaved };
+}
+
+/**
+ * Classify a single URL and return whether it should be blocked.
+ * Convenience wrapper around adBlocker.classifyUrl for use in components.
+ */
+export function classifyResource(url) {
+  return classifyUrl(url);
+}
+
+/** Quick check: should this URL be blocked? */
+export function isBlocked(url) {
+  return shouldBlock(url);
 }

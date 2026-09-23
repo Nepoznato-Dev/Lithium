@@ -1,20 +1,7 @@
-import { getModel, getModelBlob, loadModelMeta, downloadedModelFor, tierModel, TIERS } from './models';
+import { getModel, getModelBlob, loadModelMeta } from './models';
 import { storage } from '../storage/localStorage';
 
 function _estimateTokens(text) { return text ? Math.ceil(text.length / 4) : 0; }
-
-function _resolveModel(tierOrModelId, tiers, downloaded) {
-  if (!tierOrModelId || !Array.isArray(tiers) || !downloaded) return null;
-  if (downloaded[tierOrModelId]) return { modelId: tierOrModelId };
-  for (const tier of tiers) {
-    if (tier.id === tierOrModelId) {
-      if (tier.modelId && downloaded[tier.modelId]) return { modelId: tier.modelId };
-      if (tier.alt && downloaded[tier.alt]) return { modelId: tier.alt };
-      return null;
-    }
-  }
-  return null;
-}
 
 function _prepareMessages(messages, modelId, noThink, thinking) {
   if (!Array.isArray(messages)) return [];
@@ -119,46 +106,35 @@ function send(cmd, data, onToken) {
   });
 }
 
-/* ---------- Public API (unchanged surface) ---------- */
+/* ---------- Public API ---------- */
 
 export function loadedModelId() {
   return workerModelId;
 }
 
-/** Load (or reuse) the runtime for a tier or a specific model id (custom models).
- * Throws Error('MODEL_NOT_DOWNLOADED:id'). */
-export async function ensureRuntime(tierOrModelId) {
-  // Use Rust core for model resolution (pure computation, no DOM)
-  const meta = loadModelMeta();
-  const downloaded = {};
-  for (const [id, info] of Object.entries(meta)) {
-    if (info?.downloaded) downloaded[id] = true;
-  }
+/**
+ * Load (or reuse) the worker runtime for one downloaded model id.
+ * Throws Error('MODEL_NOT_DOWNLOADED:id') when the weights are not local.
+ *
+ * Callers reach this only through an explicit user action — the engine imports
+ * nothing until here, so a fresh install never downloads the WASM runtime.
+ */
+export async function ensureRuntime(modelId) {
+  const model = getModel(modelId);
+  if (!model) throw new Error(`Unknown local model: ${modelId || 'none selected'}`);
+  if (workerModelId === model.id) return { modelId: model.id };
 
-  // Try Rust-based resolution first, fall back to JS
-  let resolved = _resolveModel(tierOrModelId, TIERS, downloaded);
-  let modelId = resolved?.modelId;
-
-  // Fallback: direct model lookup
-  if (!modelId) {
-    let model = getModel(tierOrModelId);
-    if (!model) model = downloadedModelFor(tierOrModelId) || getModel(tierModel(tierOrModelId).modelId);
-    if (model) modelId = model.id;
-  }
-
-  if (!modelId) throw new Error('Unknown model');
-  if (workerModelId === modelId) return { modelId };
-
-  // Unload previous model if any
+  // One context at a time: release the previous model before loading the next.
   if (workerModelId) {
     await send('UNLOAD', {}).catch(() => {});
     workerModelId = null;
   }
 
-  if (!meta[modelId]?.downloaded) throw new Error(`MODEL_NOT_DOWNLOADED:${modelId}`);
+  const meta = loadModelMeta();
+  if (!meta[model.id]?.downloaded) throw new Error(`MODEL_NOT_DOWNLOADED:${model.id}`);
 
-  const blob = await getModelBlob(modelId);
-  if (!blob) throw new Error(`MODEL_NOT_DOWNLOADED:${modelId}`);
+  const blob = await getModelBlob(model.id);
+  if (!blob) throw new Error(`MODEL_NOT_DOWNLOADED:${model.id}`);
 
   // Convert blob → ArrayBuffer for transfer to the worker
   const buffer = await blob.arrayBuffer();
@@ -169,8 +145,8 @@ export async function ensureRuntime(tierOrModelId) {
     nCtx: storage.get('ai-ctx', 8192),
   });
 
-  workerModelId = modelId;
-  return { modelId };
+  workerModelId = model.id;
+  return { modelId: model.id };
 }
 
 /**

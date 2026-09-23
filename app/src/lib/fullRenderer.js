@@ -12,6 +12,14 @@
  */
 
 import { fetchSearchHtml, getBackendUrl } from './searchProxy';
+import { processDocument } from '../pages/Browser/stores/shieldsStore';
+import { buildCosmeticCss, initAdBlocker } from './services/adBlocker';
+import {
+  recordAdsBlocked, recordTrackersPrevented, recordScriptsBlocked,
+  recordDataSaved, recordPageProcessed, recordParamsStripped,
+  stripTrackingParams,
+} from './services/privacyService';
+import { loadSettings } from './settings';
 
 /**
  * Fetch a URL and rebuild it for the srcdoc iframe.
@@ -20,6 +28,9 @@ import { fetchSearchHtml, getBackendUrl } from './searchProxy';
  * @returns {Promise<{ srcdoc: string, title: string, source: string }>}
  */
 export async function fullRender(url) {
+  // Ensure ad blocker engine is initialized
+  initAdBlocker();
+
   const { html: rawHtml, source } = await fetchSearchHtml(url);
 
   // Parse into a DOM document for thorough URL rewriting.
@@ -34,6 +45,56 @@ export async function fullRender(url) {
   // Strip dangerous / broken elements.
   stripDangerous(doc);
 
+  // ── Real ad/tracker blocking ──
+  // Scan the document, remove classified resources, and record stats.
+  const blockResult = processDocument(doc, url);
+
+  // Record real stats to privacyService
+  if (blockResult.ads > 0) recordAdsBlocked(blockResult.ads);
+  if (blockResult.trackers > 0) recordTrackersPrevented(blockResult.trackers);
+  if (blockResult.scripts > 0) recordScriptsBlocked(blockResult.scripts);
+  if (blockResult.dataSaved > 0) recordDataSaved(blockResult.dataSaved);
+  recordPageProcessed();
+
+  // ── Tracking parameter stripping ──
+  // Rewrite URLs in the document that contain tracking parameters
+  const settings = loadSettings();
+  if (settings.privacy?.stripTrackingParams !== false) {
+    let paramsStripped = 0;
+    doc.querySelectorAll('[href]').forEach(el => {
+      const href = el.getAttribute('href');
+      if (href && (href.includes('?') || href.includes('&'))) {
+        const result = stripTrackingParams(href);
+        if (result.stripped > 0) {
+          el.setAttribute('href', result.url);
+          paramsStripped += result.stripped;
+        }
+      }
+    });
+    doc.querySelectorAll('[src]').forEach(el => {
+      const src = el.getAttribute('src');
+      if (src && (src.includes('?') || src.includes('&'))) {
+        const result = stripTrackingParams(src);
+        if (result.stripped > 0) {
+          el.setAttribute('src', result.url);
+          paramsStripped += result.stripped;
+        }
+      }
+    });
+    if (paramsStripped > 0) recordParamsStripped(paramsStripped);
+  }
+
+  // ── Cosmetic CSS injection ──
+  // Inject a stylesheet that hides ad remnants, cookie banners, etc.
+  if (settings.privacy?.cosmeticFilters !== false) {
+    const cosmeticCss = buildCosmeticCss(true);
+    const styleEl = doc.createElement('style');
+    styleEl.setAttribute('data-lithium-cosmetic', 'true');
+    styleEl.textContent = cosmeticCss;
+    const head = doc.querySelector('head');
+    if (head) head.appendChild(styleEl);
+  }
+
   // Inject the proxy override script into <head>.
   injectOverrides(doc, url);
 
@@ -41,7 +102,7 @@ export async function fullRender(url) {
   const srcdoc = new XMLSerializer().serializeToString(doc);
   const title = doc.title || hostname(url);
 
-  return { srcdoc, title, source };
+  return { srcdoc, title, source, blocked: blockResult };
 }
 
 /* ------------------------------------------------------------------ */
@@ -179,13 +240,50 @@ function injectOverrides(doc, targetUrl) {
 
   // --- Fetch override ---
   // Route all fetch() calls through the CORS proxy so API calls work.
+  // Block known tracker/ad domains by returning empty responses.
   var origFetch = window.fetch;
   var PROXY_BASE = '${getBackendUrl()}/api/web/proxy?url=';
   var FALLBACK_PROXY = 'https://api.allorigins.win/raw?url=';
+
+  // Tracker/ad domains to block at runtime (inside the iframe).
+  var BLOCKED_DOMAINS = [
+    'doubleclick.net','googlesyndication.com','googleadservices.com',
+    'google-analytics.com','googletagmanager.com','googletagservices.com',
+    'facebook.net','an.facebook.com','pixel.facebook.com',
+    'hotjar.com','mixpanel.com','segment.com','amplitude.com',
+    'newrelic.com','nr-data.net','fullstory.com','sentry.io',
+    'adsrvr.org','adnxs.com','adroll.com','criteo.com','criteo.net',
+    'taboola.com','outbrain.com','pubmatic.com','openx.net',
+    'rubiconproject.com','smartadserver.com','teads.tv',
+    'scorecardresearch.com','quantserve.com','bluekai.com',
+    'demdex.net','exelator.com','krxd.net','mathtag.com',
+    'mookie1.com','pardot.com','tapad.com','eyeota.net',
+    'coinhive.com','coin-hive.com','authedmine.com','crypto-loot.com',
+    'onesignal.com','cleverpush.com',
+    'hubspot.com','hs-scripts.com','marketo.com',
+    'drift.com','intercom.io',
+  ];
+
+  function isTrackerUrl(u) {
+    if (!u || typeof u !== 'string') return false;
+    var h = '';
+    try { h = new URL(u).hostname.replace(/^www\\./, ''); } catch(e) { return false; }
+    for (var i = 0; i < BLOCKED_DOMAINS.length; i++) {
+      if (h === BLOCKED_DOMAINS[i] || h.endsWith('.' + BLOCKED_DOMAINS[i])) return true;
+    }
+    return false;
+  }
+
+  function blockedResponse() {
+    return Promise.resolve(new Response('', { status: 204, statusText: 'Blocked by Lithium Shields' }));
+  }
+
   window.fetch = function(input, init) {
     var url = (typeof input === 'string') ? input : (input && input.url) || '';
     // Resolve relative URLs against the target page.
     try { url = new URL(url, TARGET_URL).href; } catch(e) {}
+    // Block tracker/ad requests
+    if (isTrackerUrl(url)) return blockedResponse();
     // Route through backend proxy, fallback to allorigins.
     var proxyUrl = PROXY_BASE + encodeURIComponent(url);
     return origFetch.call(this, proxyUrl, init).catch(function() {
@@ -198,6 +296,12 @@ function injectOverrides(doc, targetUrl) {
   XMLHttpRequest.prototype.open = function(method, url) {
     if (typeof url === 'string') {
       try { url = new URL(url, TARGET_URL).href; } catch(e) {}
+      // Block tracker/ad requests
+      if (isTrackerUrl(url)) {
+        // Redirect to a harmless empty response
+        arguments[1] = 'data:text/plain,';
+        return origOpen.apply(this, arguments);
+      }
       arguments[1] = PROXY_BASE + encodeURIComponent(url);
     }
     return origOpen.apply(this, arguments);

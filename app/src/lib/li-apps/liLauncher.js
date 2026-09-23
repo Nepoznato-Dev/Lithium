@@ -17,7 +17,8 @@
 import { loadManifest } from './liParser';
 import { getDynamicApps } from './liDynamicApps';
 
-const LAUNCHER_URL = '/li-apps/../launcher.li';
+// eslint-disable-next-line no-unused-vars -- reserved for future direct launcher fetches
+const _LAUNCHER_URL = '/li-apps/../launcher.li';
 // The Vite middleware serves apps/src/ at /li-apps/, but launcher.li
 // lives one level up.  We'll serve it separately via a dedicated path.
 const LAUNCHER_PATH = '/li-apps-launcher/launcher.li';
@@ -28,6 +29,37 @@ const DEFAULT_CAPABILITIES = {
   desktopIcon: true,
   searchable: true,
 };
+
+/**
+ * Combine separate HTML/CSS/JS fields into a single srcdoc document.
+ * Handles backward compatibility: old apps may have CSS/JS embedded
+ * in the HTML, or stored in separate css/js fields.
+ */
+function buildDynamicSrcdoc(entry) {
+  const html = entry.html || '';
+  const css = entry.css || '';
+  const js = entry.js || '';
+
+  // If no separate CSS/JS, return HTML as-is (backward compat)
+  if (!css && !js) return html;
+
+  // Build a complete HTML document combining all parts
+  let doc = html;
+
+  // If the HTML is a full document (has <head> or <html>), inject into it
+  if (/<\/head>/i.test(doc)) {
+    if (css) doc = doc.replace('</head>', `<style>${css}</style>\n</head>`);
+    if (js) doc = doc.replace('</body>', `<script>${js}</script>\n</body>`);
+  } else if (/<\/body>/i.test(doc)) {
+    if (css) doc = `<style>${css}</style>\n` + doc;
+    if (js) doc = doc.replace('</body>', `<script>${js}</script>\n</body>`);
+  } else {
+    // Wrap fragment in a full document
+    doc = `<!DOCTYPE html><html><head><meta charset="utf-8">${css ? `<style>${css}</style>` : ''}</head><body>${doc}${js ? `<script>${js}</script>` : ''}</body></html>`;
+  }
+
+  return doc;
+}
 
 /**
  * Load and validate the launcher.li file.
@@ -124,8 +156,8 @@ export async function discoverAppsFromLauncher() {
   // --- Dynamic apps from localStorage ---
   const dynamicManifests = getDynamicApps().map(entry => {
     const manifest = { ...entry.manifest };
-    // Dynamic apps carry their HTML inline — no fetch needed.
-    manifest._storedHtml = entry.html;
+    // Combine separate HTML/CSS/JS into a single srcdoc document.
+    manifest._storedHtml = buildDynamicSrcdoc(entry);
     manifest._capabilities = { ...DEFAULT_CAPABILITIES };
     manifest._launcherPermissions = manifest.permissions || [];
     manifest._dynamic = true;

@@ -1,6 +1,9 @@
-import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
+import { computeCall } from '../compute';
 import { getBlob } from './manager';
 import { putBlob } from './liStorage';
+
+const _enc = new TextEncoder();
+const _dec = new TextDecoder();
 
 /**
  * ZIP archive engine — full backup & restore using fflate.
@@ -74,7 +77,7 @@ export async function createBackupZip(tree, { onProgress } = {}) {
     kv: kvDump,
   };
 
-  entries[MANIFEST_NAME] = strToU8(JSON.stringify(manifest));
+  entries[MANIFEST_NAME] = _enc.encode(JSON.stringify(manifest));
   onProgress?.({ phase: 'manifest', done: 1, total: 1 + blobEntries.length });
 
   // 3. Pull blobs from IndexedDB.
@@ -90,9 +93,9 @@ export async function createBackupZip(tree, { onProgress } = {}) {
     onProgress?.({ phase: 'blobs', done: i + 2, total: 1 + blobEntries.length });
   }
 
-  // 4. Compress into a ZIP.
+  // 4. Compress into a ZIP (fflate runs in the compute worker).
   onProgress?.({ phase: 'compress' });
-  const compressed = zipSync(entries, { level: 6 });
+  const compressed = await computeCall('archive.zipBuild', { entries, level: 6 });
   return new Blob([compressed], { type: 'application/zip' });
 }
 
@@ -108,12 +111,12 @@ export async function createBackupZip(tree, { onProgress } = {}) {
 export async function restoreBackupZip(zipBlob, { onProgress, replace = false } = {}) {
   onProgress?.({ phase: 'extract' });
   const raw = new Uint8Array(await zipBlob.arrayBuffer());
-  const extracted = unzipSync(raw);
+  const extracted = await computeCall('archive.zipRead', { bytes: raw });
 
   // 1. Read manifest.
   const manifestBytes = extracted[MANIFEST_NAME];
   if (!manifestBytes) throw new Error('Invalid backup: missing manifest');
-  const manifest = JSON.parse(strFromU8(manifestBytes));
+  const manifest = JSON.parse(_dec.decode(manifestBytes));
   if (!manifest.tree || !Array.isArray(manifest.tree)) throw new Error('Invalid backup: corrupt manifest');
 
   // 2. Restore localStorage kv.
@@ -178,11 +181,11 @@ export async function exportFolderZip(tree, folderId) {
         }
       } catch { /* skip */ }
     } else if (child.content != null) {
-      entries[path] = strToU8(String(child.content));
+      entries[path] = _enc.encode(String(child.content));
     }
   }
 
-  const compressed = zipSync(entries, { level: 6 });
+  const compressed = await computeCall('archive.zipBuild', { entries, level: 6 });
   return new Blob([compressed], { type: 'application/zip' });
 }
 
@@ -203,9 +206,10 @@ export async function importZipToFolder(tree, parentId, zipBlob, { onProgress, n
 
   onProgress?.({ phase: 'extract' });
   const raw = new Uint8Array(await zipBlob.arrayBuffer());
-  const extracted = unzipSync(raw);
+  const extracted = await computeCall('archive.zipRead', { bytes: raw });
 
   const now = Date.now();
+  const extractedList = Object.entries(extracted);
   const makeId = () => `zip-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
   const folderName = nameOverride || 'Imported';
@@ -230,7 +234,7 @@ export async function importZipToFolder(tree, parentId, zipBlob, { onProgress, n
   ]);
 
   let count = 0;
-  for (const [path, bytes] of Object.entries(extracted)) {
+  for (const [path, bytes] of extractedList) {
     if (count >= MAX_IMPORT || !path || path.endsWith('/')) continue;
     const segs = path.split('/');
     if (segs.includes('__MACOSX') || segs.some(s => s.startsWith('.'))) continue;
@@ -240,7 +244,7 @@ export async function importZipToFolder(tree, parentId, zipBlob, { onProgress, n
     const ext = (name.split('.').pop() || '').toLowerCase();
     if (TEXT_EXT.has(ext) || bytes.length < 64 * 1024) {
       // Text file — inline.
-      next = [...next, { id: makeId(), name, type: 'text', parentId: parentDirId, content: strFromU8(bytes), createdAt: now, updatedAt: now }];
+      next = [...next, { id: makeId(), name, type: 'text', parentId: parentDirId, content: _dec.decode(bytes), createdAt: now, updatedAt: now }];
     } else if (bytes.length <= MAX_BINARY) {
       // Binary file — store in IndexedDB.
       const id = makeId();
@@ -248,7 +252,7 @@ export async function importZipToFolder(tree, parentId, zipBlob, { onProgress, n
       next = [...next, { id, name, type: 'file', parentId: parentDirId, content: null, idb: true, size: bytes.length, createdAt: now, updatedAt: now }];
     }
     count++;
-    onProgress?.({ phase: 'write', done: count, total: Object.keys(extracted).length });
+    onProgress?.({ phase: 'write', done: count, total: extractedList.length });
   }
 
   return { tree: next, folderId: root.id, files: count };

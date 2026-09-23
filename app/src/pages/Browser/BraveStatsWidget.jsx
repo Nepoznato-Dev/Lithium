@@ -4,7 +4,7 @@
  * optional unit text, and a description label below.
  * Reads from PrivacyService for real stats (C8: NTP unification).
  */
-import { globalStats, totalBlocked } from './stores/shieldsStore';
+import { globalStats } from './stores/shieldsStore';
 import { getStats as getPrivacyStats } from '../../lib/services/privacyService';
 
 function getStats() {
@@ -20,7 +20,7 @@ function getStats() {
         timeSaved: ps.timeSaved || 0,
       };
     }
-  } catch {}
+  } catch { /* storage unavailable */ }
   // Fallback to shieldsStore stats
   const s = globalStats.value;
   return {

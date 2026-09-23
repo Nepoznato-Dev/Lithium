@@ -33,7 +33,7 @@ function saveContainers(containers) {
   try {
     const custom = containers.filter(c => !c.isDefault);
     localStorage.setItem(CONTAINERS_KEY, JSON.stringify(custom));
-  } catch {}
+  } catch { /* quota exceeded */ }
 }
 
 /** All containers (built-in + custom). */

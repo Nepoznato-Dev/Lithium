@@ -1,0 +1,11 @@
+{
+  "versions": [
+    {
+      "version": "v2.0.0",
+      "date": "2026-09-15",
+      "changelog": "Initial release — desktop shell, File Explorer, Browser, AI hub, PWA support, local file system sync.",
+      "basePath": "/versions/v2.0.0/"
+    }
+  ],
+  "stable": "v2.0.0"
+}

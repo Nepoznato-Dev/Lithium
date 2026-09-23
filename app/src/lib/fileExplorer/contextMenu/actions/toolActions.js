@@ -6,7 +6,7 @@
  */
 
 import { ActionRegistry } from '../ActionRegistry';
-import { getEntry, pathOf, usedBytes, readEntryContent } from '../../../fileSystem.js';
+import { getEntry, pathOf } from '../../../fileSystem.js';
 import { notify } from '../../../../lib/desktop/notify.js';
 
 /* ------------------------------------------------------------------ */

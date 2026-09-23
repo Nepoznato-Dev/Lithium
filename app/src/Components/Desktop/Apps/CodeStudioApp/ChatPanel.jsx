@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../../Icon';
 import { childrenOf, readEntryContent } from '../../../../lib/fileSystem';
-import { allModels, loadModelMeta, getTier, downloadedModelFor, tierModel } from '../../../../lib/ai/models';
-import { AI_PROVIDERS, chatCompletion, loadKeys, modelsForProvider, getSelectedModel, setSelectedModel, visibleProviders } from '../../../../lib/ai/providers';
+import { allModels, downloadedModels, loadModelMeta } from '../../../../lib/ai/models';
+import { chatCompletion, loadKeys, modelsForProvider, getSelectedModel, setSelectedModel, visibleProviders } from '../../../../lib/ai/providers';
 import { stripToolBlocks, MODES, MODE_ORDER } from '../../../../lib/ai/agent';
 import { callTrusted } from '../../../../lib/ai/apiManager';
 import { buildCodeDoc } from '../../../../lib/codeApi';
@@ -15,7 +15,7 @@ import { diffLines } from './diffUtils';
 
 export default function ChatPanel({ tree, active, onStageWrite, onLog, onExplore, onCtxMenu }) {
   const [mode, setMode] = useState('agent');
-  const [provider, setProvider] = useState(() => (downloadedModelFor(getTier()) ? 'local' : loadKeys().groq ? 'groq' : 'builtin'));
+  const [provider, setProvider] = useState(() => (downloadedModels().length > 0 ? 'local' : loadKeys().groq ? 'groq' : 'builtin'));
   const [cloudModel, setCloudModel] = useState(() => '');
   const [localModel, setLocalModel] = useState(() => storage.get('ai-local-model', ''));
   const [messages, setMessages] = useState([]);
@@ -29,8 +29,8 @@ export default function ChatPanel({ tree, active, onStageWrite, onLog, onExplore
   useEffect(() => { endRef.current?.scrollIntoView(); }, [messages, busy]);
 
   const downloadedOptions = allModels().filter(m => loadModelMeta()[m.id]?.downloaded);
-  const tierResolved = downloadedModelFor(getTier()) || allModels().find(m => m.id === tierModel(getTier()).modelId);
-  const localTarget = localModel && allModels().find(m => m.id === localModel) ? localModel : (tierResolved?.id || getTier());
+  const tierResolved = downloadedModels()[0] || null;
+  const localTarget = localModel && allModels().find(m => m.id === localModel) ? localModel : (tierResolved?.id || 'qwen3-0.6b');
 
   const runModel = msgs => (provider === 'local'
     ? (async () => { const rt = await import('../../../../lib/ai/modelRuntime'); await rt.ensureRuntime(localTarget); return rt.localChat(msgs, { maxTokens: 3072 }); })()

@@ -1,15 +1,18 @@
 /**
  * JS facade over the Lithium WASM core.
  *
- * CPU-intensive operations use 4 WASM modules (filesystem, snapshot_codec, lz4, xxh3).
- * All other functionality has been inlined at call sites.
+ * The synchronous filesystem/explorer ops run against the `filesystem` WASM
+ * module on this thread. All CPU-heavy compute — lz4, xxh3, snapshot_codec
+ * and the archive byte-math — is offloaded to the shared compute Web Worker
+ * via compute.js (with a main-thread fallback inside that façade).
  *
  * Helpers (coreReady, hasWasm, wasmStatus, loadModule)
  * live in coreHelpers.js — this file re-exports them for backward compat.
  */
 
 export { coreReady, hasWasm, wasmStatus, loadModule } from './coreHelpers';
-import { toWasm, fromOut, mem, getM, loadModule, dealloc } from './coreHelpers';
+import { toWasm, fromOut, mem, getM, dealloc } from './coreHelpers';
+import { computeCall } from './compute';
 
 const _enc = new TextEncoder();
 const _dec = new TextDecoder();
@@ -82,76 +85,35 @@ export function fsOpSync(request) { return _call('fsOpSync', request); }
 export function explorerOpSync(request) { return _call('explorerOpSync', request); }
 
 /* ================================================================
-   Async facades — WASM modules (lz4, xxh3, snapshot_codec)
+   Async compute facades — delegated to the compute Web Worker
+   (lz4, xxh3, snapshot_codec). Signatures unchanged: each resolves
+   with the same value the in-thread implementation produced, or
+   null when the underlying module is unavailable.
    ================================================================ */
 
 /** LZ4-compress (size-prepended container). Returns Uint8Array or null. */
-export async function wasmCompress(u8) {
-  const wasm = await loadModule('lz4');
-  if (!wasm) return null;
-  const ptr = toWasm(u8, 'lz4');
-  const len = wasm.lz4_compress(ptr, u8.length);
-  dealloc(ptr, u8.length, 'lz4');
-  if (!len) return null;
-  const outPtr = wasm.out_ptr();
-  const result = mem('lz4').slice(outPtr, outPtr + len);
-  dealloc(outPtr, len, 'lz4');
-  return result;
+export function wasmCompress(u8) {
+  return computeCall('lz4.compress', { data: u8 }).catch(() => null);
 }
 
 /** Decompress a container produced by wasmCompress. */
-export async function wasmDecompress(u8) {
-  const wasm = await loadModule('lz4');
-  if (!wasm) return null;
-  const inPtr = toWasm(u8, 'lz4');
-  const orig = wasm.lz4_uncompressed_size(inPtr, u8.length);
-  if (!orig) { dealloc(inPtr, u8.length, 'lz4'); return null; }
-  const outPtr = wasm.alloc(orig);
-  const written = wasm.lz4_decompress_into(inPtr, u8.length, outPtr, orig);
-  dealloc(inPtr, u8.length, 'lz4');
-  if (!written) { dealloc(outPtr, orig, 'lz4'); return null; }
-  const result = mem('lz4').slice(outPtr, outPtr + written);
-  dealloc(outPtr, orig, 'lz4');
-  return result;
+export function wasmDecompress(u8) {
+  return computeCall('lz4.decompress', { data: u8 }).catch(() => null);
 }
 
 /** xxh3-64 integrity hash as a hex string. */
-export async function wasmHash(u8) {
-  const wasm = await loadModule('xxh3');
-  if (!wasm) return null;
-  const ptr = toWasm(u8, 'xxh3');
-  const value = wasm.xxh3(ptr, u8.length);
-  dealloc(ptr, u8.length, 'xxh3');
-  return BigInt.asUintN(64, value).toString(16).padStart(16, '0');
+export function wasmHash(u8) {
+  return computeCall('xxh3.hash', { data: u8 }).catch(() => null);
 }
 
 /** JSON (entries array) → binary snapshot. */
-export async function snapshotEncode(jsonString) {
-  const wasm = await loadModule('snapshot_codec');
-  if (!wasm) return null;
-  const bytes = _enc.encode(jsonString);
-  const ptr = toWasm(bytes, 'snapshot_codec');
-  const len = wasm.snapshot_encode(ptr, bytes.length);
-  dealloc(ptr, bytes.length, 'snapshot_codec');
-  if (!len) return null;
-  const outPtr = wasm.out_ptr();
-  const result = mem('snapshot_codec').slice(outPtr, outPtr + len);
-  dealloc(outPtr, len, 'snapshot_codec');
-  return result;
+export function snapshotEncode(jsonString) {
+  return computeCall('snap.encode', { json: jsonString }).catch(() => null);
 }
 
 /** Binary snapshot → JSON string. */
-export async function snapshotDecode(bin) {
-  const wasm = await loadModule('snapshot_codec');
-  if (!wasm) return null;
-  const ptr = toWasm(bin, 'snapshot_codec');
-  const len = wasm.snapshot_decode(ptr, bin.length);
-  dealloc(ptr, bin.length, 'snapshot_codec');
-  if (!len) return null;
-  const outPtr = wasm.out_ptr();
-  const result = _dec.decode(mem('snapshot_codec').slice(outPtr, outPtr + len));
-  dealloc(outPtr, len, 'snapshot_codec');
-  return result;
+export function snapshotDecode(bin) {
+  return computeCall('snap.decode', { data: bin }).catch(() => null);
 }
 
 

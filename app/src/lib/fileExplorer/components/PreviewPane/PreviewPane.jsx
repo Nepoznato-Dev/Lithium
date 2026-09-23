@@ -4,8 +4,8 @@
  */
 import { useState, useEffect } from 'react';
 import { PngIcon } from '../common/PngIcon.jsx';
-import { selectedItems, nav } from '../../state/signals.jsx';
-import { readEntryContent, getEntry } from '../../../fileSystem.js';
+import { selectedItems } from '../../state/signals.jsx';
+import { readEntryContent } from '../../../fileSystem.js';
 import PropertyPanel from './PropertyPanel.jsx';
 
 export default function PreviewPane({ tree, drive }) {

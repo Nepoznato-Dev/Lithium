@@ -1,5 +1,3 @@
-import Icon from '../../Components/Icon';
-
 export default function ApiField({ label, hint, value, onChange }) {
   return (
     <label className="block">

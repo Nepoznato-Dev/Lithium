@@ -2,8 +2,8 @@
  * searchProxy.js — Free search scraping with fallback proxy chain.
  *
  * Fetches search engine HTML through a chain of proxies:
- *   1. Vercel backend proxy (always-online serverless functions)
- *   2. Local Python backend (legacy — localhost:8734)
+ *   1. Multiple local backend servers (tries each in order)
+ *   2. Vercel backend proxy (always-online serverless functions)
  *   3. Public CORS proxies (allorigins, corsproxy.io, codetabs)
  *   4. Direct fetch (last resort — may fail due to CORS)
  *
@@ -13,6 +13,8 @@
  * `parse` function (extracts { title, url, snippet }[] from the HTML).
  */
 
+import { getServerUrls, getActiveUrl, setActiveUrl, BACKEND_OFFLINE_MESSAGE } from './backendApi';
+
 /* ------------------------------------------------------------------ */
 /*  Proxy chain with fallbacks                                        */
 /* ------------------------------------------------------------------ */
@@ -21,11 +23,10 @@
  *  When deployed on Vercel itself, leave empty for same-origin API calls.
  *  For local dev, set to your Vercel deployment URL (e.g. https://lithium.vercel.app). */
 const VERCEL_BACKEND = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
-const LOCAL_BACKEND = 'http://127.0.0.1:8734';
 
-/** Get the primary backend URL (Vercel > local). */
+/** Get the primary backend URL (Vercel > active local server). */
 export function getBackendUrl() {
-  return VERCEL_BACKEND || LOCAL_BACKEND;
+  return VERCEL_BACKEND || getActiveUrl();
 }
 
 /** Public CORS proxies that return raw HTML. */
@@ -49,24 +50,27 @@ async function tryFetch(url, timeoutMs = 10000) {
 
 /**
  * Fetch HTML through the proxy chain.
- * Tries backend first, then each public CORS proxy, then direct fetch.
- * Returns { html, source } where source is 'backend' | 'cors' | 'direct'.
+ * Tries multiple local backends, then Vercel, then CORS proxies, then direct fetch.
+ * Returns { html, source } where source is 'backend' | 'vercel' | 'cors' | 'direct'.
  */
 export async function fetchSearchHtml(url) {
-  const backendUrl = getBackendUrl();
+  const serverUrls = getServerUrls();
 
-  // 1. Try the primary backend proxy (Vercel or local).
-  try {
-    const html = await tryFetch(`${backendUrl}/api/web/proxy?url=${encodeURIComponent(url)}`, 8000);
-    return { html, source: 'vercel' };
-  } catch { /* backend offline — fall through */ }
-
-  // 2. If Vercel backend is set and differs from local, try local too.
-  if (VERCEL_BACKEND && VERCEL_BACKEND !== LOCAL_BACKEND) {
+  // 1. Try each local backend server in order
+  for (const baseUrl of serverUrls) {
     try {
-      const html = await tryFetch(`${LOCAL_BACKEND}/api/web/proxy?url=${encodeURIComponent(url)}`, 5000);
+      const html = await tryFetch(`${baseUrl}/api/web/proxy?url=${encodeURIComponent(url)}`, 5000);
+      setActiveUrl(baseUrl); // Cache the working URL
       return { html, source: 'backend' };
-    } catch { /* local backend offline — fall through */ }
+    } catch { /* this server offline — try next */ }
+  }
+
+  // 2. Try Vercel backend if configured
+  if (VERCEL_BACKEND) {
+    try {
+      const html = await tryFetch(`${VERCEL_BACKEND}/api/web/proxy?url=${encodeURIComponent(url)}`, 8000);
+      return { html, source: 'vercel' };
+    } catch { /* Vercel backend offline — fall through */ }
   }
 
   // 3. Try public CORS proxies.
@@ -81,9 +85,11 @@ export async function fetchSearchHtml(url) {
   try {
     const html = await tryFetch(url, 10000);
     return { html, source: 'direct' };
-  } catch (err) {
-    throw new Error(`All proxies failed: ${err.message}`);
+  } catch {
+    // All methods exhausted
   }
+
+  throw new Error(BACKEND_OFFLINE_MESSAGE);
 }
 
 /** Fetch HTML through the backend proxy (legacy — used by scrapeSearch). */

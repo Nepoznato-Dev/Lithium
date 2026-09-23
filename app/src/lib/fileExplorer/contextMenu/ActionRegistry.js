@@ -184,7 +184,7 @@ export const ActionRegistry = {
         result.push({ id: `sep-${lastGroup}-${item._group}`, type: 'separator' });
       }
       lastGroup = item._group;
-      const { _group, _order, _actionId, ...clean } = item;
+      const { _group, _order, _actionId, ...clean } = item; // eslint-disable-line no-unused-vars
       // Preserve _actionId for lazy children resolution.
       if (_actionId) clean._actionId = _actionId;
       result.push(clean);

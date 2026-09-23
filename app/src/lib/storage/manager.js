@@ -17,7 +17,7 @@ import { kvOverflowBytes } from './kvTier';
 export const IDB_CAP = 28 * 1024 ** 3; // 28 GB hard limit
 export const CACHE_CAP = 10 * 1024 ** 3; // 10 GB soft limit for the offline cache
 export const LOCAL_CAP = 5 * 1024 ** 2; // ~5 MB (informational — overflow prevents hitting it)
-export const SITE_CACHE_NAME = 'lithium-site-v2';
+export const SITE_CACHE_NAME = 'lithium-site-v3';
 export const LEGACY_GAME_CACHE = 'lithium-games-v1'; // purged on sw activate
 
 const _UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -150,12 +150,13 @@ export async function clearSiteCache() {
 /** Everything the Storage Manager panel needs, in one call. */
 export async function storageSnapshot() {
   const estimate = await browserEstimate();
-  const [local, idb, cache, assets, cold] = await Promise.all([
+  const [local, idb, cache, assets, cold, ramFs] = await Promise.all([
     Promise.resolve(localStorageUsage()),
     idbUsage(),
     cacheUsage(),
     cachedAssetCount(),
     coldStorageUsage(),
+    ramFsStats(),
   ]);
   return {
     quota: estimate.quota || 0,
@@ -167,7 +168,18 @@ export async function storageSnapshot() {
     cachedAssets: assets,
     kvOverflow: kvOverflowBytes(),
     cold,
+    ramFs,
   };
+}
+
+async function ramFsStats() {
+  try {
+    const { getRamUsage } = await import('./ramFS');
+    const usage = getRamUsage();
+    return { usage, budget: 10 * 1024 * 1024, engine: 'tar+gzip' };
+  } catch {
+    return { usage: 0, budget: 10 * 1024 * 1024, engine: 'tar+gzip' };
+  }
 }
 
 async function coldStorageUsage() {

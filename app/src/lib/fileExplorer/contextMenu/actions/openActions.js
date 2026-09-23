@@ -6,7 +6,7 @@
  */
 
 import { ActionRegistry } from '../ActionRegistry';
-import { getDefaultApp, FILE_ASSOCIATIONS, getAppIconInfo } from '../../../fileSystem/fileAssociations.js';
+import { FILE_ASSOCIATIONS, getAppIconInfo } from '../../../fileSystem/fileAssociations.js';
 
 /* ------------------------------------------------------------------ */
 /*  fs.open                                                            */
@@ -72,7 +72,7 @@ ActionRegistry.register({
     if (dot < 0) return false;
     return RUNNABLE_EXTS.has(e.name.slice(dot).toLowerCase());
   },
-  execute(entries, ctx) {
+  execute(entries, _ctx) {
     const entry = entries[0];
     window.dispatchEvent(
       new CustomEvent('lithium:launch-app', {
@@ -107,7 +107,7 @@ ActionRegistry.register({
     const seen = new Set();
     return Object.entries(FILE_ASSOCIATIONS)
       .filter(([ext]) => entry.name.toLowerCase().endsWith(ext.replace('*', '')))
-      .map(([ext, assoc]) => {
+      .map(([_ext, assoc]) => {
         if (seen.has(assoc.appId)) return null;
         seen.add(assoc.appId);
         const info = getAppIconInfo(assoc.appId);

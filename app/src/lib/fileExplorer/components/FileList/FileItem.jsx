@@ -1,68 +1,25 @@
 /**
  * Individual grid tile — icon/thumbnail + name.
  * Extracted from the grid item rendering in the monolith.
+ *
+ * The glyph rules live in `lib/fileExplorer/glyphs.js`, not here: the Solid
+ * island that replaces this component in low-end mode needs the same answers and
+ * cannot import a Preact component to get them.
  */
 import { useState, useEffect, useRef, memo } from 'react';
 import Icon from '../../../../Components/Icon';
-import { getThumbUrl, getCachedThumbUrl } from '../../thumbCache.js';
+import { glyphFor, pngSrc } from '../../glyphs.js';
+import { getThumbUrl, getCachedThumbUrl, retainThumb, releaseThumb } from '../../thumbCache.js';
 import { selectedItems } from '../../state/signals.jsx';
-
-/** Pick the best Icon name + colour for an entry, matching the pattern used
- *  across Sidebar, CodeStudio, Notes, Downloader, etc. */
-function glyphFor(entry) {
-  if (entry.cold)  return { name: 'Snowflake', color: '#93c5fd' };
-  if (entry.ref)   return { name: 'Gamepad2',  color: '#ff6b6b' };
-
-  const ext = (entry.name || '').split('.').pop()?.toLowerCase();
-
-  if (entry.type === 'folder') return { name: 'Folder',    color: '#fbbf24' };
-  if (entry.type === 'image')  return { name: 'Image',     color: '#f472b6' };
-  if (entry.type === 'video')  return { name: 'Film',      color: '#a78bfa' };
-
-  // Extension-specific icons — same pattern as CodeStudio / Downloader
-  switch (ext) {
-    case 'mp3': case 'ogg': case 'wav': case 'flac': case 'm4a': case 'aac':
-      return { name: 'Music', color: '#f472b6' };
-    case 'pdf':
-      return { name: 'FileText', color: '#ef4444' };
-    case 'zip': case 'tar': case 'gz': case 'rar': case '7z':
-      return { name: 'Archive', color: '#f59e0b' };
-    case 'json':
-      return { name: 'FileJson', color: '#fbbf24' };
-    case 'gguf':
-      return { name: 'BrainCircuit', color: '#22d3ee' };
-    case 'js': case 'jsx': case 'ts': case 'tsx': case 'py': case 'rs':
-    case 'html': case 'css': case 'xml': case 'yaml': case 'yml': case 'toml':
-      return { name: 'Code2', color: '#4ade80' };
-    case 'csv': case 'xls': case 'xlsx':
-      return { name: 'Files', color: '#22c55e' };
-    default:
-      if (entry.type === 'text') return { name: 'FileText', color: '#60a5fa' };
-      return { name: 'FileText', color: '#9ca3af' };
-  }
-}
-
-/** Map icon names to PNG filenames in public/icons/ */
-const ICON_PNG_MAP = {
-  Folder: 'files',
-  Image: 'gallery',
-  Film: 'film',
-  Music: 'music-note',
-  FileText: 'notes',
-  Archive: 'archive',
-  BrainCircuit: 'cortex',
-  Code2: 'code-studio',
-  Gamepad2: 'hydrux',
-  Snowflake: 'snowflake',
-  FileJson: 'file-json',
-};
+import { useColoredPng } from '../../../iconRecolor.js';
 
 function EntryGlyph({ entry, size = 36 }) {
-  const { name, color } = glyphFor(entry);
-  const pngName = ICON_PNG_MAP[name];
-  if (pngName) {
-    return <img src={`/icons/${pngName}.png`} alt="" style={{ width: size, height: size }} className="object-contain" />;
+  const png = pngSrc(entry);
+  const colored = useColoredPng(png);
+  if (png) {
+    return <img src={colored || png} alt="" style={{ width: size, height: size }} className="object-contain" />;
   }
+  const { name, color } = glyphFor(entry);
   return <Icon name={name} size={size} color={color} strokeWidth={1.4} />;
 }
 
@@ -70,6 +27,14 @@ function EntryThumb({ entry, className }) {
   const [url, setUrl] = useState(() => getCachedThumbUrl(entry) || null);
   const [visible, setVisible] = useState(false);
   const imgRef = useRef(null);
+
+  /* Refcount the cache slot for exactly as long as this tile is mounted. A
+   * `blob:` URL pins its Blob until revoked, so without this the cache cannot
+   * tell a thumbnail that scrolled away from one that is on screen. */
+  useEffect(() => {
+    retainThumb(entry.id);
+    return () => releaseThumb(entry.id);
+  }, [entry.id]);
 
   // IntersectionObserver: only load when actually visible
   useEffect(() => {
@@ -97,7 +62,7 @@ function EntryThumb({ entry, className }) {
   return <img src={url} alt="" className={className} />;
 }
 
-const FileItem = memo(function FileItem({ entry, treeRef, drive, openItem, onItemContext, dragProps, dropTarget }) {
+const FileItem = memo(function FileItem({ entry, treeRef: _treeRef, drive, openItem, onItemContext, dragProps, dropTarget }) {
   // Read signal directly — only THIS item re-renders on selection change,
   // not the entire list. Drag styling is handled at the container level
   // (FileGrid) via DOM classList to avoid re-rendering every item on drag.

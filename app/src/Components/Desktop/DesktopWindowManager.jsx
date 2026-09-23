@@ -1,15 +1,40 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { scheduleStorageSave, flushStorageSaves } from '../../lib/storage/localStorage';
+import { DESKTOP_SESSION_KEY, captureDesktopSession, fitWindow, loadDesktopSession, restoreDesktopWindows } from '../../lib/desktop/session';
 
-const WindowContext = createContext(null);
+const NO_WINDOWS = [];
 
-export function useDesktopWindows() {
-  const context = useContext(WindowContext);
-  if (!context) throw new Error('useDesktopWindows must be used inside DesktopWindowProvider');
-  return context;
+/**
+ * Two contexts on purpose.
+ *
+ * `WindowActionsContext` holds the (permanently stable) action callbacks, so
+ * components that only *drive* windows — window chrome, drag handles, the app
+ * bridge — never re-render because window data changed.
+ *
+ * `WindowListContext` holds the list itself. Only components that actually
+ * render window data subscribe to churn there. Sharing one context object for
+ * both meant a fresh literal on every provider render, so a single window
+ * update re-rendered every consumer in the shell.
+ */
+const WindowActionsContext = createContext(null);
+const WindowListContext = createContext(NO_WINDOWS);
+
+/** Actions only — never re-renders on window state changes. */
+export function useDesktopActions() {
+  const actions = useContext(WindowActionsContext);
+  if (!actions) throw new Error('useDesktopActions must be used inside DesktopWindowProvider');
+  return actions;
 }
 
-let tabSerial = 1;
-let winSerial = 1;
+/** Actions + the live window list. Prefer `useDesktopActions()` when the list
+ *  is not rendered. */
+export function useDesktopWindows() {
+  const windows = useContext(WindowListContext);
+  const actions = useDesktopActions();
+  return useMemo(() => ({ windows, ...actions }), [windows, actions]);
+}
+
+const newTabKey = () => `tab-${crypto.randomUUID()}`;
 
 const activeTabOf = win => win.tabs.find(tab => tab.key === win.activeTab) || win.tabs[0];
 
@@ -30,18 +55,58 @@ const mirror = win => {
  * already open at the time of creation.
  */
 export function DesktopWindowProvider({ children }) {
-  const [windows, setWindows] = useState([]);
+  const [windows, setWindowState] = useState(NO_WINDOWS);
+  const [initialSession] = useState(loadDesktopSession);
+  const windowsRef = useRef(NO_WINDOWS);
+  const placements = useRef(initialSession.placements);
+  const restored = useRef(false);
   const nextZIndex = useRef(10);
 
+  // Queue the snapshot in the action itself, before a reload can interrupt rendering.
+  const setWindows = useCallback(updater => {
+    const next = updater(windowsRef.current);
+    const nextPlacements = { ...placements.current };
+    for (const win of next) {
+      for (const tab of win.tabs) {
+        Object.defineProperty(nextPlacements, tab.appId, { value: fitWindow(win), enumerable: true, configurable: true, writable: true });
+      }
+    }
+    placements.current = nextPlacements;
+    windowsRef.current = next;
+    if (restored.current) {
+      scheduleStorageSave(DESKTOP_SESSION_KEY, captureDesktopSession(next, nextPlacements));
+    }
+    setWindowState(next);
+  }, []);
+
+  const restoreSession = useCallback(apps => {
+    if (restored.current) return;
+    restored.current = true;
+    const saved = restoreDesktopWindows(initialSession, apps).map(mirror);
+    nextZIndex.current = Math.max(nextZIndex.current, ...saved.map(win => win.zIndex));
+    const current = windowsRef.current;
+    const next = [...saved.filter(win => !current.some(item => item.id === win.id)), ...current];
+    windowsRef.current = next;
+    setWindowState(next);
+  }, [initialSession]);
+
+  useEffect(() => () => flushStorageSaves(), []);
+  /** Topmost window id — refocusing it is a no-op (see focusWindow). */
+  const topWindow = useRef(null);
+
   const focusWindow = useCallback(id => {
+    // A click inside an already-focused window used to bump zIndex and
+    // re-render the whole shell. Nothing to do when it is already on top.
+    if (topWindow.current === id) return;
+    topWindow.current = id;
     nextZIndex.current += 1;
     const z = nextZIndex.current;
     setWindows(current => current.map(win => (win.id === id ? { ...win, zIndex: z } : win)));
-  }, []);
+  }, [setWindows]);
 
   const openWindow = useCallback(config => {
     const makeTab = () => ({
-      key: `tab-${tabSerial++}`,
+      key: newTabKey(),
       appId: config.id,
       title: config.title,
       icon: config.icon,
@@ -76,9 +141,11 @@ export function DesktopWindowProvider({ children }) {
         }
       }
       const tab = makeTab();
-      const id = config.newWindow && !current.some(win => win.id === config.id) ? config.id : `${config.id}-${winSerial++}`;
+      const id = config.newWindow && !current.some(win => win.id === config.id) ? config.id : `${config.id}-${crypto.randomUUID()}`;
       /* Cascade new windows so they don't stack on top of each other. */
       const cascadeStep = current.length * 28;
+      const savedPlacement = Object.hasOwn(placements.current, config.id) && !current.some(win => win.tabs.some(t => t.appId === config.id))
+        ? fitWindow(placements.current[config.id]) : null;
       const baseX = config.x ?? 110;
       const baseY = config.y ?? 70;
       const winW = config.width || 900;
@@ -94,28 +161,31 @@ export function DesktopWindowProvider({ children }) {
         zIndex: z,
         minimized: false,
         maximized: false,
+        ...savedPlacement,
         tabs: [tab],
         activeTab: tab.key,
       })];
     });
-  }, []);
+  }, [setWindows]);
 
   const updateWindow = useCallback((id, changes) => {
     setWindows(current => current.map(win => (win.id === id ? { ...win, ...changes } : win)));
-  }, []);
+  }, [setWindows]);
 
   const closeWindow = useCallback(id => {
+    // The cached "already on top" marker must not outlive the window.
+    if (topWindow.current === id) topWindow.current = null;
     setWindows(current => current.filter(win => win.id !== id));
-  }, []);
+  }, [setWindows]);
 
   const addTab = useCallback((windowId, config) => {
-    const tab = { key: `tab-${tabSerial++}`, appId: config.appId, title: config.title, icon: config.icon, component: config.component };
+    const tab = { key: newTabKey(), appId: config.appId, title: config.title, icon: config.icon, component: config.component };
     nextZIndex.current += 1;
     const z = nextZIndex.current;
     setWindows(current => current.map(win => (win.id === windowId
       ? mirror({ ...win, zIndex: z, tabs: [...win.tabs, tab], activeTab: tab.key })
       : win)));
-  }, []);
+  }, [setWindows]);
 
   const closeTab = useCallback((windowId, key) => {
     setWindows(current => current.flatMap(win => {
@@ -125,11 +195,11 @@ export function DesktopWindowProvider({ children }) {
       const activeTab = win.activeTab === key ? tabs[tabs.length - 1].key : win.activeTab;
       return [mirror({ ...win, tabs, activeTab })];
     }));
-  }, []);
+  }, [setWindows]);
 
   const setActiveTab = useCallback((windowId, key) => {
     setWindows(current => current.map(win => (win.id === windowId ? mirror({ ...win, activeTab: key }) : win)));
-  }, []);
+  }, [setWindows]);
 
   /** Close whichever tab hosts the given app (used by apps.close). */
   const closeApp = useCallback(appId => {
@@ -140,7 +210,7 @@ export function DesktopWindowProvider({ children }) {
       const activeTab = tabs.some(tab => tab.key === win.activeTab) ? win.activeTab : tabs[tabs.length - 1].key;
       return [mirror({ ...win, tabs, activeTab })];
     }));
-  }, []);
+  }, [setWindows]);
 
   /** Focus the window + tab hosting the given app (used by apps.focus). */
   const focusApp = useCallback(appId => {
@@ -149,11 +219,19 @@ export function DesktopWindowProvider({ children }) {
     setWindows(current => current.map(win => (win.tabs.some(tab => tab.appId === appId)
       ? mirror({ ...win, minimized: false, zIndex: z, activeTab: win.tabs.find(tab => tab.appId === appId).key })
       : win)));
-  }, []);
+  }, [setWindows]);
+
+  // Every action below is useCallback'd with no dependencies, so this object is
+  // created once and keeps its identity for the lifetime of the provider.
+  const actions = useMemo(() => ({
+    openWindow, updateWindow, focusWindow, closeWindow, addTab, closeTab, setActiveTab, closeApp, focusApp, restoreSession,
+  }), [openWindow, updateWindow, focusWindow, closeWindow, addTab, closeTab, setActiveTab, closeApp, focusApp, restoreSession]);
 
   return (
-    <WindowContext.Provider value={{ windows, openWindow, updateWindow, focusWindow, closeWindow, addTab, closeTab, setActiveTab, closeApp, focusApp }}>
-      {children}
-    </WindowContext.Provider>
+    <WindowActionsContext.Provider value={actions}>
+      <WindowListContext.Provider value={windows}>
+        {children}
+      </WindowListContext.Provider>
+    </WindowActionsContext.Provider>
   );
 }

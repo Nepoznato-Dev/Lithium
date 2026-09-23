@@ -7,7 +7,6 @@
 import { activeTab, currentUrl, goBack, goForward, reloadTab, navigateTab } from './stores/tabStore';
 import { isBookmarked, toggleBookmark } from './stores/bookmarksStore';
 import { addHistoryEntry } from './stores/historyStore';
-import { simulateBlocking } from './stores/shieldsStore';
 import { articleDetected } from './stores/browserStore';
 import { navigateInternal } from './stores/browserStore';
 import Omnibox from './Omnibox';
@@ -34,7 +33,8 @@ export default function NavigationBar({ omniboxRef }) {
   const handleNavigate = (newUrl) => {
     navigateTab(tab.id, newUrl);
     addHistoryEntry(hostname(newUrl), newUrl);
-    simulateBlocking();
+    // Real ad/tracker blocking happens in fullRenderer.js during page rendering.
+    // For normal iframe mode, we just record the navigation for stats.
     articleDetected.value = false; // reset on navigation
   };
 

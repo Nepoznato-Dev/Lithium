@@ -3,7 +3,7 @@
  * Renders the active tab's content based on viewport mode:
  *   normal (iframe), search, reader, rebuild, fullRender, or new tab.
  */
-import { useEffect, useState, useRef, useCallback } from 'preact/hooks';
+import { useEffect, useState, useRef } from 'preact/hooks';
 import { activeTab, currentUrl, setTabLoading, setTabTitle, updateTab, activeTabMode, activeTabSearchData, goBack, goForward, reloadTab } from './stores/tabStore';
 import { readerData, rebuildData, fullRenderData, setViewportMode, backendUp, articleDetected } from './stores/browserStore';
 import { activeSearchProvider } from './stores/searchStore';
@@ -51,7 +51,7 @@ export default function Viewport() {
   useEffect(() => {
     if (mode === 'search' && !sp && url) {
       let query = '';
-      try { query = new URL(url).searchParams.get('q') || ''; } catch {}
+      try { query = new URL(url).searchParams.get('q') || ''; } catch { /* invalid URL */ }
       if (query) {
         const pKey = activeSearchProvider.value;
         updateTab(tab.id, { searchData: { html: null, query, provider: '', providerKey: pKey, searchUrl: url, loading: true } });
@@ -71,7 +71,7 @@ export default function Viewport() {
         })();
       }
     }
-  }, [mode, sp, url, tab.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, sp, url, tab.id]);   
 
   // Handle postMessage navigation from srcdoc iframes and search interactions
   useEffect(() => {
@@ -84,7 +84,7 @@ export default function Viewport() {
       } else if (data.type === 'lithium-search' && data.query) {
         // Re-search from the injected top bar form
         const pKey = activeSearchProvider.value;
-        const searchUrl = SCRAPE_PROVIDERS[pKey]?.buildUrl?.(data.query) || '';
+        const searchUrl = SCRAPE_PROVIDERS[pKey]?.buildUrl?.(data.query) || ''; // eslint-disable-line no-unused-vars
         updateTab(tab.id, { searchData: { html: null, query: data.query, provider: '', providerKey: pKey, searchUrl: '', loading: true } });
         try {
           const result = await renderSearchResults(data.query, pKey);
@@ -111,6 +111,10 @@ export default function Viewport() {
       } else if (data.type === 'lithium-login-form') {
         // Login form detected in the proxied page
         setLoginFormDetected(true);
+      } else if (data.type === 'lithium-login-popup' && data.url) {
+        // Login page detected server-side — open in popup
+        const sep = data.url.includes('?') ? '&' : '?';
+        setPopupUrl(`${data.url}${sep}__li_popup=1`);
       } else if (data.type === 'lithium-switch-provider' && data.provider) {
         // Switch provider and re-run the current query
         activeSearchProvider.value = data.provider;
@@ -141,6 +145,7 @@ export default function Viewport() {
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- tab identity is stable for the iframe lifetime
   }, []);
 
   // Handle clicks inside the search results HTML (dangerouslySetInnerHTML)
@@ -224,7 +229,7 @@ export default function Viewport() {
     }
   };
 
-  const handleRebuiltClick = (event) => {
+  const handleRebuiltClick = (event) => { // eslint-disable-line no-unused-vars
     const anchor = event.target.closest?.('a[href]');
     if (anchor) {
       event.preventDefault();
@@ -272,10 +277,13 @@ export default function Viewport() {
           ) : rb.error || !rb.html ? (
             <ErrorState message={rb.error || 'Could not rebuild this page'} onDismiss={() => { rebuildData.value = null; setViewportMode('normal'); }} />
           ) : (
-            <div
-              className="search-page-viewport h-full w-full overflow-auto"
-              onClick={handleRebuiltClick}
-              dangerouslySetInnerHTML={{ __html: rb.html }}
+            <iframe
+              key={`rb-${tab.reloadKey}`}
+              srcDoc={rb.srcdoc || rb.html}
+              title={`Rebuilt: ${hostname(url)}`}
+              className="h-full w-full border-0 bg-[#0f0f17]"
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+              referrerPolicy="no-referrer"
             />
           )
         ) : mode === 'search' && sp ? (
@@ -338,13 +346,13 @@ export default function Viewport() {
                     setCaptchaDetected(true);
                     return;
                   }
-                } catch {}
+                } catch { /* cross-origin */ }
                 setCaptchaDetected(false);
                 // Extract real page title and favicon (like a real browser)
                 try {
                   const doc = iframeRef.current?.contentDocument;
                   if (doc?.title) setTabTitle(tab.id, doc.title);
-                } catch {}
+                } catch { /* cross-origin */ }
                 // Always derive a clean title from URL as fallback
                 const h = hostname(url);
                 if (h && h !== 'new tab') {
@@ -354,7 +362,7 @@ export default function Viewport() {
                 try {
                   const origin = new URL(url).origin;
                   updateTab(tab.id, { favicon: `https://www.google.com/s2/favicons?domain=${origin}&sz=32` });
-                } catch {}
+                } catch { /* invalid URL */ }
                 // Article detection for reader mode trigger (C4)
                 try {
                   const doc = iframeRef.current?.contentDocument;

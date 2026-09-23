@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { getEntry, useFileSystem, readEntryContent, storeEntryContent, updateEntry, createEntry } from '../../../../lib/fileSystem';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getEntry, loadTree, useFileSystem, readEntryContent, storeEntryContent, updateEntry, createEntry, isTrashed } from '../../../../lib/fileSystem';
+import { notify } from '../../../../lib/desktop/notify';
 import { renderMarkdown } from '../../../../lib/markdown';
 import { storage } from '../../../../lib/storage';
 import { parseFrontmatter, extractTags, extractHeadings, backlinkContext } from './frontmatter';
@@ -20,8 +21,11 @@ function isInsideVault(tree, entry) {
 /** All state declarations, memoized derived data, and side-effects for NotesApp. */
 export default function useNotesState() {
   const [tree, commit] = useFileSystem();
-  const [tabs, setTabs] = useState([]);
-  const [activeId, setActiveId] = useState(null);
+  const [session] = useState(() => storage.get('notes-session', { tabs: [], activeId: null }));
+  const [tabs, setTabs] = useState(session.tabs);
+  const [activeId, setActiveId] = useState(session.activeId);
+  const [layout, setLayout] = useState(() => storage.get('notes-layout', 'notes') === 'notepad' ? 'notepad' : 'notes');
+  const [fontSize, setFontSize] = useState(() => Math.max(10, Math.min(24, Number(storage.get('notes-font-size', 13)) || 13)));
   const [mode, setMode] = useState('edit');
   const [inlineEdit, setInlineEdit] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -45,13 +49,55 @@ export default function useNotesState() {
 
   /* --- Memoized data --- */
   const allNotes = useMemo(
-    () => tree.filter(e => e.type === 'text' && /\.(md|txt)$/i.test(e.name) && !isHidden(e.name)).sort((a, b) => a.name.localeCompare(b.name)),
+    () => tree.filter(e => (e.type === 'text' || /\.(md|txt|log)$/i.test(e.name)) && !isTrashed(e) && !isHidden(e.name)).sort((a, b) => a.name.localeCompare(b.name)),
     [tree]
   );
   const vaultNotes = useMemo(() => allNotes.filter(e => e.parentId === VAULT_ID || isInsideVault(tree, e)), [allNotes, tree]);
   const active = activeId ? getEntry(tree, activeId) : null;
-  const [draft, setDraft] = useState('');
-  const { meta: frontmatter, body: cleanBody } = useMemo(() => parseFrontmatter(draft), [draft]);
+  const [document, setDocument] = useState({ id: null, text: '', loaded: false });
+  const [saveStatus, setSaveStatus] = useState('Saved');
+  const pending = useRef(new Map());
+  const saves = useRef(new Map());
+  const activeRef = useRef(activeId);
+  activeRef.current = activeId;
+  const draft = document.id === activeId ? document.text : '';
+  const loading = Boolean(active && (document.id !== activeId || !document.loaded));
+
+  const saveDraft = useCallback((id = activeRef.current) => {
+    const snapshot = pending.current.get(id);
+    if (!snapshot) return Promise.resolve();
+    if (activeRef.current === id) setSaveStatus('Saving…');
+    const task = (saves.current.get(id) || Promise.resolve()).then(async () => {
+      if (pending.current.get(id) !== snapshot) return;
+      const entry = getEntry(loadTree(), id);
+      if (!entry || isTrashed(entry)) { pending.current.delete(id); return; }
+      const stored = await storeEntryContent({ ...entry, type: 'text' }, snapshot.text);
+      const latest = loadTree();
+      if (!getEntry(latest, id)) return;
+      commit(updateEntry(latest, id, {
+        content: stored.content, idb: stored.idb, size: stored.size,
+        type: 'text', cold: false, coldRef: null, blobRef: null,
+      }));
+      if (pending.current.get(id) === snapshot) {
+        pending.current.delete(id);
+        if (activeRef.current === id) setSaveStatus('Saved');
+      }
+    }).catch(error => {
+      if (activeRef.current === id) setSaveStatus('Save failed');
+      notify({ title: 'Notes', body: `Could not save note: ${error.message}` });
+    });
+    saves.current.set(id, task);
+    task.then(() => { if (saves.current.get(id) === task) saves.current.delete(id); });
+    return task;
+  }, [commit]);
+
+  const setDraft = useCallback(text => {
+    if (document.id !== activeId || !document.loaded) return;
+    pending.current.set(activeId, { text });
+    setDocument({ id: activeId, text, loaded: true });
+    setSaveStatus('Unsaved changes');
+  }, [activeId, document.id, document.loaded]);
+  const { meta: frontmatter } = useMemo(() => parseFrontmatter(draft), [draft]);
   const previewHtml = useMemo(() => (mode === 'preview' || mode === 'split' || mode === 'live' ? renderMarkdown(draft) : ''), [draft, mode]);
   const headings = useMemo(() => extractHeadings(draft), [draft]);
   const noteTags = useMemo(() => extractTags(draft), [draft]);
@@ -93,24 +139,42 @@ export default function useNotesState() {
   // Auto-load draft when active note changes
   useEffect(() => {
     let cancelled = false;
-    if (active) readEntryContent(active).then(text => { if (!cancelled) setDraft(text || ''); });
-    else setDraft('');
-    return () => { cancelled = true; };
-  }, [activeId]); // eslint-disable-line
+    const entry = getEntry(loadTree(), activeId);
+    const cached = pending.current.get(activeId);
+    if (cached) {
+      setDocument({ id: activeId, text: cached.text, loaded: true });
+      setSaveStatus('Unsaved changes');
+    } else if (entry) {
+      setDocument({ id: activeId, text: '', loaded: false });
+      readEntryContent(entry).then(async content => {
+        const text = content instanceof Blob ? await content.text() : String(content ?? '');
+        if (!cancelled) {
+          setDocument({ id: activeId, text, loaded: true });
+          setSaveStatus('Saved');
+        }
+      }).catch(error => {
+        if (!cancelled) {
+          setSaveStatus('Could not load note');
+          notify({ title: 'Notes', body: `Could not open note: ${error.message}` });
+        }
+      });
+    } else setDocument({ id: null, text: '', loaded: false });
+    return () => { cancelled = true; void saveDraft(activeId); };
+  }, [activeId, saveDraft]);
 
   // Auto-save draft
   useEffect(() => {
-    if (!active) return undefined;
-    const timer = setTimeout(async () => {
-      const stored = await storeEntryContent(active, draft);
-      commit(updateEntry(tree, active.id, { content: stored.content, idb: stored.idb, size: stored.size }));
-    }, 500);
+    if (!pending.current.has(activeId)) return undefined;
+    const timer = setTimeout(() => { void saveDraft(activeId); }, 500);
     return () => clearTimeout(timer);
-  }, [draft]); // eslint-disable-line
+  }, [activeId, draft, saveDraft]);
 
   // Persist preferences
   useEffect(() => storage.set('notes-spellcheck', spellCheck), [spellCheck]);
   useEffect(() => storage.set('notes-settings', notesSettings), [notesSettings]);
+  useEffect(() => storage.set('notes-layout', layout), [layout]);
+  useEffect(() => storage.set('notes-font-size', fontSize), [fontSize]);
+  useEffect(() => storage.set('notes-session', { tabs, activeId }), [tabs, activeId]);
 
   /* --- Computed display values --- */
   const wordCount = draft.trim() ? draft.trim().split(/\s+/).length : 0;
@@ -119,6 +183,7 @@ export default function useNotesState() {
 
   return {
     tree, commit, tabs, setTabs, activeId, setActiveId, mode, setMode,
+    layout, setLayout, fontSize, setFontSize, loading, saveStatus, saveDraft,
     inlineEdit, setInlineEdit, sidebarOpen, setSidebarOpen,
     switcherOpen, setSwitcherOpen, switcherQuery, setSwitcherQuery,
     openFolders, setOpenFolders, spellCheck, setSpellCheck,

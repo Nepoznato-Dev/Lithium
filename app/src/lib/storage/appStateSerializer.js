@@ -240,7 +240,7 @@ export async function getSerializedAppsSize() {
 export async function deleteSerializedApp(appId) {
   try {
     await del('app-state', KEY_PREFIX + appId);
-  } catch {}
+  } catch { /* ignore delete failures */ }
 }
 
 /**

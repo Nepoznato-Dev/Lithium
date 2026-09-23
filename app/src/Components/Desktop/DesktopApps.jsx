@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
+import { colorForKey, useColoredPng } from '../../lib/iconRecolor';
 
 const iconCache = new Map();
 
@@ -10,7 +11,7 @@ function loadIconSvg(name) {
   return promise;
 }
 
-function SvgIcon({ name, size, color, appColor }) {
+function SvgIcon({ name, size, color, appColor, iconHex }) {
   const [svg, setSvg] = useState(null);
   const mounted = useRef(true);
 
@@ -18,12 +19,20 @@ function SvgIcon({ name, size, color, appColor }) {
     mounted.current = true;
     loadIconSvg(name).then(content => {
       if (mounted.current && content) {
-        const colored = content.replace(/ICON_COLOR/g, appColor || '#fff');
+        let colored = content.replace(/ICON_COLOR/g, appColor || '#fff');
+        if (iconHex) {
+          // The white silhouette follows the custom icon color as well.
+          colored = colored
+            .replace(/#ffffff/gi, iconHex)
+            .replace(/#fff(?![0-9a-fA-F])/gi, iconHex)
+            .replace(/fill="white"/gi, `fill="${iconHex}"`)
+            .replace(/stroke="white"/gi, `stroke="${iconHex}"`);
+        }
         setSvg(colored);
       }
     });
     return () => { mounted.current = false; };
-  }, [name, color, appColor]);
+  }, [name, color, appColor, iconHex]);
 
   if (!svg) return null;
 
@@ -39,6 +48,7 @@ const pngAvailability = new Map();
 
 export function PngIcon({ name, size }) {
   const [ok, setOk] = useState(() => pngAvailability.get(name) ?? null);
+  const colored = useColoredPng(name);
 
   useEffect(() => {
     if (pngAvailability.has(name)) {
@@ -55,7 +65,7 @@ export function PngIcon({ name, size }) {
 
   return (
     <img
-      src={`/icons/${name}.png`}
+      src={colored || `/icons/${name}.png`}
       alt=""
       width={size}
       height={size}
@@ -65,16 +75,22 @@ export function PngIcon({ name, size }) {
   );
 }
 
-export function AppIcon({ icon: iconName, color, size = 24, iconFile }) {
-  const box = size === 24 ? 48 : 32;
+/* `box` overrides the coloured tile size (used by the scalable desktop grid);
+   otherwise it follows the classic 48/32 pairing with `size`. The icon tint
+   comes from the global iconColor signal (Settings → Appearance). */
+export function AppIcon({ icon: iconName, color, size = 24, iconFile, box }) {
+  const customBox = box != null;
+  const tile = customBox ? box : (size === 24 ? 48 : 32);
   const useCustomIcon = !!iconFile;
+  // Resolve this icon's tint: its own color in colorful mode, else the global tint.
+  const iconHex = colorForKey(iconFile || iconName);
 
   return (
     <div
       style={{
-        width: box,
-        height: box,
-        borderRadius: 12,
+        width: tile,
+        height: tile,
+        borderRadius: customBox ? Math.max(6, Math.round(tile * 0.25)) : 12,
         background: `linear-gradient(135deg, ${color}dd 0%, ${color}aa 100%)`,
         display: 'flex',
         alignItems: 'center',
@@ -84,15 +100,16 @@ export function AppIcon({ icon: iconName, color, size = 24, iconFile }) {
       }}
     >
       {useCustomIcon
-        ? <PngIconFallback name={iconFile} size={size} iconName={iconName} color="#fff" appColor={color} />
-        : <Icon name={iconName} size={size} color="#fff" strokeWidth={2.5} />
+        ? <PngIconFallback name={iconFile} size={size} iconName={iconName} color={iconHex || '#fff'} appColor={color} iconHex={iconHex} />
+        : <Icon name={iconName} size={size} color={iconHex || '#fff'} strokeWidth={2.5} />
       }
     </div>
   );
 }
 
-function PngIconFallback({ name, size, iconName, color, appColor }) {
+function PngIconFallback({ name, size, iconName: _iconName, color, appColor, iconHex }) {
   const [pngOk, setPngOk] = useState(() => pngAvailability.get(name) ?? null);
+  const colored = useColoredPng(name);
 
   useEffect(() => {
     if (pngAvailability.has(name)) {
@@ -108,7 +125,7 @@ function PngIconFallback({ name, size, iconName, color, appColor }) {
   if (pngOk === true) {
     return (
       <img
-        src={`/icons/${name}.png`}
+        src={colored || `/icons/${name}.png`}
         alt=""
         width={size}
         height={size}
@@ -118,7 +135,7 @@ function PngIconFallback({ name, size, iconName, color, appColor }) {
     );
   }
   if (pngOk === false) {
-    return <SvgIcon name={name} size={size} color={color} appColor={appColor} />;
+    return <SvgIcon name={name} size={size} color={color} appColor={appColor} iconHex={iconHex} />;
   }
   return null;
 }
