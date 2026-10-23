@@ -6,7 +6,7 @@ import { storage } from '../../../../lib/storage';
 import { renderMarkdown } from '../../../../lib/markdown';
 import { getCatalog } from '../../../../lib/ai/apiManager';
 import { extractApiCalls, extractWidgetBlocks, stripToolBlocks, deleteChat, loadChats, makeChatId, upsertChat, MODES } from '../../../../lib/ai/agent';
-import { backendBuildContext, backendWebSearch } from '../../../../lib/backendApi';
+import { backendBuildContext, backendWebSearch, backendEstimate } from '../../../../lib/backendApi';
 import { loadTree, readEntryContent } from '../../../../lib/fileSystem';
 import Icon from '../../../Icon';
 import { WidgetBlockChips, ApiCallChips } from './WidgetApiChips';
@@ -83,6 +83,19 @@ export default function PlaygroundView({ onNeedModels, onCtxMenu, chatId, onChat
   const [mode, setMode] = useState(() => storage.get('cortex-mode', 'chat')); // eslint-disable-line no-unused-vars
   const [editingIdx, setEditingIdx] = useState(null);
   const [editDraft, setEditDraft] = useState('');
+  const [costEstimate, setCostEstimate] = useState(null);
+
+  // Debounced cost estimate for the Lithium provider
+  useEffect(() => {
+    if (provider !== 'lithium' || !input.trim() || busy) { setCostEstimate(null); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const est = await backendEstimate([{ role: 'user', content: input }], { model: cloudModel || getSelectedModel(provider) });
+        setCostEstimate(est);
+      } catch { setCostEstimate(null); }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [input, provider, cloudModel, busy]);
   const [apiLines, setApiLines] = useState('');
   const [chats, setChats] = useState(loadChats);
   const [tierDropdownOpen, setTierDropdownOpen] = useState(false);
@@ -537,6 +550,12 @@ export default function PlaygroundView({ onNeedModels, onCtxMenu, chatId, onChat
           <button className="inline-flex items-center rounded-lg p-1.5 text-[#9e9890] hover:bg-[#faf8f5] hover:text-[#2d2d2d] transition-colors" title="Voice input">
             <Icon name="Mic" size={14} />
           </button>
+          {/* Cost estimate pill — shown when typing with Lithium provider */}
+          {costEstimate && provider === 'lithium' && (
+            <span className="rounded-full bg-[#eef7f1] px-2 py-0.5 text-[10px] font-medium text-[#4a9e6d]" title={`~${costEstimate.estimated_tokens || '?'} tokens`}>
+              ~{costEstimate.estimated_credits ?? '?'} credit{costEstimate.estimated_credits === 1 ? '' : 's'}
+            </span>
+          )}
           {/* Send button — Qoder dark rounded */}
           <button className="ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30" style={{ background: '#2d2d2d' }} disabled={busy || !input.trim()} onClick={send} aria-label="Send">
             <Icon name="ArrowUp" size={15} />

@@ -1,1 +1,0 @@
-# Lithium backend package.

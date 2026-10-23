@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-import { BACKEND_FEATURES_DISABLED, BACKEND_INACTIVE_MESSAGE } from '../../../lib/backendApi';
 import { call, clearAudit, engineInfo, getAudit, getCatalog } from '../../../lib/ai/apiManager';
+import { backendMcpTools, backendMcpCall, backendMcpStatus } from '../../../lib/backendApi';
 import { loadDriveConfigs } from '../../../lib/cloudDrives';
 import { AI_PROVIDERS, loadKeys } from '../../../lib/ai/providers';
 import { createEntry, loadTree, readEntryContent, saveTree, storeEntryContent, removeEntryDeep, updateEntry } from '../../../lib/fileSystem';
@@ -12,6 +12,7 @@ import ContextMenu, { useContextMenu } from '../ContextMenu';
 
 const TABS = [
   { id: 'catalog', label: 'Catalog', icon: 'BookOpen' },
+  { id: 'mcp', label: 'MCP Tools', icon: 'Wrench' },
   { id: 'widgets', label: 'Widgets', icon: 'Blocks' },
   { id: 'external', label: 'External', icon: 'Cloud' },
   { id: 'audit', label: 'Audit', icon: 'ScrollText' },
@@ -335,6 +336,74 @@ function AuditTab({ onCtxMenu }) {
   );
 }
 
+/* ---------- MCP Tools tab ---------- */
+
+function McpTab() {
+  const [status, setStatus] = useState(null);
+  const [tools, setTools] = useState([]);
+  const [calling, setCalling] = useState('');
+  const [results, setResults] = useState({});
+  const [error, setError] = useState('');
+
+  const refresh = async () => {
+    try {
+      const [s, t] = await Promise.all([backendMcpStatus(), backendMcpTools()]);
+      setStatus(s); setTools(Array.isArray(t?.tools) ? t.tools : []); setError('');
+    } catch (err) { setError(err.message); }
+  };
+  useEffect(() => { refresh(); }, []);
+
+  const callTool = async (toolName) => {
+    setCalling(toolName); setResults(prev => ({ ...prev, [toolName]: undefined }));
+    try {
+      const result = await backendMcpCall(toolName);
+      setResults(prev => ({ ...prev, [toolName]: { ok: true, data: result } }));
+    } catch (err) {
+      setResults(prev => ({ ...prev, [toolName]: { ok: false, error: err.message } }));
+    } finally { setCalling(''); }
+  };
+
+  if (error) return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-sm font-medium text-white"><Icon name="Wrench" size={15} /> MCP Tools</div>
+      <p className="rounded-lg border border-red-400/25 bg-red-400/10 px-3 py-2 text-[11px] text-red-300">Backend unreachable: {error}</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-2 text-sm font-medium text-white"><Icon name="Wrench" size={15} /> MCP Tools</span>
+        {status && <span className="text-[10px] text-white/40">{status.tool_count ?? tools.length} tools available</span>}
+      </div>
+      <p className="text-[11px] text-white/40">Tools external AI clients (Claude Desktop, agent runners) can invoke through the MCP bridge. Each tool acts on your browser state.</p>
+      {tools.length === 0 && !error && <p className="text-xs text-white/30">No MCP tools registered on the server.</p>}
+      <div className="space-y-1.5">
+        {tools.map(tool => (
+          <div key={tool.name} className="rounded-lg bg-[#1a1c27] px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Icon name="Wrench" size={13} className="shrink-0 text-cyan-300" />
+              <span className="font-mono text-xs font-semibold text-white">{tool.name}</span>
+              <button className="ml-auto rounded border border-white/10 px-2 py-0.5 text-[10px] text-white/60 hover:bg-white/10 disabled:opacity-40" disabled={calling === tool.name} onClick={() => callTool(tool.name)}>
+                {calling === tool.name ? 'Running…' : 'Run'}
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-white/40">{tool.description}</p>
+            {tool.input_schema?.properties && (
+              <p className="mt-1 text-[10px] text-white/25">Params: {Object.keys(tool.input_schema.properties).join(', ') || 'none'}</p>
+            )}
+            {results[tool.name] && (
+              <div className={`mt-2 rounded border px-2 py-1.5 text-[10px] ${results[tool.name].ok ? 'border-emerald-400/20 bg-emerald-400/5 text-emerald-200' : 'border-red-400/20 bg-red-400/5 text-red-300'}`}>
+                {results[tool.name].ok ? JSON.stringify(results[tool.name].data, null, 2).slice(0, 500) : results[tool.name].error}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- App shell ---------- */
 
 export default function ApiManagerApp({ windowed = false, closeSelf, minimizeSelf, maximizeSelf, isMaximized }) {
@@ -351,7 +420,6 @@ export default function ApiManagerApp({ windowed = false, closeSelf, minimizeSel
         { id: 'refresh', label: 'Refresh', icon: 'RefreshCw', action: () => setRefreshKey(k => k + 1) },
       ])}>
         <span className="mr-2 flex items-center gap-1.5 text-xs font-bold text-white/80"><Icon name="Plug2" size={14} className="acc-text" /> API Manager</span>
-        {BACKEND_FEATURES_DISABLED && <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">Inactive</span>}
         {TABS.map(({ id, label, icon }) => (
           <button
             key={id}
@@ -369,12 +437,8 @@ export default function ApiManagerApp({ windowed = false, closeSelf, minimizeSel
         {windowed && <WinControls onClose={closeSelf} onMinimize={minimizeSelf} onMaximize={maximizeSelf} isMaximized={isMaximized} />}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {BACKEND_FEATURES_DISABLED && (
-          <div className="mb-4 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-200">
-            {BACKEND_INACTIVE_MESSAGE}
-          </div>
-        )}
         {tab === 'catalog' && <CatalogTab key={`catalog-${refreshKey}`} onCtxMenu={openMenu} />}
+        {tab === 'mcp' && <McpTab key={`mcp-${refreshKey}`} />}
         {tab === 'widgets' && <WidgetsTab key={`widgets-${refreshKey}`} onCtxMenu={openMenu} />}
         {tab === 'external' && <ExternalTab key={`external-${refreshKey}`} />}
         {tab === 'audit' && <AuditTab key={`audit-${refreshKey}`} onCtxMenu={openMenu} />}

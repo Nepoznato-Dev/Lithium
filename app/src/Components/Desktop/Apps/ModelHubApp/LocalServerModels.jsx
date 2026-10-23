@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { formatBytes } from '../../../../lib/storage/manager';
-import { BACKEND_FEATURES_DISABLED, BACKEND_INACTIVE_MESSAGE, backendLlmStatus, backendLlmModels, backendLlmUpload, backendLlmDownload, backendLlmDelete, backendLlmImport, backendUrl } from '../../../../lib/backendApi';
+import { backendLlmStatus, backendLlmModels, backendLlmUpload, backendLlmDownload, backendLlmDelete, backendLlmImport, backendUrl } from '../../../../lib/backendApi';
 import Icon from '../../../Icon';
 
 export default function LocalServerModels() {
@@ -42,14 +42,6 @@ export default function LocalServerModels() {
   const importOllama = async id => { setBusy(id); try { await backendLlmImport(id); } catch (err) { setUpload(`✗ ${err.message}`); } setBusy(''); refresh(); };
 
   const chip = (ok, label) => <span className={`rounded-lg px-1.5 py-0.5 text-[10px] font-medium ${ok ? 'text-[#4a9e6d]' : 'text-[#9e9890]'}`} style={{ background: ok ? '#eef7f1' : '#eae6df' }}>{label} {ok ? '✓' : '—'}</span>;
-
-  if (BACKEND_FEATURES_DISABLED) return (
-    <div className="space-y-3 rounded-2xl border border-amber-400/20 bg-[#10151b] p-5">
-      <div className="flex items-center gap-2 text-sm font-medium text-white"><Icon name="Server" size={15} /> Local model server</div>
-      <p className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-200">{BACKEND_INACTIVE_MESSAGE}</p>
-      <div className="flex items-center gap-2 text-[10px] text-white/40"><span className="h-2 w-2 rounded-full bg-amber-400" /> Backend disabled, design-only status</div>
-    </div>
-  );
 
   if (!status) return (
     <div className="rounded-xl border bg-white p-6" style={{ borderColor: '#e8e4dd' }}>

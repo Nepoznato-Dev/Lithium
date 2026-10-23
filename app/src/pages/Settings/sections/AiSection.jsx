@@ -1,9 +1,21 @@
 import { CardGroup, SettingsRow, SegmentedControl, EnhancedToggle } from '../controls';
 import { getActiveModel, getActiveProvider, getSystemPrompt, setSystemPrompt } from '../../../lib/services/aiService';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { liServerUrl, setLiServerUrl, liServerUrlOverride, backendHealth, backendAdminUrl } from '../../../lib/backendApi';
 
 export default function AiSection({ settings, update }) {
   const [prompt, setPrompt] = useState(() => getSystemPrompt() || settings.ai?.systemPrompt || '');
+  const [serverUrl, setServerUrl] = useState(() => liServerUrlOverride());
+  const [serverStatus, setServerStatus] = useState(null);
+
+  useEffect(() => {
+    backendHealth().then(h => setServerStatus(h));
+  }, []);
+
+  const handleServerUrlSave = () => {
+    setLiServerUrl(serverUrl);
+    backendHealth().then(h => setServerStatus(h));
+  };
 
   const handlePromptSave = () => {
     setSystemPrompt(prompt);
@@ -12,6 +24,31 @@ export default function AiSection({ settings, update }) {
 
   return (
     <div>
+      <CardGroup label="Server Connection">
+        <SettingsRow title="Backend status" description={serverStatus?.ok ? `Online — ${serverStatus.memories ?? 0} memories synced` : serverStatus?.inactive ? 'Backend inactive' : 'Offline — start li-server or configure URL below'}>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${serverStatus?.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+            {serverStatus?.ok ? 'Connected' : 'Disconnected'}
+          </span>
+        </SettingsRow>
+        <SettingsRow title="Server URL" description={`Current: ${liServerUrl()} — leave empty for auto-discovery`}>
+          <div className="flex gap-1.5">
+            <input
+              className="text-input rounded-full py-1.5 text-xs flex-1 min-w-0"
+              type="text"
+              placeholder="http://127.0.0.1:8734"
+              value={serverUrl}
+              onChange={e => setServerUrl(e.target.value)}
+            />
+            <button className="btn-primary rounded-full px-3 py-1.5 text-xs shrink-0" onClick={handleServerUrlSave}>Save</button>
+          </div>
+        </SettingsRow>
+        <SettingsRow title="Admin panel" description="Server management, logs, system info and metrics">
+          <a href={backendAdminUrl()} target="_blank" rel="noopener noreferrer" className="btn-primary inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs">
+            Open admin panel
+          </a>
+        </SettingsRow>
+      </CardGroup>
+
       <CardGroup label="Model">
         <SettingsRow title="Default model" description="AI model used across all apps when no specific model is chosen">
           <select

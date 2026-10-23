@@ -29,6 +29,7 @@ const DEFAULT_URLS = [
   'http://192.168.0.100:8734',
   'http://10.0.0.1:8734',
   'http://10.0.0.100:8734',
+  'http://10.10.10.2:8734',
   // Alternative ports (same machine, different services)
   'http://127.0.0.1:4515',
   'http://127.0.0.1:9461',
@@ -41,8 +42,20 @@ const DEFAULT_URLS = [
   'http://localhost:8080',
 ];
 
+/** Try to detect the current hostname and add it to the URL list */
+const getCurrentHostUrl = () => {
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const host = window.location.hostname;
+    // Skip localhost variants (already in DEFAULT_URLS)
+    if (host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
+      return `http://${host}:8734`;
+    }
+  }
+  return null;
+};
+
 export const BACKEND_OFFLINE_MESSAGE = 'Backend currently offline, try again later.';
-export const BACKEND_FEATURES_DISABLED = true;
+export const BACKEND_FEATURES_DISABLED = false;
 export const BACKEND_INACTIVE_MESSAGE = 'Backend inactive — Lithium is intentionally shown as a design prototype with no working backend features yet.';
 export const backendFeatureEnabled = () => !BACKEND_FEATURES_DISABLED;
 
@@ -50,6 +63,11 @@ export const backendFeatureEnabled = () => !BACKEND_FEATURES_DISABLED;
 export const getServerUrls = () => {
   const stored = storage.get('server-urls', null);
   if (Array.isArray(stored) && stored.length > 0) return stored;
+  // Add current hostname to the URL list for network deployments
+  const currentHost = getCurrentHostUrl();
+  if (currentHost) {
+    return [currentHost, ...DEFAULT_URLS];
+  }
   return DEFAULT_URLS;
 };
 
@@ -242,6 +260,77 @@ export const backendBuildContext = (messages, { maxTokens, modelId, includeMemor
 export const backendWebSearch = (query, limit = 5, signal) => request('/api/web/search', {
   method: 'POST', signal, body: JSON.stringify({ query, limit }),
 });
+
+/* ---------- Server-side provider credentials (keys.rs) ---------- */
+
+/** List which providers have server-side credentials (keys never returned). */
+export const backendKeysList = () => request('/api/keys');
+
+/** Save or remove a provider credential on the server (AES-256-GCM sealed at rest). */
+export const backendKeysSave = (provider, key) => request('/api/keys', {
+  method: 'POST', body: JSON.stringify({ provider, key }),
+});
+
+/** Remove a provider credential from the server. */
+export const backendKeysRemove = (provider) => request(`/api/keys/${encodeURIComponent(provider)}`, { method: 'DELETE' });
+
+/* ---------- Server-issued personal API key (apikeys.rs) ---------- */
+
+/** Provision or refresh the caller's personal API key (auto-rotates weekly). */
+export const backendApiKeysProvision = (force = false) => request('/api/apikeys/me', {
+  method: 'POST', body: JSON.stringify({ force }),
+});
+
+/** Verify a personal API key's validity (open endpoint — key is the credential). */
+export const backendApiKeysVerify = (key) => request('/api/apikeys/verify', {
+  method: 'POST', body: JSON.stringify({ key }),
+});
+
+/* ---------- MCP tool catalog (mcp.rs) ---------- */
+
+/** List all MCP tools the server exposes to external AI clients. */
+export const backendMcpTools = () => request('/api/mcp/tools');
+
+/** Invoke an MCP tool by name with parameters. */
+export const backendMcpCall = (tool, params = {}) => request('/api/mcp/call', {
+  method: 'POST', body: JSON.stringify({ tool, params }),
+});
+
+/** MCP server handshake summary (status, tool count, capabilities). */
+export const backendMcpStatus = () => request('/api/mcp/status');
+
+/* ---------- Auth session (auth.rs) ---------- */
+
+/** Verify the current JWT and get the session the server sees. */
+export const backendAuthSession = () => request('/api/auth/session');
+
+/* ---------- Cost estimate (chat.rs) ---------- */
+
+/** Preview what a message will cost in credits without billing. */
+export const backendEstimate = (messages, { model, provider } = {}, signal) => request('/api/estimate', {
+  method: 'POST', signal, body: JSON.stringify({ messages, model, provider }),
+});
+
+/* ---------- Memory search (memory.rs) ---------- */
+
+/** Case-insensitive substring search over memory keys and values. */
+export const backendMemorySearch = (query, signal) => request(`/api/memory/search?q=${encodeURIComponent(query)}`, { signal });
+
+/* ---------- OpenAI-compatible local endpoints (openai.rs) ---------- */
+
+/** List local GGUF models via the OpenAI-compatible API. */
+export const backendOpenAiModels = () => request('/v1/models');
+
+/** One-shot chat completion via the OpenAI-compatible local endpoint. */
+export const backendOpenAiChat = (messages, { model, temperature, maxTokens, signal } = {}) => request('/v1/chat/completions', {
+  method: 'POST', signal,
+  body: JSON.stringify({ messages, model, temperature, max_tokens: maxTokens, stream: false }),
+});
+
+/* ---------- Admin panel (admin.rs) ---------- */
+
+/** Absolute URL to the server's self-contained admin panel HTML page. */
+export const backendAdminUrl = () => `${liServerUrl()}/admin`;
 
 /* ---------- Local GGUF model store (the "mini-Ollama") ---------- */
 

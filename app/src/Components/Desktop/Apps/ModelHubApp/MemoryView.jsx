@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { deleteMemory, loadMemory, writeMemory } from '../../../../lib/ai/agent';
-import { BACKEND_FEATURES_DISABLED, BACKEND_INACTIVE_MESSAGE, backendHealth, backendMemorySync, backendUrl } from '../../../../lib/backendApi';
+import { BACKEND_FEATURES_DISABLED, backendHealth, backendMemorySync, backendMemorySearch, backendUrl } from '../../../../lib/backendApi';
 import Icon from '../../../Icon';
 
 export default function MemoryView({ onCtxMenu }) {
@@ -13,6 +13,8 @@ export default function MemoryView({ onCtxMenu }) {
   const [backend, setBackend] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
 
   useEffect(() => {
     const bump = () => setVersion(v => v + 1);
@@ -20,8 +22,6 @@ export default function MemoryView({ onCtxMenu }) {
     window.addEventListener('lithium:kv-ready', bump);
     if (!BACKEND_FEATURES_DISABLED) {
       backendHealth().then(setBackend);
-    } else {
-      setBackend({ ok: false, inactive: true, message: BACKEND_INACTIVE_MESSAGE, memories: 0 });
     }
     return () => { window.removeEventListener('lithium:memory-changed', bump); window.removeEventListener('lithium:kv-ready', bump); };
   }, []);
@@ -38,7 +38,20 @@ export default function MemoryView({ onCtxMenu }) {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const entries = useMemo(() => Object.entries(loadMemory()).sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0)), [version]);
+  const entries = useMemo(() => {
+    const all = Object.entries(loadMemory());
+    if (!searchQuery.trim()) return all.sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
+    const q = searchQuery.toLowerCase();
+    return all.filter(([k, e]) => k.toLowerCase().includes(q) || (e.value || '').toLowerCase().includes(q)).sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
+  }, [version, searchQuery]);
+
+  const searchBackend = async () => {
+    if (!searchQuery.trim()) { setSearchResults(null); return; }
+    try {
+      const results = await backendMemorySearch(searchQuery);
+      setSearchResults(Array.isArray(results) ? results : []);
+    } catch { setSearchResults([]); }
+  };
   const add = () => { if (!draftKey.trim()) return; writeMemory(draftKey, draftValue); setDraftKey(''); setDraftValue(''); setAdding(false); };
 
   return (
@@ -54,6 +67,19 @@ export default function MemoryView({ onCtxMenu }) {
           {syncing ? <Icon name="Loader2" size={12} className="animate-spin" /> : <Icon name="Database" size={12} />} {syncing ? 'Syncing…' : 'Sync'}
         </button>
       </div>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Icon name="Search" size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9e9890]" />
+          <input className="w-full rounded-lg border bg-white py-2 pl-9 pr-3 text-xs text-[#2d2d2d] outline-none placeholder:text-[#9e9890] focus:border-[#4a9e6d]/30" style={{ borderColor: '#e8e4dd' }} placeholder="Search memories (local + server)…" value={searchQuery} onChange={e => { setSearchQuery(e.target.value); if (!e.target.value.trim()) setSearchResults(null); }} onKeyDown={e => { if (e.key === 'Enter') searchBackend(); }} />
+        </div>
+        {searchQuery.trim() && <button className="shrink-0 rounded-lg border px-3 py-2 text-[11px] text-[#6b6560] hover:bg-[#faf8f5] transition-colors" style={{ borderColor: '#e8e4dd' }} onClick={searchBackend}>Search server</button>}
+      </div>
+      {searchResults !== null && (
+        <div className="rounded-lg border px-3 py-2 text-[11px]" style={{ borderColor: '#e8e4dd', background: '#faf8f5' }}>
+          {searchResults.length === 0 ? <span className="text-[#9e9890]">No matches on server.</span> :
+            <span className="text-[#6b6560]">{searchResults.length} server match{searchResults.length === 1 ? '' : 'es'} — sync to pull them locally.</span>}
+        </div>
+      )}
       {syncMsg && <p className={`text-[11px] ${syncMsg.startsWith('✓') ? 'text-[#4a9e6d]' : 'text-red-500'}`}>{syncMsg}</p>}
       {adding && (
         <div className="space-y-2 rounded-xl border bg-white p-4" style={{ borderColor: '#e8e4dd' }}>

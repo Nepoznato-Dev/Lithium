@@ -1,28 +1,47 @@
-# Dependencies and build
+# Build artifacts
 node_modules/
 dist/
+target/
+.vite/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Python
-__pycache__/
-*.pyc
-backend/lithium.db
-backend/data/
-backend/.encryption_key
+# Server runtime state (sqlite journals are covered by *.db)
+*.db
+*.db-shm
+*.db-wal
 
-# Rust build artifacts (all crates)
-rust/**/target/
-rust/target/
+# IDE
+.idea/
 
-# Cloudflare Workers
-.wrangler/
+# Environment
+.env*
+.vercel
+
+# Leftover from reorganization (safe to delete)
+Lithium/
+
+# Custom standalone server (not part of open-source repo).
+# Matches Backend/server/ at any depth; *.db and target/ above cover its sqlite + build.
+server/
+
+# Extra files that don't need to be uploaded
+docs/
+extension/
+extensions/
+assets/
+apps/
+test-screenshots/
 
 # IDE
 .vscode/
-.idea/
 
-.vercel
-.env*
+# Deploy package artifacts
+deploy-package/
+deploy-package.tar.gz
+
+# Test/auth response dumps
+signin*.json
+signup*.json
